@@ -1,0 +1,51 @@
+package com.uninote.backend.domain;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "notes")
+@Getter @Setter
+@NoArgsConstructor
+@EntityListeners(AuditingEntityListener.class)
+public class Note {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long noteId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_id")
+    private Course course;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "stud_id")
+    private Student student;
+
+    @Column(columnDefinition = "TEXT")
+    private String goals;
+
+    @Column(columnDefinition = "TEXT")
+    private String content;
+
+    @Column(columnDefinition = "TEXT")
+    private String questions;
+
+    @Column(columnDefinition = "TEXT")
+    private String aiSummary;
+
+    @Column(columnDefinition = "TEXT")
+    private String aiQuizData;
+
+    @CreatedDate
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
+}

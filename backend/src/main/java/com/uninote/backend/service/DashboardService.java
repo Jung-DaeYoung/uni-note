@@ -41,15 +41,24 @@ public class DashboardService {
 
         // 최신 게시글 5개 조회 및 변환
         List<PostResponse> recentPosts = postRepository.findTop5ByOrderByCreatedAtDesc().stream()
-                .map(post -> PostResponse.builder()
+                .map(post -> {
+                    String authorName = "익명";
+                    boolean isAuthor = false;
+                    if (post.getStudent() != null) {
+                        isAuthor = post.getStudent().getStudentNum().equals(studentNum);
+                        authorName = "익명 " + (post.getStudent().getStudId() % 100);
+                    }
+                    return PostResponse.builder()
                         .postId(post.getPostId())
                         .courseId(post.getCourse().getCourseId())
                         .courseName(post.getCourse().getCourseName()) // 강의명 추가
                         .title(post.getTitle())
                         .content(post.getContent())
-                        .authorName(post.isAnonymous() ? "익명 " + (post.getStudent().getStudId() % 100) : post.getStudent().getName())
+                        .authorName(authorName)
+                        .isAuthor(isAuthor)
                         .createdAt(post.getCreatedAt())
-                        .build())
+                        .build();
+                })
                 .collect(Collectors.toList());
 
         return DashboardResponse.builder()

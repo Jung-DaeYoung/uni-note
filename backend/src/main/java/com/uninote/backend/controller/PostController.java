@@ -18,8 +18,10 @@ public class PostController {
     private final PostService postService;
 
     @GetMapping("/{courseId}")
-    public ResponseEntity<List<PostResponse>> getPosts(@PathVariable Long courseId) {
-        return ResponseEntity.ok(postService.getPosts(courseId));
+    public ResponseEntity<List<PostResponse>> getPosts(
+            @PathVariable Long courseId,
+            @AuthenticationPrincipal String studentNum) {
+        return ResponseEntity.ok(postService.getPosts(courseId, studentNum));
     }
 
     @PostMapping("/{courseId}")

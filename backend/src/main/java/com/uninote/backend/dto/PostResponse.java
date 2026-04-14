@@ -19,6 +19,7 @@ public class PostResponse {
     private String title;
     private String content;
     private String authorName;
+    private boolean isAuthor; // 본인 작성 여부
     private LocalDateTime createdAt;
     private List<CommentResponse> comments;
 }

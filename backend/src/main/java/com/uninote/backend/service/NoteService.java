@@ -60,10 +60,7 @@ public class NoteService {
                     return newNote;
                 });
 
-        note.setGoals(request.getGoals());
         note.setContent(request.getContent());
-        note.setQuestions(request.getQuestions());
-
         Note savedNote = noteRepository.save(note);
         return convertToResponse(savedNote);
     }
@@ -78,11 +75,7 @@ public class NoteService {
         return NoteResponse.builder()
                 .noteId(note.getNoteId())
                 .courseId(note.getCourse().getCourseId())
-                .goals(note.getGoals())
                 .content(note.getContent())
-                .questions(note.getQuestions())
-                .aiSummary(note.getAiSummary())
-                .aiQuizData(note.getAiQuizData())
                 .updatedAt(note.getUpdatedAt())
                 .build();
     }

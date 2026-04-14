@@ -8,7 +8,5 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class NoteRequest {
-    private String goals;
     private String content;
-    private String questions;
 }

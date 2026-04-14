@@ -56,8 +56,7 @@
 | `note_id` | INT | PK, AI | 노트/게시글 고유 ID |
 | `title` | VARCHAR | NOT NULL | 제목 |
 | `content` | TEXT | NOT NULL | 내용 (Smart Note 데이터 포함) |
-| `is_anonymous` | BOOLEAN | DEFAULT TRUE | 익명 여부 |
-| `author_id` | INT | FK | 작성자 학생 ID (students.stud_id) |
+| `stud_id` | INT | FK | 작성자 학생 ID (students.stud_id) |
 | `board_id` | INT | FK | 소속 게시판 ID (boards.board_id) |
 | `created_at` | TIMESTAMP | DEFAULT NOW() | 작성 일시 |
 

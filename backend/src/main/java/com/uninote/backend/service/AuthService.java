@@ -27,9 +27,13 @@ public class AuthService {
                     return new IllegalArgumentException("해당 학번의 학생을 찾을 수 없습니다.");
                 });
         
-        // 테스트 환경: DB에 평문으로 저장된 비밀번호와 직접 비교
-        if (!loginRequest.getPassword().equals(student.getPassword())) {
-            log.error("로그인 실패: 비밀번호가 일치하지 않습니다. 학번: {}", loginRequest.getStudentNum());
+        // 테스트 환경: DB에 평문으로 저장된 비밀번호와 직접 비교 (앞뒤 공백 제거 추가)
+        String rawPassword = loginRequest.getPassword() != null ? loginRequest.getPassword().trim() : "";
+        String dbPassword = student.getPassword() != null ? student.getPassword().trim() : "";
+
+        if (!rawPassword.equals(dbPassword)) {
+            log.error("로그인 실패: 비밀번호가 일치하지 않습니다. 학번: {}, 입력비밀번호길이: {}, DB비밀번호길이: {}", 
+                    loginRequest.getStudentNum(), rawPassword.length(), dbPassword.length());
             throw new IllegalArgumentException("비밀번호가 일치하지 않습니다.");
         }
         

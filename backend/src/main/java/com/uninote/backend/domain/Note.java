@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 public class Note {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "note_id")
     private Long noteId;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -29,19 +30,7 @@ public class Note {
     private Student student;
 
     @Column(columnDefinition = "TEXT")
-    private String goals;
-
-    @Column(columnDefinition = "TEXT")
-    private String content;
-
-    @Column(columnDefinition = "TEXT")
-    private String questions;
-
-    @Column(columnDefinition = "TEXT")
-    private String aiSummary;
-
-    @Column(columnDefinition = "TEXT")
-    private String aiQuizData;
+    private String content;   // 필기 내용만 유지
 
     @CreatedDate
     private LocalDateTime createdAt;

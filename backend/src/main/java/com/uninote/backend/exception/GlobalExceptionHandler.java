@@ -22,15 +22,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
     }
 
-    // 데이터가 존재하지 않을 때
+    // 데이터가 존재하지 않거나 인증 실패 시
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
         ErrorResponse error = new ErrorResponse(
             LocalDateTime.now(),
-            HttpStatus.NOT_FOUND.value(),
-            "NOT_FOUND",
+            HttpStatus.UNAUTHORIZED.value(),
+            "UNAUTHORIZED",
             ex.getMessage()
         );
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
     }
 }

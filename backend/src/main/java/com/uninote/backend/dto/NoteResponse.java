@@ -14,10 +14,6 @@ import java.time.LocalDateTime;
 public class NoteResponse {
     private Long noteId;
     private Long courseId;
-    private String goals;
     private String content;
-    private String questions;
-    private String aiSummary;
-    private String aiQuizData;
     private LocalDateTime updatedAt;
 }

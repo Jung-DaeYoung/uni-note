@@ -20,12 +20,12 @@ public class PostService {
     private final StudentRepository studentRepository;
     private final CommentRepository commentRepository;
 
-    public List<PostResponse> getPosts(Long courseId) {
+    public List<PostResponse> getPosts(Long courseId, String studentNum) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid course ID"));
 
         return postRepository.findByCourseOrderByCreatedAtDesc(course).stream()
-                .map(this::convertToResponse)
+                .map(post -> convertToResponse(post, studentNum))
                 .collect(Collectors.toList());
     }
 
@@ -44,7 +44,7 @@ public class PostService {
         post.setAnonymous(true); // 항상 익명으로 저장
 
         Post savedPost = postRepository.save(post);
-        return convertToResponse(savedPost);
+        return convertToResponse(savedPost, studentNum);
     }
 
     @Transactional
@@ -76,27 +76,39 @@ public class PostService {
         postRepository.delete(post);
     }
 
-    private PostResponse convertToResponse(Post post) {
-        String authorName = post.isAnonymous() ? 
-                "익명 " + (post.getStudent().getStudId() % 100) : 
-                post.getStudent().getName();
+    private PostResponse convertToResponse(Post post, String studentNum) {
+        String authorName = "익명";
+        boolean isPostAuthor = false;
+        
+        if (post.getStudent() != null) {
+            isPostAuthor = post.getStudent().getStudentNum().equals(studentNum);
+            authorName = "익명 " + (post.getStudent().getStudId() % 100);
+        }
 
         List<CommentResponse> comments = post.getComments().stream()
-                .map(c -> CommentResponse.builder()
+                .map(c -> {
+                    boolean isCommentAuthor = c.getStudent() != null && c.getStudent().getStudentNum().equals(studentNum);
+                    String commentAuthorName = (c.getStudent() != null) ? 
+                            "익명 " + (c.getStudent().getStudId() % 100) : "익명";
+                    
+                    return CommentResponse.builder()
                         .commentId(c.getCommentId())
                         .content(c.getContent())
-                        .authorName("익명 " + (c.getStudent().getStudId() % 100)) // 댓글은 현재 무조건 익명 (엔티티에 필드 추가 필요 시 확장 가능)
+                        .authorName(commentAuthorName)
+                        .isAuthor(isCommentAuthor)
                         .createdAt(c.getCreatedAt())
-                        .build())
+                        .build();
+                })
                 .collect(Collectors.toList());
 
         return PostResponse.builder()
                 .postId(post.getPostId())
                 .courseId(post.getCourse().getCourseId())
-                .courseName(post.getCourse().getCourseName()) // 강의명 추가
+                .courseName(post.getCourse().getCourseName())
                 .title(post.getTitle())
                 .content(post.getContent())
                 .authorName(authorName)
+                .isAuthor(isPostAuthor)
                 .createdAt(post.getCreatedAt())
                 .comments(comments)
                 .build();

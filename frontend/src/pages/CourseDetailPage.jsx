@@ -22,7 +22,7 @@ const CourseDetailPage = () => {
   // Board Logic States: 'list', 'write', 'detail'
   const [boardView, setBoardView] = useState('list'); 
   const [selectedPost, setSelectedPost] = useState(null);
-  const [newPost, setNewPost] = useState({ title: '', content: '', isAnonymous: true });
+  const [newPost, setNewPost] = useState({ title: '', content: '' });
   const [newComment, setNewComment] = useState('');
 
   // Initial Data Fetch
@@ -63,7 +63,7 @@ const CourseDetailPage = () => {
     fetchData();
   }, [courseId, location.search]);
 
-  // Auto-save Note
+  // Simple Auto-save Note
   useEffect(() => {
     const timeoutId = setTimeout(async () => {
       if (!note.content) return;
@@ -82,9 +82,9 @@ const CourseDetailPage = () => {
     e.preventDefault();
     if (!newPost.title.trim() || !newPost.content.trim()) return;
     try {
-      const res = await client.post(`/posts/${courseId}`, { ...newPost, isAnonymous: true });
+      const res = await client.post(`/posts/${courseId}`, newPost);
       setPosts([res.data, ...posts]);
-      setNewPost({ title: '', content: '', isAnonymous: true });
+      setNewPost({ title: '', content: '' });
       setBoardView('list');
     } catch (error) {
       alert("게시글 저장에 실패했습니다.");
@@ -151,15 +151,9 @@ const CourseDetailPage = () => {
 
             <div className="space-y-6">
               <section className="relative group">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 shadow-sm transition-transform">
-                    <PenLine size={16} />
-                  </div>
-                  <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Main Content</h2>
-                </div>
                 <textarea 
-                  className="w-full bg-slate-50/50 rounded-[1.5rem] p-8 border-2 border-transparent focus:border-blue-500/10 focus:bg-white transition-all text-slate-800 text-base leading-relaxed min-h-[650px] outline-none shadow-sm group-hover:shadow-lg placeholder:text-slate-300"
-                  placeholder="오늘의 강의 내용을 기록하세요..."
+                  className="w-full bg-slate-50/50 rounded-[2rem] p-10 border-2 border-transparent focus:border-blue-500/10 focus:bg-white transition-all text-slate-800 text-lg leading-relaxed min-h-[700px] outline-none shadow-sm group-hover:shadow-xl placeholder:text-slate-300"
+                  placeholder="오늘의 강의 내용을 자유롭게 기록하세요..."
                   value={note.content || ''}
                   onChange={(e) => setNote({ content: e.target.value })}
                 />
@@ -301,12 +295,14 @@ const CourseDetailPage = () => {
                           <p className="text-[10px] font-bold text-slate-300 uppercase tracking-tighter">{new Date(selectedPost.createdAt).toLocaleString()}</p>
                         </div>
                       </div>
-                      <button 
-                        onClick={handleDeletePost}
-                        className="p-1.5 hover:bg-red-50 text-slate-200 hover:text-red-500 rounded-lg transition-all"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {selectedPost.isAuthor && (
+                        <button 
+                          onClick={handleDeletePost}
+                          className="p-1.5 hover:bg-red-50 text-slate-200 hover:text-red-500 rounded-lg transition-all"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                     <h3 className={`${isBoardMaximized ? 'text-xl' : 'text-base'} font-black text-slate-900 mb-3 leading-tight`}>{selectedPost.title}</h3>
                     <p className={`${isBoardMaximized ? 'text-base' : 'text-sm'} text-slate-600 leading-relaxed whitespace-pre-wrap mb-6`}>{selectedPost.content}</p>

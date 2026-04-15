@@ -64,6 +64,32 @@ public class PostService {
     }
 
     @Transactional
+    public void updateComment(Long commentId, String studentNum, String content) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid comment ID"));
+        
+        // 작성자 본인 확인
+        if (!comment.getStudent().getStudentNum().trim().equals(studentNum.trim())) {
+            throw new IllegalArgumentException("작성자 본인만 수정할 수 있습니다.");
+        }
+        
+        comment.setContent(content);
+    }
+
+    @Transactional
+    public void deleteComment(Long commentId, String studentNum) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid comment ID"));
+        
+        // 작성자 본인 확인
+        if (!comment.getStudent().getStudentNum().trim().equals(studentNum.trim())) {
+            throw new IllegalArgumentException("작성자 본인만 삭제할 수 있습니다.");
+        }
+        
+        commentRepository.delete(comment);
+    }
+
+    @Transactional
     public void deletePost(Long postId, String studentNum) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid post ID"));
@@ -76,18 +102,35 @@ public class PostService {
         postRepository.delete(post);
     }
 
+    @Transactional
+    public PostResponse updatePost(Long postId, String studentNum, PostRequest request) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid post ID"));
+        
+        // 작성자 본인 확인
+        if (!post.getStudent().getStudentNum().equals(studentNum)) {
+            throw new IllegalArgumentException("작성자 본인만 수정할 수 있습니다.");
+        }
+        
+        post.setTitle(request.getTitle());
+        post.setContent(request.getContent());
+        
+        return convertToResponse(post, studentNum);
+    }
+
     private PostResponse convertToResponse(Post post, String studentNum) {
         String authorName = "익명";
         boolean isPostAuthor = false;
         
-        if (post.getStudent() != null) {
-            isPostAuthor = post.getStudent().getStudentNum().equals(studentNum);
+        if (post.getStudent() != null && studentNum != null) {
+            isPostAuthor = post.getStudent().getStudentNum().trim().equals(studentNum.trim());
             authorName = "익명 " + (post.getStudent().getStudId() % 100);
         }
 
         List<CommentResponse> comments = post.getComments().stream()
                 .map(c -> {
-                    boolean isCommentAuthor = c.getStudent() != null && c.getStudent().getStudentNum().equals(studentNum);
+                    boolean isCommentAuthor = c.getStudent() != null && studentNum != null && 
+                            c.getStudent().getStudentNum().trim().equals(studentNum.trim());
                     String commentAuthorName = (c.getStudent() != null) ? 
                             "익명 " + (c.getStudent().getStudId() % 100) : "익명";
                     

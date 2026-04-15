@@ -41,11 +41,36 @@ public class PostController {
         return ResponseEntity.ok().build();
     }
 
+    @PutMapping("/comments/{commentId}")
+    public ResponseEntity<Void> updateComment(
+            @PathVariable Long commentId,
+            @AuthenticationPrincipal String studentNum,
+            @RequestBody com.uninote.backend.dto.CommentRequest request) {
+        postService.updateComment(commentId, studentNum, request.getContent());
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/comments/{commentId}")
+    public ResponseEntity<Void> deleteComment(
+            @PathVariable Long commentId,
+            @AuthenticationPrincipal String studentNum) {
+        postService.deleteComment(commentId, studentNum);
+        return ResponseEntity.ok().build();
+    }
+
     @DeleteMapping("/{postId}")
     public ResponseEntity<Void> deletePost(
             @PathVariable Long postId,
             @AuthenticationPrincipal String studentNum) {
         postService.deletePost(postId, studentNum);
         return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/{postId}")
+    public ResponseEntity<PostResponse> updatePost(
+            @PathVariable Long postId,
+            @AuthenticationPrincipal String studentNum,
+            @RequestBody PostRequest request) {
+        return ResponseEntity.ok(postService.updatePost(postId, studentNum, request));
     }
 }

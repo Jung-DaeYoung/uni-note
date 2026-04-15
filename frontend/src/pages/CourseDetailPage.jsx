@@ -23,7 +23,10 @@ const CourseDetailPage = () => {
   const [boardView, setBoardView] = useState('list'); 
   const [selectedPost, setSelectedPost] = useState(null);
   const [newPost, setNewPost] = useState({ title: '', content: '' });
+  const [editingPost, setEditingPost] = useState({ title: '', content: '' });
   const [newComment, setNewComment] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentContent, setEditingCommentContent] = useState('');
 
   // Initial Data Fetch
   useEffect(() => {
@@ -91,6 +94,21 @@ const CourseDetailPage = () => {
     }
   };
 
+  const handleUpdatePost = async (e) => {
+    e.preventDefault();
+    if (!editingPost.title.trim() || !editingPost.content.trim()) return;
+    try {
+      const res = await client.put(`/posts/${selectedPost.postId}`, editingPost);
+      
+      // Update local posts list
+      setPosts(posts.map(p => p.postId === selectedPost.postId ? res.data : p));
+      setSelectedPost(res.data);
+      setBoardView('detail');
+    } catch (error) {
+      alert("게시글 수정에 실패했습니다.");
+    }
+  };
+
   const handleSendComment = async (e) => {
     e.preventDefault();
     if (!newComment.trim() || !selectedPost) return;
@@ -98,13 +116,56 @@ const CourseDetailPage = () => {
       await client.post(`/posts/${selectedPost.postId}/comments`, { content: newComment });
       
       const postsRes = await client.get(`/posts/${courseId}`);
-      setPosts(postsRes.data);
+      const updatedPosts = postsRes.data || [];
+      setPosts(updatedPosts);
       
-      const updatedPost = postsRes.data.find(p => p.postId === selectedPost.postId);
-      setSelectedPost(updatedPost);
+      // 최신 목록에서 현재 보고 있는 글을 찾아 상세 내용을 최신화
+      const updatedPost = updatedPosts.find(p => p.postId === selectedPost.postId);
+      if (updatedPost) {
+        setSelectedPost(updatedPost);
+      }
       setNewComment('');
     } catch (error) {
       alert("댓글 작성에 실패했습니다.");
+    }
+  };
+
+  const handleUpdateComment = async (commentId) => {
+    if (!editingCommentContent.trim()) return;
+    try {
+      await client.put(`/posts/comments/${commentId}`, { content: editingCommentContent });
+      
+      // Refresh posts data
+      const postsRes = await client.get(`/posts/${courseId}`);
+      const updatedPosts = postsRes.data || [];
+      setPosts(updatedPosts);
+      
+      const updatedPost = updatedPosts.find(p => p.postId === selectedPost.postId);
+      if (updatedPost) {
+        setSelectedPost(updatedPost);
+      }
+      setEditingCommentId(null);
+    } catch (error) {
+      alert("댓글 수정에 실패했습니다.");
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm("댓글을 삭제하시겠습니까?")) return;
+    try {
+      await client.delete(`/posts/comments/${commentId}`);
+      
+      // Refresh posts data
+      const postsRes = await client.get(`/posts/${courseId}`);
+      const updatedPosts = postsRes.data || [];
+      setPosts(updatedPosts);
+      
+      const updatedPost = updatedPosts.find(p => p.postId === selectedPost.postId);
+      if (updatedPost) {
+        setSelectedPost(updatedPost);
+      }
+    } catch (error) {
+      alert("댓글 삭제에 실패했습니다.");
     }
   };
 
@@ -275,6 +336,42 @@ const CourseDetailPage = () => {
                 </div>
               )}
 
+              {/* VIEW: EDIT */}
+              {boardView === 'edit' && (
+                <div className="bg-white p-6 rounded-[1.5rem] border border-blue-50 shadow-xl">
+                  <div className="flex items-center gap-1.5 mb-6 text-blue-600 cursor-pointer" onClick={() => setBoardView('detail')}>
+                    <ChevronLeft size={16} />
+                    <span className="text-xs font-bold uppercase">Cancel Edit</span>
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900 mb-6 tracking-tight">Edit Post</h3>
+                  <form onSubmit={handleUpdatePost} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Title</label>
+                      <input 
+                        className="w-full bg-slate-50 border border-slate-100 rounded-xl py-3 px-4 text-sm font-bold text-slate-900 placeholder:text-slate-300 focus:bg-white focus:border-blue-500/20 transition-all outline-none"
+                        placeholder="제목을 입력하세요"
+                        value={editingPost.title}
+                        onChange={e => setEditingPost({...editingPost, title: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Content</label>
+                      <textarea 
+                        className="w-full bg-slate-50 border border-slate-100 rounded-xl py-3 px-4 text-xs font-medium placeholder:text-slate-300 focus:bg-white focus:border-blue-500/20 transition-all outline-none h-32 resize-none"
+                        placeholder="자유롭게 의견을 나누세요..."
+                        value={editingPost.content}
+                        onChange={e => setEditingPost({...editingPost, content: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="w-full bg-blue-600 text-white font-black py-3 rounded-xl text-xs shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all">
+                      수정완료
+                    </button>
+                  </form>
+                </div>
+              )}
+
               {/* VIEW: DETAIL */}
               {boardView === 'detail' && selectedPost && (
                 <div className={`space-y-4 ${isBoardMaximized ? 'max-w-4xl mx-auto' : ''}`}>
@@ -295,13 +392,26 @@ const CourseDetailPage = () => {
                           <p className="text-[10px] font-bold text-slate-300 uppercase tracking-tighter">{new Date(selectedPost.createdAt).toLocaleString()}</p>
                         </div>
                       </div>
-                      {selectedPost.isAuthor && (
-                        <button 
-                          onClick={handleDeletePost}
-                          className="p-1.5 hover:bg-red-50 text-slate-200 hover:text-red-500 rounded-lg transition-all"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                      {(selectedPost.isAuthor === true || selectedPost.author === true) && (
+                        <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => {
+                              setEditingPost({ title: selectedPost.title, content: selectedPost.content });
+                              setBoardView('edit');
+                            }}
+                            className="p-1.5 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-lg transition-all"
+                            title="수정"
+                          >
+                            <PenLine size={14} />
+                          </button>
+                          <button 
+                            onClick={handleDeletePost}
+                            className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition-all"
+                            title="삭제"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       )}
                     </div>
                     <h3 className={`${isBoardMaximized ? 'text-xl' : 'text-base'} font-black text-slate-900 mb-3 leading-tight`}>{selectedPost.title}</h3>
@@ -318,9 +428,45 @@ const CourseDetailPage = () => {
                           <div key={comment.commentId} className={`bg-slate-50/80 rounded-xl ${isBoardMaximized ? 'p-4' : 'p-3'}`}>
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{comment.authorName}</span>
-                              <span className="text-[9px] font-bold text-slate-300">{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              <div className="flex items-center gap-2">
+                                {(comment.isAuthor === true || comment.author === true) && (
+                                  <div className="flex items-center gap-1">
+                                    <button 
+                                      onClick={() => {
+                                        setEditingCommentId(comment.commentId);
+                                        setEditingCommentContent(comment.content);
+                                      }}
+                                      className="p-1 hover:text-blue-600 text-slate-300 transition-colors"
+                                    >
+                                      <PenLine size={10} />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDeleteComment(comment.commentId)}
+                                      className="p-1 hover:text-red-500 text-slate-300 transition-colors"
+                                    >
+                                      <Trash2 size={10} />
+                                    </button>
+                                  </div>
+                                )}
+                                <span className="text-[9px] font-bold text-slate-300">{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              </div>
                             </div>
-                            <p className="text-slate-700 text-xs font-medium leading-relaxed">{comment.content}</p>
+                            {editingCommentId === comment.commentId ? (
+                              <div className="mt-2 space-y-2">
+                                <textarea 
+                                  className="w-full bg-white border border-blue-100 rounded-lg p-2 text-xs outline-none focus:border-blue-500 transition-all resize-none"
+                                  value={editingCommentContent}
+                                  onChange={e => setEditingCommentContent(e.target.value)}
+                                  rows={2}
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button onClick={() => setEditingCommentId(null)} className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 py-1">Cancel</button>
+                                  <button onClick={() => handleUpdateComment(comment.commentId)} className="text-[9px] font-black text-blue-600 uppercase tracking-widest px-2 py-1 bg-blue-50 rounded-md">Save</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-slate-700 text-xs font-medium leading-relaxed">{comment.content}</p>
+                            )}
                           </div>
                         ))}
                       </div>

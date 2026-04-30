@@ -29,7 +29,7 @@ public class Note {
     @JoinColumn(name = "stud_id")
     private Student student;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "LONGTEXT")
     private String content;   // 필기 내용만 유지
 
     @CreatedDate

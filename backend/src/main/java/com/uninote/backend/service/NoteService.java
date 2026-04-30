@@ -25,8 +25,9 @@ public class NoteService {
     private final EnrollmentRepository enrollmentRepository;
 
     public NoteResponse getNote(Long courseId, String studentNum) {
+        System.out.println("DEBUG: [getNote] Request for CourseID: " + courseId + " by StudentNum: " + studentNum);
         Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid student number"));
+                .orElseThrow(() -> new IllegalArgumentException("Invalid student number: " + studentNum));
         validateEnrollment(student, courseId);
 
         Course course = courseRepository.findById(courseId)
@@ -45,8 +46,9 @@ public class NoteService {
 
     @Transactional
     public NoteResponse saveNote(Long courseId, String studentNum, NoteRequest request) {
+        System.out.println("DEBUG: [saveNote] Request for CourseID: " + courseId + " by StudentNum: " + studentNum);
         Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid student number"));
+                .orElseThrow(() -> new IllegalArgumentException("Invalid student number: " + studentNum));
         validateEnrollment(student, courseId);
 
         Course course = courseRepository.findById(courseId)
@@ -66,7 +68,10 @@ public class NoteService {
     }
 
     private void validateEnrollment(Student student, Long courseId) {
-        if (!enrollmentRepository.existsByStudentAndCourse_CourseId(student, courseId)) {
+        System.out.println("DEBUG: Checking enrollment for Student (ID: " + student.getStudId() + ", Num: " + student.getStudentNum() + ") and CourseID: " + courseId);
+        boolean exists = enrollmentRepository.existsByStudentAndCourse_CourseId(student, courseId);
+        System.out.println("DEBUG: Enrollment exists in DB? " + exists);
+        if (!exists) {
             throw new CourseAccessException("해당 강의를 수강하지 않습니다.");
         }
     }

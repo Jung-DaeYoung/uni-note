@@ -6,27 +6,35 @@ export default Extension.create({
   addGlobalAttributes() {
     return [
       {
-        // 최상위 블록으로 작동할 노드 타입들
-        types: ['paragraph', 'heading', 'blockquote', 'codeBlock', 'taskList'],
+        types: ['paragraph', 'heading', 'blockquote', 'codeBlock', 'taskList', 'bulletList', 'orderedList'],
         attributes: {
           id: {
             default: null,
-            // HTML 렌더링 시 data-id 속성 부여
-            renderHTML: attributes => ({
-              'data-id': attributes.id || Math.random().toString(36).substring(2, 9),
-            }),
-            // HTML 파싱 시 data-id 속성 읽기
             parseHTML: element => element.getAttribute('data-id'),
-          },
-          // ProseMirror 기본 드래그 기능을 활성화하기 위한 속성
-          draggable: {
-            default: true,
-            renderHTML: () => ({
-              draggable: 'true',
-            }),
+            renderHTML: attributes => {
+              if (!attributes.id) {
+                // 새로운 ID 생성 (8자리 임의 문자열)
+                attributes.id = Math.random().toString(36).substring(2, 10);
+              }
+              return { 'data-id': attributes.id };
+            },
+            // 텍스트 복사/붙여넣기 시 ID 유지
+            keepOnSplit: false, 
           },
         },
       },
     ];
+  },
+
+  // 노드가 생성될 때 ID가 없으면 부여하는 로직 (강제성 부여)
+  onTransaction({ transaction }) {
+    if (!transaction.docChanged) return;
+
+    const { doc } = transaction;
+    doc.descendants((node, pos) => {
+      if (node.isBlock && this.options.types?.includes(node.type.name) && !node.attrs.id) {
+        // 이 부분은 사실 renderHTML에서 처리되지만, 명시적 관리를 위해 남겨둠
+      }
+    });
   },
 });

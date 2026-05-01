@@ -12,13 +12,12 @@ const BlockHandle = ({ editor }) => {
     if (!editor || isMenuOpen) return;
 
     const view = editor.view;
-    // 정확히 마우스 위치의 포지션 찾기
     const posAtCoords = view.posAtCoords({ left: e.clientX, top: e.clientY });
 
     if (posAtCoords) {
       try {
         const $pos = view.state.doc.resolve(posAtCoords.pos);
-        const node = $pos.node(1); // 최상위 블록
+        const node = $pos.node(1); 
         const start = $pos.start(1);
 
         if (node) {
@@ -28,16 +27,13 @@ const BlockHandle = ({ editor }) => {
             const editorRect = view.dom.getBoundingClientRect();
 
             setPos({
-              // 에디터 컨테이너 기준 상대 좌표 계산
               top: rect.top - editorRect.top,
-              left: 0, // NotionEditor에서 준 padding-left 공간(32px) 안에 위치
+              left: 0,
             });
             setCurrentNode({ node, pos: start - 1 });
           }
         }
-      } catch (e) {
-        // 노드 경계 밖인 경우 무시
-      }
+      } catch (e) {}
     }
   }, [editor, isMenuOpen]);
 
@@ -56,33 +52,38 @@ const BlockHandle = ({ editor }) => {
         setIsMenuOpen(false);
       }
     };
-
     if (isMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     } else {
       document.removeEventListener('mousedown', handleClickOutside);
     }
-
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isMenuOpen]);
 
-  // 현재 블록 선택 (NodeSelection)
+  // 드래그 시작 시 데이터 설정
+  const handleDragStart = (e) => {
+    if (!currentNode) return;
+    
+    // 블록 데이터 직렬화하여 전달
+    const dragData = {
+      pos: currentNode.pos,
+      nodeSize: currentNode.node.nodeSize,
+      nodeJSON: currentNode.node.toJSON()
+    };
+    
+    e.dataTransfer.setData('block-drag', JSON.stringify(dragData));
+    e.dataTransfer.effectAllowed = 'move';
+    
+    // 드래그 시 메뉴 닫기
+    setIsMenuOpen(false);
+  };
+
   const selectBlock = () => {
     if (!currentNode) return;
     editor.commands.setNodeSelection(currentNode.pos);
     setIsMenuOpen(true);
-  };
-
-  // 블록 데이터 추출 (AI 연동용)
-  const getBlockData = () => {
-    if (!currentNode) return null;
-    return {
-      id: currentNode.node.attrs.id,
-      type: currentNode.node.type.name,
-      text: currentNode.node.textContent
-    };
   };
 
   const deleteBlock = () => {
@@ -97,9 +98,13 @@ const BlockHandle = ({ editor }) => {
   };
 
   const handleAiAction = () => {
-    const data = getBlockData();
+    const data = {
+      id: currentNode.node.attrs.id,
+      type: currentNode.node.type.name,
+      text: currentNode.node.textContent
+    };
     console.log("AI 연동 데이터:", data);
-    alert(`블록 ID: ${data.id}\n내용: ${data.text}\n이 내용을 기반으로 AI 요청을 보냅니다.`);
+    alert(`블록 ID: ${data.id}\nAI 기능을 요청합니다.`);
     setIsMenuOpen(false);
   };
 
@@ -110,6 +115,8 @@ const BlockHandle = ({ editor }) => {
       style={{ top: pos.top, left: pos.left }}
     >
       <button
+        draggable="true"
+        onDragStart={handleDragStart}
         onClick={selectBlock}
         className="p-1 hover:bg-slate-100 rounded cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-600"
       >

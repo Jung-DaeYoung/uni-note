@@ -9,7 +9,12 @@ export default Extension.create({
       suggestion: {
         char: '/',
         command: ({ editor, range, props }) => {
-          props.command({ editor, range });
+          console.log('slash command 실행됨', props);
+          // props는 SuggestionList에서 넘겨준 item 객체임
+          props.command({ 
+            editor, // suggestion에서 제공하는 editor 인스턴스 사용
+            range 
+          });
         },
       },
     };

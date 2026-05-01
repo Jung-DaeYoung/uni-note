@@ -8,5 +8,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class NoteRequest {
+    private String title;
     private String content;
+    private String previewText;
+    private String searchContent;
 }

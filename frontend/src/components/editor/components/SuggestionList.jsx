@@ -34,6 +34,23 @@ export default forwardRef((props, ref) => {
     },
   }));
 
+  // 선택된 아이템이 화면 밖으로 나갈 경우 자동 스크롤
+  useEffect(() => {
+    const listElement = document.getElementById('suggestion-list-container');
+    const selectedElement = listElement?.children[selectedIndex];
+    
+    if (listElement && selectedElement) {
+      const listRect = listElement.getBoundingClientRect();
+      const itemRect = selectedElement.getBoundingClientRect();
+
+      if (itemRect.bottom > listRect.bottom) {
+        selectedElement.scrollIntoView({ block: 'end', behavior: 'smooth' });
+      } else if (itemRect.top < listRect.top) {
+        selectedElement.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }
+    }
+  }, [selectedIndex]);
+
   if (items.length === 0) return null;
 
   return (
@@ -42,7 +59,7 @@ export default forwardRef((props, ref) => {
         <span>명령어</span>
         <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[8px]">{items.length}개</span>
       </div>
-      <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+      <div id="suggestion-list-container" className="max-h-[300px] overflow-y-auto custom-scrollbar scroll-smooth">
         {items.map((item, index) => (
           <button
             key={index}

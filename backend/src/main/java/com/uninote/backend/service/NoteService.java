@@ -62,7 +62,10 @@ public class NoteService {
                     return newNote;
                 });
 
+        note.setTitle(request.getTitle());
         note.setContent(request.getContent());
+        note.setPreviewText(request.getPreviewText());
+        note.setSearchContent(request.getSearchContent());
         Note savedNote = noteRepository.save(note);
         return convertToResponse(savedNote);
     }
@@ -80,6 +83,7 @@ public class NoteService {
         return NoteResponse.builder()
                 .noteId(note.getNoteId())
                 .courseId(note.getCourse().getCourseId())
+                .title(note.getTitle())
                 .content(note.getContent())
                 .updatedAt(note.getUpdatedAt())
                 .build();

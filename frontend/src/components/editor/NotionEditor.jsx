@@ -4,9 +4,10 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
+import Image from '@tiptap/extension-image';
 import tippy from 'tippy.js';
 import debounce from 'lodash.debounce';
-import { PenLine, Heading1, Heading2, List, CheckSquare, Text, Code, Quote } from 'lucide-react';
+import { PenLine, Heading1, Heading2, List, CheckSquare, Text, Code, Quote, Image as ImageIcon } from 'lucide-react';
 
 import client from '../../api/client';
 import SlashCommand from './extensions/SlashCommand.js';
@@ -19,12 +20,36 @@ const NotionEditor = ({ courseId }) => {
   const lastSavedJson = useRef(null);
   const isInitialMount = useRef(true);
 
+  const handleImageUpload = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const response = await client.post('/upload/image', formData);
+      const serverUrl = 'http://localhost:8080'; // 백엔드 서버 주소
+      return serverUrl + response.data.url;
+    } catch (error) {
+      console.error("이미지 업로드 실패:", error);
+      return null;
+    }
+  };
+
   const debouncedSaveToServer = useCallback(
-    debounce(async (jsonContent, id) => {
+    debounce(async (editor, id) => {
+      const jsonContent = editor.getJSON();
+      const plainText = editor.getText();
+      const title = plainText.split('\n')[0].substring(0, 50) || '제목 없음';
+      const previewText = plainText.substring(0, 200);
+
       if (JSON.stringify(jsonContent) === JSON.stringify(lastSavedJson.current)) return;
+      
       setSaveStatus('saving');
       try {
-        await client.post(`/notes/${id}`, { content: JSON.stringify(jsonContent) });
+        await client.post(`/notes/${id}`, { 
+          title: title,
+          content: JSON.stringify(jsonContent),
+          previewText: previewText,
+          searchContent: plainText
+        });
         lastSavedJson.current = jsonContent;
         setSaveStatus('synced');
       } catch (error) {
@@ -45,6 +70,7 @@ const NotionEditor = ({ courseId }) => {
       }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      Image,
       BlockId,
       SlashCommand.configure({
         suggestion: {
@@ -105,6 +131,24 @@ const NotionEditor = ({ courseId }) => {
                   editor.chain().focus().deleteRange(range).setParagraph().toggleBlockquote().run();
                 }
               },
+              { 
+                title: '이미지 업로드', 
+                icon: <ImageIcon size={18} />, 
+                command: ({ editor, range }) => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*';
+                  input.onchange = async () => {
+                    if (input.files?.length) {
+                      const url = await handleImageUpload(input.files[0]);
+                      if (url) {
+                        editor.chain().focus().deleteRange(range).setImage({ src: url }).run();
+                      }
+                    }
+                  };
+                  input.click();
+                }
+              },
             ].filter(item => item.title.toLowerCase().includes(query.toLowerCase()));
           },
           render: () => {
@@ -148,6 +192,27 @@ const NotionEditor = ({ courseId }) => {
         class: 'uninote-editor focus:outline-none min-h-[700px] text-lg leading-relaxed',
       },
       handleDrop: (view, event, slice, moved) => {
+        // 1. 외부 파일 드롭 처리 (이미지 업로드)
+        if (!moved && event.dataTransfer.files.length > 0) {
+          event.preventDefault();
+          const file = event.dataTransfer.files[0];
+          if (file.type.startsWith('image/')) {
+            handleImageUpload(file).then(url => {
+              if (url) {
+                const coordinates = view.posAtCoords({ left: event.clientX, top: event.clientY });
+                if (coordinates) {
+                  editor.chain().focus().insertContentAt(coordinates.pos, {
+                    type: 'image',
+                    attrs: { src: url }
+                  }).run();
+                }
+              }
+            });
+          }
+          return true;
+        }
+
+        // 2. 기존 블록 드래그/드롭 처리
         if (!moved && event.dataTransfer.getData('block-drag')) {
           const { pos: fromPos, nodeSize, nodeJSON } = JSON.parse(event.dataTransfer.getData('block-drag'));
           const dropCoords = view.posAtCoords({ left: event.clientX, top: event.clientY });
@@ -164,7 +229,7 @@ const NotionEditor = ({ courseId }) => {
     onUpdate: ({ editor }) => {
       const json = editor.getJSON();
       localStorage.setItem(`note-temp-${courseId}`, JSON.stringify({ content: json, timestamp: Date.now() }));
-      if (!isInitialMount.current) debouncedSaveToServer(json, courseId);
+      if (!isInitialMount.current) debouncedSaveToServer(editor, courseId);
     },
   });
 
@@ -206,6 +271,7 @@ const NotionEditor = ({ courseId }) => {
           .uninote-editor h2 { font-size: 1.875rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.75rem; color: #1e293b; }
           .uninote-editor p { margin-bottom: 0.75rem; line-height: 1.75; }
           .uninote-editor blockquote { border-left: 4px solid #e2e8f0; padding-left: 1rem; font-style: italic; color: #475569; margin: 1.5rem 0; }
+          .uninote-editor img { max-width: 650px; width: 100%; height: auto; border-radius: 12px; margin: 1.5rem 0; border: 1px solid #f1f5f9; display: block; }
           
           /* 노션 스타일 코드 블록 */
           .ProseMirror pre {

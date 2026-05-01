@@ -29,8 +29,16 @@ public class Note {
     @JoinColumn(name = "stud_id")
     private Student student;
 
+    private String title;
+
     @Column(columnDefinition = "LONGTEXT")
-    private String content;   // 필기 내용만 유지
+    private String content;   // Tiptap JSON 전체
+
+    @Column(columnDefinition = "TEXT")
+    private String previewText; // 미리보기용 텍스트
+
+    @Column(columnDefinition = "LONGTEXT")
+    private String searchContent; // 검색 최적화용 순수 텍스트
 
     @CreatedDate
     private LocalDateTime createdAt;

@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 public class NoteResponse {
     private Long noteId;
     private Long courseId;
+    private String title;
     private String content;
     private LocalDateTime updatedAt;
 }

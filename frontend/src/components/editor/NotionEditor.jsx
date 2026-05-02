@@ -19,7 +19,8 @@ import {
   Code, 
   Quote, 
   Image as ImageIcon,
-  FilePlus 
+  FilePlus,
+  BrainCircuit
 } from 'lucide-react';
 
 import client from '../../api/client';
@@ -28,6 +29,8 @@ import BlockId from './extensions/BlockId.js';
 import PageLink from './extensions/PageLink.jsx';
 import SuggestionList from './components/SuggestionList.jsx';
 import BlockHandle from './components/BlockHandle.jsx';
+import QuizConfigModal from './components/QuizConfigModal';
+import CBTPlayer from './components/CBTPlayer';
 
 // 첫 번째 블록을 제목으로 강제하는 커스텀 도큐먼트
 const CustomDocument = Document.extend({
@@ -36,6 +39,8 @@ const CustomDocument = Document.extend({
 
 const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => { 
   const [saveStatus, setSaveStatus] = useState('synced');
+  const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
+  const [quizResult, setQuizResult] = useState(null);
   const lastSavedJson = useRef(null);
   const isInitialMount = useRef(true);
   const navigate = useNavigate();
@@ -343,7 +348,29 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
 
   return (
     <div className="relative">
+      <QuizConfigModal 
+        isOpen={isQuizModalOpen} 
+        onClose={() => setIsQuizModalOpen(false)}
+        courseId={courseId}
+        currentNoteId={noteId}
+        onGenerated={(res) => setQuizResult(res)}
+      />
+
+      {quizResult && (
+        <CBTPlayer 
+          quizData={quizResult} 
+          onClose={() => setQuizResult(null)} 
+        />
+      )}
+
       <div className="absolute -top-10 right-0 flex items-center gap-1.5 px-3 py-1 bg-white/50 backdrop-blur rounded-full border border-slate-100 z-10 shadow-sm">
+        <button 
+          onClick={() => setIsQuizModalOpen(true)}
+          className="flex items-center gap-1.5 hover:bg-blue-50 px-2 py-0.5 rounded-full transition-colors text-blue-600"
+        >
+          <BrainCircuit size={12} />
+          <span className="text-[9px] font-black uppercase tracking-wider">AI 퀴즈 생성</span>
+        </button>
         <div className={`w-1.5 h-1.5 rounded-full ${saveStatus === 'saving' ? 'bg-blue-500 animate-pulse' : saveStatus === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
         <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">
           {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'error' ? 'Error' : 'Synced'}

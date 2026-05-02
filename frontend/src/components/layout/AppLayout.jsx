@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   LogOut, 
-  Menu
+  Menu,
+  BrainCircuit
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -38,6 +39,14 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
           >
             <LayoutDashboard size={18} />
             <span className="text-sm font-bold">대시보드</span>
+          </button>
+
+          <button 
+            onClick={() => navigate('/quizzes')} 
+            className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white transition-all whitespace-nowrap mb-2"
+          >
+            <BrainCircuit size={18} />
+            <span className="text-sm font-bold">생성 문제 모음</span>
           </button>
 
           <div className="h-[1px] bg-slate-800 my-4 mx-2" />

@@ -9,6 +9,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "notes")
@@ -29,18 +31,26 @@ public class Note {
     @JoinColumn(name = "stud_id")
     private Student student;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_note_id")
+    private Note parentNote;
+
+    @OneToMany(mappedBy = "parentNote", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Note> childNotes = new ArrayList<>();
+
     private String title;
 
     @Column(columnDefinition = "LONGTEXT")
-    private String content;   // Tiptap JSON 전체
+    private String content;
 
     @Column(columnDefinition = "TEXT")
-    private String previewText; // 미리보기용 텍스트
+    private String previewText;
 
     @Column(columnDefinition = "LONGTEXT")
-    private String searchContent; // 검색 최적화용 순수 텍스트
+    private String searchContent;
 
     @CreatedDate
+    @Column(updatable = false)
     private LocalDateTime createdAt;
 
     @UpdateTimestamp

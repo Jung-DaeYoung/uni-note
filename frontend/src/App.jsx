@@ -31,6 +31,14 @@ function App() {
             </ProtectedRoute>
           } 
         />
+        <Route 
+          path="/course/:courseId/note/:noteId" 
+          element={
+            <ProtectedRoute>
+              <CourseDetailPage />
+            </ProtectedRoute>
+          } 
+        />
 
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

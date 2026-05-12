@@ -60,6 +60,11 @@ const QuizLibraryPage = () => {
           ) : (
             quizzes.map(quiz => (
               <div key={quiz.quizSetId} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[9px] font-black px-2 py-1 bg-blue-600 text-white rounded-lg uppercase tracking-tight shadow-sm shadow-blue-200">
+                    {quiz.courseName}
+                  </span>
+                </div>
                 <div className="flex justify-between items-start mb-4">
                   <h3 className="font-bold text-slate-900">{quiz.title}</h3>
                   <div className="flex items-center gap-2">

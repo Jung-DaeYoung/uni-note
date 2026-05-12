@@ -369,7 +369,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
           className="flex items-center gap-1.5 hover:bg-blue-50 px-2 py-0.5 rounded-full transition-colors text-blue-600"
         >
           <BrainCircuit size={12} />
-          <span className="text-[9px] font-black uppercase tracking-wider">AI 퀴즈 생성</span>
+          <span className="text-[9px] font-black uppercase tracking-wider">AI 문제 생성</span>
         </button>
         <div className={`w-1.5 h-1.5 rounded-full ${saveStatus === 'saving' ? 'bg-blue-500 animate-pulse' : saveStatus === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
         <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">

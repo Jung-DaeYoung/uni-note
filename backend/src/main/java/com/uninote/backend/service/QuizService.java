@@ -96,6 +96,12 @@ public class QuizService {
                 quizSet.setDifficulty(request.getDifficulty());
                 quizSet.setSourceNotes(objectMapper.writeValueAsString(request.getNoteIds()));
                 quizSet.setStudent(student);
+                
+                // 첫 번째 노트의 강의 정보를 퀴즈 셋의 강의 정보로 설정
+                if (!notes.isEmpty()) {
+                    quizSet.setCourse(notes.get(0).getCourse());
+                }
+                
                 quizSetRepository.save(quizSet);
 
                 for (QuestionResponse qr : quizResponse.getQuestions()) {
@@ -136,6 +142,7 @@ public class QuizService {
             .map(qs -> QuizSetResponse.builder()
                 .quizSetId(qs.getQuizSetId())
                 .title(qs.getTitle())
+                .courseName(qs.getCourse() != null ? qs.getCourse().getCourseName() : "Unknown Course")
                 .difficulty(qs.getDifficulty())
                 .createdAt(qs.getCreatedAt())
                 .build())

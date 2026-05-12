@@ -43,7 +43,7 @@ const QuizConfigModal = ({ isOpen, onClose, courseId, currentNoteId, onGenerated
       onGenerated(response.data);
       onClose();
     } catch (error) {
-      alert('퀴즈 생성 중 오류가 발생했습니다.');
+      alert('문제 생성 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -54,7 +54,7 @@ const QuizConfigModal = ({ isOpen, onClose, courseId, currentNoteId, onGenerated
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
         <div className="p-4 border-b flex justify-between items-center bg-slate-50">
           <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
-            <BookOpen size={16} className="text-blue-600" /> AI 퀴즈 생성 설정
+            <BookOpen size={16} className="text-blue-600" /> AI 문제 생성 설정
           </h2>
           <button onClick={onClose}><X size={16} /></button>
         </div>

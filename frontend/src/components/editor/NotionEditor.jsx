@@ -20,13 +20,15 @@ import {
   Quote, 
   Image as ImageIcon,
   FilePlus,
-  BrainCircuit
+  BrainCircuit,
+  FileText
 } from 'lucide-react';
 
 import client from '../../api/client';
 import SlashCommand from './extensions/SlashCommand.js';
 import BlockId from './extensions/BlockId.js';
 import PageLink from './extensions/PageLink.jsx';
+import PdfBlock from './extensions/PdfBlock.jsx';
 import SuggestionList from './components/SuggestionList.jsx';
 import BlockHandle from './components/BlockHandle.jsx';
 import QuizConfigModal from './components/QuizConfigModal';
@@ -83,6 +85,22 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
     }
   };
 
+  const handlePdfUpload = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const response = await client.post('/upload/file', formData);
+      const serverUrl = 'http://localhost:8080';
+      return {
+        url: serverUrl + response.data.url,
+        title: response.data.title
+      };
+    } catch (error) {
+      console.error("PDF 업로드 실패:", error);
+      return null;
+    }
+  };
+
   const debouncedSaveToServer = useCallback(
     debounce(async (editor, id) => {
       // ... (기존 로직 유지)
@@ -131,6 +149,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
       Image,
       BlockId,
       PageLink,
+      PdfBlock,
       SlashCommand.configure({
         // ... (기존 suggestion 설정 유지)
         suggestion: {
@@ -226,6 +245,28 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
                   input.click();
                 }
               },
+              { 
+                title: 'PDF 업로드', 
+                icon: <FileText size={18} className="text-red-500" />, 
+                description: 'PDF 파일을 문서에 첨부합니다.',
+                command: ({ editor, range }) => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.pdf,application/pdf';
+                  input.onchange = async () => {
+                    if (input.files?.length) {
+                      const result = await handlePdfUpload(input.files[0]);
+                      if (result) {
+                        editor.chain().focus().deleteRange(range).insertContent({
+                          type: 'pdfBlock',
+                          attrs: { src: result.url, title: result.title }
+                        }).run();
+                      }
+                    }
+                  };
+                  input.click();
+                }
+              },
             ].filter(item => item.title.toLowerCase().includes(query.toLowerCase()));
           },
           render: () => {
@@ -291,16 +332,24 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
         if (!moved && event.dataTransfer.files.length > 0) {
           event.preventDefault();
           const file = event.dataTransfer.files[0];
+          const coordinates = view.posAtCoords({ left: event.clientX, top: event.clientY });
+
           if (file.type.startsWith('image/')) {
             handleImageUpload(file).then(url => {
-              if (url) {
-                const coordinates = view.posAtCoords({ left: event.clientX, top: event.clientY });
-                if (coordinates) {
-                  editor.chain().focus().insertContentAt(coordinates.pos, {
-                    type: 'image',
-                    attrs: { src: url }
-                  }).run();
-                }
+              if (url && coordinates) {
+                editor.chain().focus().insertContentAt(coordinates.pos, {
+                  type: 'image',
+                  attrs: { src: url }
+                }).run();
+              }
+            });
+          } else if (file.type === 'application/pdf') {
+            handlePdfUpload(file).then(result => {
+              if (result && coordinates) {
+                editor.chain().focus().insertContentAt(coordinates.pos, {
+                  type: 'pdfBlock',
+                  attrs: { src: result.url, title: result.title }
+                }).run();
               }
             });
           }
@@ -379,9 +428,9 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
 
       <section className="relative min-h-[850px] bg-white rounded-[2.5rem] px-12 py-8 shadow-2xl shadow-slate-200/40 border border-slate-100 ring-1 ring-slate-50">
         <style>{`
-          .uninote-editor { color: #1e293b; }
+          .uninote-editor { color: #1e293b; font-size: 0.9375rem; }
           .ProseMirror h1:first-child { 
-            font-size: 2.25rem; 
+            font-size: 1.875rem; 
             font-weight: 800; 
             margin-top: 0; 
             margin-bottom: 1rem; 
@@ -389,9 +438,9 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
             padding-bottom: 1rem;
             letter-spacing: -0.025em;
           }
-          .uninote-editor h1 { font-size: 2.5rem; font-weight: 800; margin-top: 1.5rem; margin-bottom: 1rem; line-height: 1.2; color: #0f172a; }
-          .uninote-editor h2 { font-size: 1.875rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.75rem; color: #1e293b; }
-          .uninote-editor p { margin-bottom: 0.75rem; line-height: 1.75; }
+          .uninote-editor h1 { font-size: 2rem; font-weight: 800; margin-top: 1.5rem; margin-bottom: 1rem; line-height: 1.2; color: #0f172a; }
+          .uninote-editor h2 { font-size: 1.5rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.75rem; color: #1e293b; }
+          .uninote-editor p { margin-bottom: 0.5rem; line-height: 1.625; }
           .uninote-editor blockquote { border-left: 4px solid #e2e8f0; padding-left: 1rem; font-style: italic; color: #475569; margin: 1.5rem 0; }
           .uninote-editor img { max-width: 650px; width: 100%; height: auto; border-radius: 12px; margin: 1.5rem 0; border: 1px solid #f1f5f9; display: block; }
           /* 페이지 링크 블록 스타일 고도화 */
@@ -429,6 +478,12 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
           }
           .page-link-container:hover .page-link-title-text {
             border-bottom-color: #94a3b8;
+          }
+
+          /* PDF 블록 스타일 */
+          .pdf-block-wrapper {
+            margin: 1rem 0;
+            padding: 2px 0;
           }
 
           /* 노션 스타일 코드 블록 */

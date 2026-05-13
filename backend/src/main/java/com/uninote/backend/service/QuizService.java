@@ -14,6 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -27,26 +30,43 @@ public class QuizService {
     private final RestTemplate restTemplate;
 
     private final String GEMINI_API_KEY = System.getenv("GEMINI_API_KEY");
+    // 원래 모델인 gemini-2.5-flash 사용
     private final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY;
 
     @Transactional
     public QuizResponse generateQuiz(QuizRequest request, Student student) {
         List<Note> notes = noteRepository.findAllById(request.getNoteIds());
-        String context = notes.stream().map(n -> n.getContent() != null ? n.getContent() : "").collect(Collectors.joining("\n"));
+        
+        StringBuilder combinedText = new StringBuilder();
+        List<Map<String, Object>> mediaParts = new ArrayList<>();
+
+        for (Note note : notes) {
+            if (note.getContent() != null) {
+                processNoteContent(note.getContent(), combinedText, mediaParts);
+            }
+        }
 
         String typeInstruction = request.getTypeCounts().entrySet().stream()
             .map(e -> e.getKey() + " " + e.getValue() + "문제")
             .collect(Collectors.joining(", "));
 
         String prompt = String.format(
-            "강의 내용을 기반으로 퀴즈를 생성하라. " +
-            "난이도: %s. " +
-            "유형별 문제 수 배분: %s. " +
-            "응답 구조: { \"title\": \"제목\", \"difficulty\": \"%s\", \"questions\": [ { \"type\": \"유형\", \"questionText\": \"내용\", \"options\": [\"A\", \"B\"], \"correctAnswer\": \"정답\", \"explanation\": \"해설\", \"sourceNoteId\": 1, \"sourceBlockId\": \"b1\" } ] }. " +
-            "반드시 마크다운 없이 오직 JSON 객체로만 응답하라. " +
-            "내용: %s",
-            request.getDifficulty(), typeInstruction, request.getDifficulty(), context
+            "강의 내용(텍스트, 이미지, PDF)을 기반으로 퀴즈를 생성하라.\n" +
+            "난이도: %s.\n" +
+            "유형별 문제 수 배분: %s.\n" +
+            "응답 구조: { \"title\": \"제목\", \"difficulty\": \"%s\", \"questions\": [ { \"type\": \"유형\", \"questionText\": \"내용\", \"options\": [\"A\", \"B\"], \"correctAnswer\": \"정답\", \"explanation\": \"해설\", \"sourceNoteId\": 1, \"sourceBlockId\": \"b1\" } ] }.\n" +
+            "--- 엄격 준수 사항 ---\n" +
+            "1. JSON 응답 내의 어떠한 숫자 값(또는 숫자로 이루어진 문자열)도 500자를 초과할 수 없다.\n" +
+            "2. 설명(explanation)이나 정답(correctAnswer)에 불필요하게 긴 숫자 나열, 복잡한 수식, 또는 로우 데이터(raw data)를 포함하지 마라.\n" +
+            "3. 텍스트 중심의 간결하고 명확한 설명을 제공하라.\n" +
+            "4. 반드시 마크다운 없이 오직 JSON 객체로만 응답하라.\n" +
+            "텍스트 내용: %s",
+            request.getDifficulty(), typeInstruction, request.getDifficulty(), combinedText.toString()
         );
+
+        List<Map<String, Object>> parts = new ArrayList<>();
+        parts.add(Map.of("text", prompt));
+        parts.addAll(mediaParts);
 
         Map<String, Object> schema = Map.of(
             "type", "OBJECT",
@@ -74,7 +94,7 @@ public class QuizService {
         );
 
         Map<String, Object> requestBody = Map.of(
-            "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
+            "contents", List.of(Map.of("parts", parts)),
             "generationConfig", Map.of("responseMimeType", "application/json", "responseSchema", schema)
         );
 
@@ -97,7 +117,6 @@ public class QuizService {
                 quizSet.setSourceNotes(objectMapper.writeValueAsString(request.getNoteIds()));
                 quizSet.setStudent(student);
                 
-                // 첫 번째 노트의 강의 정보를 퀴즈 셋의 강의 정보로 설정
                 if (!notes.isEmpty()) {
                     quizSet.setCourse(notes.get(0).getCourse());
                 }
@@ -120,7 +139,69 @@ public class QuizService {
             return quizResponse;
         } catch (Exception e) {
             log.error("AI 퀴즈 처리 실패", e);
-            throw new RuntimeException("퀴즈 생성 실패");
+            throw new RuntimeException("퀴즈 생성 실패: " + e.getMessage());
+        }
+    }
+
+    private void processNoteContent(String contentJson, StringBuilder combinedText, List<Map<String, Object>> mediaParts) {
+        try {
+            JsonNode root = objectMapper.readTree(contentJson);
+            extractDataFromNode(root, combinedText, mediaParts);
+        } catch (Exception e) {
+            log.warn("노트 콘텐츠 파싱 실패", e);
+        }
+    }
+
+    private void extractDataFromNode(JsonNode node, StringBuilder textBuilder, List<Map<String, Object>> mediaParts) {
+        if (node.isObject()) {
+            String type = node.path("type").asText();
+            
+            if ("text".equals(type)) {
+                textBuilder.append(node.path("text").asText()).append(" ");
+            } else if ("image".equals(type)) {
+                String src = node.path("attrs").path("src").asText();
+                addMediaPart(src, "image", mediaParts);
+            } else if ("pdfBlock".equals(type)) {
+                String src = node.path("attrs").path("src").asText();
+                addMediaPart(src, "application/pdf", mediaParts);
+            }
+
+            JsonNode content = node.path("content");
+            if (content.isArray()) {
+                for (JsonNode child : content) {
+                    extractDataFromNode(child, textBuilder, mediaParts);
+                }
+            }
+        } else if (node.isArray()) {
+            for (JsonNode child : node) {
+                extractDataFromNode(child, textBuilder, mediaParts);
+            }
+        }
+    }
+
+    private void addMediaPart(String url, String defaultMimeType, List<Map<String, Object>> mediaParts) {
+        try {
+            String fileName = url.substring(url.lastIndexOf("/") + 1);
+            Path filePath = Paths.get("uploads").resolve(fileName);
+            
+            if (Files.exists(filePath)) {
+                byte[] fileBytes = Files.readAllBytes(filePath);
+                String base64Data = Base64.getEncoder().encodeToString(fileBytes);
+                
+                String mimeType = defaultMimeType;
+                if (fileName.toLowerCase().endsWith(".png")) mimeType = "image/png";
+                else if (fileName.toLowerCase().endsWith(".jpg") || fileName.toLowerCase().endsWith(".jpeg")) mimeType = "image/jpeg";
+                else if (fileName.toLowerCase().endsWith(".pdf")) mimeType = "application/pdf";
+
+                mediaParts.add(Map.of(
+                    "inline_data", Map.of(
+                        "mime_type", mimeType,
+                        "data", base64Data
+                    )
+                ));
+            }
+        } catch (Exception e) {
+            log.warn("미디어 데이터 변환 실패: " + url, e);
         }
     }
 

@@ -8,12 +8,10 @@ const PdfBlockComponent = ({ node }) => {
 
   const handleDownload = (e) => {
     e.preventDefault();
-    const link = document.createElement('a');
-    link.href = src;
-    link.download = title;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // URL에서 UUID 파일명만 추출
+    const fileName = src.substring(src.lastIndexOf("/") + 1);
+    // 백엔드의 강제 다운로드 API 호출 (원본 파일명을 파라미터로 전달)
+    window.location.href = `http://localhost:8080/api/upload/download/${fileName}?originalName=${encodeURIComponent(title)}`;
   };
 
   return (

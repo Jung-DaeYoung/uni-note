@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useEditor, EditorContent, ReactRenderer } from '@tiptap/react';
+import { useEditor, EditorContent, ReactRenderer, ReactNodeViewRenderer } from '@tiptap/react';
 import Document from '@tiptap/extension-document';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
+import { all, createLowlight } from 'lowlight'
+import debounce from 'lodash.debounce';
 import Image from '@tiptap/extension-image';
 import tippy from 'tippy.js';
-import debounce from 'lodash.debounce';
 import { 
   PenLine, 
   Heading1, 
@@ -33,6 +35,18 @@ import SuggestionList from './components/SuggestionList.jsx';
 import BlockHandle from './components/BlockHandle.jsx';
 import QuizConfigModal from './components/QuizConfigModal';
 import CBTPlayer from './components/CBTPlayer';
+import CodeBlockComponent from './components/CodeBlockComponent';
+
+import 'highlight.js/styles/atom-one-dark.css'
+
+const lowlight = createLowlight(all)
+
+// 커스텀 코드 블록 확장 정의
+const CustomCodeBlock = CodeBlockLowlight.extend({
+  addNodeView() {
+    return ReactNodeViewRenderer(CodeBlockComponent)
+  },
+})
 
 // 첫 번째 블록을 제목으로 강제하는 커스텀 도큐먼트
 const CustomDocument = Document.extend({
@@ -137,6 +151,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
       StarterKit.configure({
         document: false, 
         heading: { levels: [1, 2, 3] },
+        codeBlock: false,
       }),
       Placeholder.configure({
         placeholder: ({ node, pos }) => {
@@ -147,6 +162,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
       TaskList,
       TaskItem.configure({ nested: true }),
       Image,
+      CustomCodeBlock.configure({ lowlight }),
       BlockId,
       PageLink,
       PdfBlock,
@@ -317,6 +333,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
       // ... (기존 editorProps 유지)
       attributes: {
         class: 'uninote-editor focus:outline-none min-h-[700px] text-lg leading-relaxed',
+        spellcheck: 'false',
       },
       handleClickOn: (view, pos, node, nodePos, event, direct) => {
         if (node.type.name === 'pageLink') {
@@ -487,9 +504,10 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
           }
 
           /* 노션 스타일 코드 블록 */
-          .ProseMirror pre { background: #f6f6f7; padding: 14px 16px; border-radius: 8px; margin: 12px 0; overflow-x: auto; border: 1px solid #e2e8f0; }
-          .ProseMirror pre code { font-family: 'Fira Code', monospace; background: transparent; padding: 0; color: #1e293b; font-size: 0.9rem; }
-          .ProseMirror code { background: rgba(135,131,120,0.15); padding: 2px 4px; border-radius: 4px; font-family: 'Fira Code', monospace; font-size: 0.85em; }
+          .code-block-wrapper { margin: 1.5rem 0; position: relative; z-index: 10; }
+          .code-block-wrapper pre { background: #f1f5f9; padding: 2.5rem 1rem 1rem; border-radius: 12px; overflow-x: auto; border: 1px solid #e2e8f0; position: relative; }
+          .code-block-wrapper pre code { font-family: 'Fira Code', monospace; background: transparent; padding: 0; font-size: 0.9rem; color: #334155; }
+          .ProseMirror code { background: rgba(135,131,120,0.12); padding: 2px 4px; border-radius: 4px; font-family: 'Fira Code', monospace; font-size: 0.85em; }
           .uninote-editor ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; }
           .uninote-editor ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1rem; }
           .uninote-editor [data-type="taskList"] { list-style: none; padding: 0; }

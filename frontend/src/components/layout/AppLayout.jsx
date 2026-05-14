@@ -1,24 +1,44 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   LogOut, 
   Menu,
-  BrainCircuit
+  BrainCircuit,
+  ChevronDown,
+  ChevronRight,
+  BookOpen,
+  PenLine
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useCourses } from '../../context/CourseContext';
 
 const AppLayout = ({ children, sidebarContent, headerContent }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isDashboardExpanded, setIsDashboardExpanded] = useState(true);
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { courses } = useCourses();
+
+  const toggleDashboard = (e) => {
+    e.stopPropagation();
+    setIsDashboardExpanded(!isDashboardExpanded);
+  };
+
+  const handleDashboardClick = () => {
+    navigate('/dashboard');
+    if (!isDashboardExpanded) {
+      setIsDashboardExpanded(true);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
       {/* Sidebar */}
       <aside 
         className={`bg-slate-900 text-white flex flex-col transition-all duration-300 ease-in-out overflow-hidden ${
-          isSidebarCollapsed ? 'w-0' : 'w-60 border-r border-slate-800'
+          isSidebarCollapsed ? 'w-0' : 'w-64 border-r border-slate-800'
         }`}
       >
         {/* Sidebar Header */}
@@ -33,17 +53,60 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
 
         {/* Navigation */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto custom-scrollbar">
-          <button 
-            onClick={() => navigate('/dashboard')} 
-            className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white transition-all whitespace-nowrap mb-2"
-          >
-            <LayoutDashboard size={18} />
-            <span className="text-sm font-bold">대시보드</span>
-          </button>
+          {/* Dashboard Menu (Collapsible) */}
+          <div className="mb-2">
+            <div 
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 transition-all whitespace-nowrap cursor-pointer ${
+                location.pathname === '/dashboard' ? 'text-white bg-white/5' : 'text-slate-400 hover:text-white'
+              }`}
+              onClick={handleDashboardClick}
+            >
+              <div className="flex items-center gap-3">
+                <LayoutDashboard size={18} />
+                <span className="text-sm font-bold">대시보드</span>
+              </div>
+              <button 
+                onClick={toggleDashboard}
+                className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                {isDashboardExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+            </div>
+
+            {/* Course List (Nested) */}
+            {isDashboardExpanded && (
+              <div className="mt-1 ml-4 space-y-1 border-l border-slate-800">
+                {courses.length === 0 ? (
+                  <p className="px-6 py-2 text-[10px] text-slate-600 font-bold uppercase tracking-widest italic">수강 중인 강의 없음</p>
+                ) : (
+                  courses.map((course) => {
+                    const isCourseActive = location.pathname.includes(`/course/${course.courseId}`);
+                    return (
+                      <div key={course.courseId} className="space-y-0.5">
+                        <button 
+                          onClick={() => navigate(`/course/${course.courseId}`)}
+                          className={`w-[calc(100%-0.5rem)] ml-2 flex items-center gap-3 p-2.5 rounded-xl transition-all text-xs font-bold ${
+                            isCourseActive 
+                            ? 'bg-blue-600/10 text-blue-400' 
+                            : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'
+                          }`}
+                        >
+                          <BookOpen size={14} className={isCourseActive ? 'text-blue-400' : 'text-slate-500'} />
+                          <span className="truncate">{course.courseName}</span>
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
 
           <button 
             onClick={() => navigate('/quizzes')} 
-            className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white transition-all whitespace-nowrap mb-2"
+            className={`w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all whitespace-nowrap mb-2 ${
+              location.pathname === '/quizzes' ? 'text-white bg-white/5' : 'text-slate-400 hover:text-white'
+            }`}
           >
             <BrainCircuit size={18} />
             <span className="text-sm font-bold">생성 문제 모음</span>
@@ -77,7 +140,7 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
             <Menu size={20} />
           </button>
           
-          <div className="ml-4 flex-1 flex items-center h-full">
+          <div className="ml-4 flex-1 flex items-center h-full overflow-hidden">
             {headerContent}
           </div>
         </header>

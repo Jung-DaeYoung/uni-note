@@ -64,7 +64,7 @@ const BlockHandle = ({ editor }) => {
 
   // 드래그 시작 시 데이터 설정
   const handleDragStart = (e) => {
-    if (!currentNode) return;
+    if (!currentNode || !currentNode.node) return;
     
     // 블록 데이터 직렬화하여 전달
     const dragData = {
@@ -81,26 +81,36 @@ const BlockHandle = ({ editor }) => {
   };
 
   const selectBlock = () => {
-    if (!currentNode) return;
-    editor.commands.setNodeSelection(currentNode.pos);
-    setIsMenuOpen(true);
+    if (!currentNode || !currentNode.node) return;
+    try {
+      editor.commands.setNodeSelection(currentNode.pos);
+      setIsMenuOpen(true);
+    } catch (err) {
+      console.error("Block selection failed:", err);
+    }
   };
 
   const deleteBlock = () => {
-    editor.chain().focus().deleteRange({ from: currentNode.pos, to: currentNode.pos + currentNode.node.nodeSize }).run();
+    if (!currentNode || !currentNode.node) return;
+    editor.chain().focus().deleteRange({ 
+      from: currentNode.pos, 
+      to: currentNode.pos + currentNode.node.nodeSize 
+    }).run();
     setIsMenuOpen(false);
   };
 
   const duplicateBlock = () => {
+    if (!currentNode || !currentNode.node) return;
     const { node, pos: nodePos } = currentNode;
     editor.chain().focus().insertContentAt(nodePos + node.nodeSize, node.toJSON()).run();
     setIsMenuOpen(false);
   };
 
   const handleAiAction = () => {
+    if (!currentNode || !currentNode.node) return;
     const data = {
-      id: currentNode.node.attrs.id,
-      type: currentNode.node.type.name,
+      id: currentNode.node.attrs?.id,
+      type: currentNode.node.type?.name,
       text: currentNode.node.textContent
     };
     console.log("AI 연동 데이터:", data);

@@ -5,6 +5,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.util.UriUtils;
+
+import java.net.MalformedURLException;
+import java.nio.charset.StandardCharsets;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +26,31 @@ import java.util.UUID;
 public class ImageUploadController {
 
     private final String uploadDir = "uploads";
+
+    @GetMapping("/download/{fileName}")
+    public ResponseEntity<Resource> downloadFile(@PathVariable String fileName, @RequestParam String originalName) {
+        try {
+            Path filePath = Paths.get(uploadDir).resolve(fileName);
+            Resource resource = new UrlResource(filePath.toUri());
+
+            if (resource.exists() || resource.isReadable()) {
+                // 한글 파일명 깨짐 방지를 위한 인코딩
+                String encodedFileName = UriUtils.encode(originalName, StandardCharsets.UTF_8);
+                // 브라우저에게 다운로드를 강제하는 헤더 설정
+                String contentDisposition = "attachment; filename=\"" + encodedFileName + "\"";
+
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
+                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                        .body(resource);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (MalformedURLException e) {
+            log.error("파일 다운로드 오류: {}", fileName, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
 
     @PostMapping("/image")
     public ResponseEntity<?> uploadImage(@RequestParam("file") MultipartFile file) {

@@ -20,6 +20,7 @@ import client from '../api/client';
 import AppLayout from '../components/layout/AppLayout';
 import NotionEditor from '../components/editor/NotionEditor';
 import { NoteTreeProvider } from '../context/NoteTreeContext';
+import { useCourses } from '../context/CourseContext';
 
 // --- Sidebar Tree Item Component ---
 const NoteTreeItem = ({ item, courseId, depth = 0, currentNoteId, onDelete }) => {
@@ -92,12 +93,17 @@ const CourseDetailPage = () => {
   const { courseId, noteId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { courses } = useCourses();
   
   // States
-  const [courseName, setCourseName] = useState('');
   const [noteData, setNoteNoteData] = useState(null);
   const [noteTree, setNoteTree] = useState([]);
   const [posts, setPosts] = useState([]);
+
+  const courseName = useMemo(() => {
+    const course = courses.find(c => c.courseId === parseInt(courseId));
+    return course ? course.courseName : '';
+  }, [courses, courseId]);
   
   // Board Sidebar State
   const [isBoardOpen, setIsBoardOpen] = useState(false);
@@ -128,10 +134,6 @@ const CourseDetailPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const dashboardRes = await client.get('/dashboard/courses');
-        const currentCourse = dashboardRes.data.courses.find(c => c.courseId === parseInt(courseId));
-        if (currentCourse) setCourseName(currentCourse.courseName);
-
         const postsRes = await client.get(`/posts/${courseId}`);
         setPosts(postsRes.data || []);
 

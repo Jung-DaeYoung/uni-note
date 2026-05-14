@@ -61,6 +61,20 @@ const CBTPlayer = ({ quizData, onClose }) => {
                           </div>
                         )}
                       </div>
+                    ) : q.type === 'OX' ? (
+                      <div className="flex gap-4">
+                        {['O', 'X'].map((opt) => (
+                          <div key={opt} className={`flex-1 p-3 rounded-xl border text-center font-black text-sm transition-all ${
+                            opt === q.correctAnswer 
+                              ? 'border-green-500 bg-green-50 text-green-700' 
+                              : (answers[idx] === opt ? 'border-red-500 bg-red-50 text-red-700' : 'border-slate-100 text-slate-300')
+                          }`}>
+                            {opt}
+                            {opt === q.correctAnswer && <CheckCircle size={14} className="inline ml-2" />}
+                            {answers[idx] === opt && opt !== q.correctAnswer && <XCircle size={14} className="inline ml-2" />}
+                          </div>
+                        ))}
+                      </div>
                     ) : (
                       q.options?.map((opt, i) => (
                         <div key={i} className={`p-3 rounded-lg border text-sm ${

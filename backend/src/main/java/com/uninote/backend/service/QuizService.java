@@ -17,6 +17,7 @@ import org.springframework.web.client.RestTemplate;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -26,6 +27,9 @@ import java.util.stream.Collectors;
 public class QuizService {
     private final NoteRepository noteRepository;
     private final QuizSetRepository quizSetRepository;
+    private final QuizAttemptRepository quizAttemptRepository;
+    private final UserAnswerRepository userAnswerRepository;
+    private final QuestionRepository questionRepository;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
 
@@ -42,7 +46,7 @@ public class QuizService {
 
         for (Note note : notes) {
             if (note.getContent() != null) {
-                processNoteContent(note.getContent(), combinedText, mediaParts);
+                processNoteContent(note.getNoteId(), note.getContent(), combinedText, mediaParts);
             }
         }
 
@@ -52,6 +56,8 @@ public class QuizService {
 
         String prompt = String.format(
             "강의 내용(텍스트, 이미지, PDF)을 기반으로 퀴즈를 생성하라.\n" +
+            "텍스트 내용에는 [[REF:noteId/blockId]] 형태의 출처 메타데이터가 포함되어 있다.\n" +
+            "모든 문항(question)은 반드시 제공된 출처 중 하나를 근거로 생성해야 하며, 해당 문항의 근거가 된 noteId와 blockId를 'sourceNoteId'와 'sourceBlockId' 필드에 정확히 기입하라.\n" +
             "난이도: %s.\n" +
             "유형별 문제 수 배분: %s.\n" +
             "응답 구조: { \"title\": \"제목\", \"difficulty\": \"%s\", \"questions\": [ { \"type\": \"유형\", \"questionText\": \"내용\", \"options\": [\"A\", \"B\"], \"correctAnswer\": \"정답\", \"explanation\": \"해설\", \"sourceNoteId\": 1, \"sourceBlockId\": \"b1\" } ] }.\n" +
@@ -133,8 +139,12 @@ public class QuizService {
                     question.setExplanation(qr.getExplanation());
                     question.setSourceNoteId(qr.getSourceNoteId());
                     question.setSourceBlockId(qr.getSourceBlockId());
-                    quizSet.getQuestions().add(question);
+                    
+                    Question savedQuestion = questionRepository.save(question);
+                    qr.setQuestionId(savedQuestion.getQuestionId()); // ID 주입
+                    quizSet.getQuestions().add(savedQuestion);
                 }
+                quizResponse.setQuizSetId(quizSet.getQuizSetId()); // QuizResponse에도 ID 추가 필요
             }
             return quizResponse;
         } catch (Exception e) {
@@ -143,25 +153,35 @@ public class QuizService {
         }
     }
 
-    private void processNoteContent(String contentJson, StringBuilder combinedText, List<Map<String, Object>> mediaParts) {
+    private void processNoteContent(Long noteId, String contentJson, StringBuilder combinedText, List<Map<String, Object>> mediaParts) {
         try {
             JsonNode root = objectMapper.readTree(contentJson);
-            extractDataFromNode(root, combinedText, mediaParts);
+            extractDataFromNode(noteId, null, root, combinedText, mediaParts);
         } catch (Exception e) {
             log.warn("노트 콘텐츠 파싱 실패", e);
         }
     }
 
-    private void extractDataFromNode(JsonNode node, StringBuilder textBuilder, List<Map<String, Object>> mediaParts) {
+    private void extractDataFromNode(Long noteId, String currentBlockId, JsonNode node, StringBuilder textBuilder, List<Map<String, Object>> mediaParts) {
         if (node.isObject()) {
             String type = node.path("type").asText();
+            String blockId = node.path("attrs").has("id") ? node.path("attrs").path("id").asText() : currentBlockId;
             
             if ("text".equals(type)) {
+                if (blockId != null) {
+                    textBuilder.append("[[REF:").append(noteId).append("/").append(blockId).append("]] ");
+                }
                 textBuilder.append(node.path("text").asText()).append(" ");
             } else if ("image".equals(type)) {
+                if (blockId != null) {
+                    textBuilder.append("[[REF:").append(noteId).append("/").append(blockId).append("]] (Image Content) ");
+                }
                 String src = node.path("attrs").path("src").asText();
                 addMediaPart(src, "image", mediaParts);
             } else if ("pdfBlock".equals(type)) {
+                if (blockId != null) {
+                    textBuilder.append("[[REF:").append(noteId).append("/").append(blockId).append("]] (PDF Content) ");
+                }
                 String src = node.path("attrs").path("src").asText();
                 addMediaPart(src, "application/pdf", mediaParts);
             }
@@ -169,12 +189,12 @@ public class QuizService {
             JsonNode content = node.path("content");
             if (content.isArray()) {
                 for (JsonNode child : content) {
-                    extractDataFromNode(child, textBuilder, mediaParts);
+                    extractDataFromNode(noteId, blockId, child, textBuilder, mediaParts);
                 }
             }
         } else if (node.isArray()) {
             for (JsonNode child : node) {
-                extractDataFromNode(child, textBuilder, mediaParts);
+                extractDataFromNode(noteId, currentBlockId, child, textBuilder, mediaParts);
             }
         }
     }
@@ -222,6 +242,7 @@ public class QuizService {
         return quizSetRepository.findByStudent_StudId(student.getStudId()).stream()
             .map(qs -> QuizSetResponse.builder()
                 .quizSetId(qs.getQuizSetId())
+                .courseId(qs.getCourse() != null ? qs.getCourse().getCourseId() : null)
                 .title(qs.getTitle())
                 .courseName(qs.getCourse() != null ? qs.getCourse().getCourseName() : "Unknown Course")
                 .difficulty(qs.getDifficulty())
@@ -238,6 +259,7 @@ public class QuizService {
         List<QuestionResponse> questions = quizSet.getQuestions().stream()
             .map(q -> {
                 QuestionResponse qr = new QuestionResponse();
+                qr.setQuestionId(q.getQuestionId()); // questionId 추가
                 qr.setType(q.getType());
                 qr.setQuestionText(q.getQuestionText());
                 try {
@@ -259,5 +281,113 @@ public class QuizService {
             .difficulty(quizSet.getDifficulty())
             .questions(questions)
             .build();
+    }
+
+    @Transactional
+    public void saveAttempt(QuizAttemptRequest request, Student student) {
+        QuizSet quizSet = quizSetRepository.findById(request.getQuizSetId())
+            .orElseThrow(() -> new RuntimeException("퀴즈를 찾을 수 없습니다."));
+
+        QuizAttempt attempt = new QuizAttempt();
+        attempt.setQuizSet(quizSet);
+        attempt.setStudent(student);
+        attempt.setScore(request.getScore());
+        attempt.setStatus(QuizStatus.COMPLETED);
+        attempt.setStartTime(LocalDateTime.now()); // 수동 설정
+        attempt.setEndTime(LocalDateTime.now());
+        
+        quizAttemptRepository.save(attempt);
+
+        for (QuizAttemptRequest.UserAnswerRequest uar : request.getUserAnswers()) {
+            Question question = questionRepository.findById(uar.getQuestionId())
+                .orElseThrow(() -> new RuntimeException("문제를 찾을 수 없습니다."));
+            
+            UserAnswer userAnswer = new UserAnswer();
+            userAnswer.setQuizAttempt(attempt);
+            userAnswer.setQuestion(question);
+            userAnswer.setSubmittedAnswer(uar.getSubmittedAnswer());
+            userAnswer.setIsCorrect(uar.getIsCorrect());
+            userAnswerRepository.save(userAnswer);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<QuizAttemptResponse> getMyAttempts(Student student) {
+        return quizAttemptRepository.findByStudent_StudId(student.getStudId()).stream()
+            .map(a -> QuizAttemptResponse.builder()
+                .attemptId(a.getAttemptId())
+                .quizSetId(a.getQuizSet().getQuizSetId())
+                .courseId(a.getQuizSet().getCourse() != null ? a.getQuizSet().getCourse().getCourseId() : null)
+                .quizTitle(a.getQuizSet().getTitle())
+                .score(a.getScore())
+                .totalQuestions(a.getQuizSet().getQuestions() != null ? a.getQuizSet().getQuestions().size() : 0)
+                .createdAt(a.getStartTime() != null ? a.getStartTime() : LocalDateTime.now()) // Null 방어
+                .build())
+            .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt())) // 안전한 정렬
+            .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public QuizAttemptDetailResponse getAttemptDetail(Long attemptId) {
+        QuizAttempt attempt = quizAttemptRepository.findById(attemptId)
+            .orElseThrow(() -> new RuntimeException("기록을 찾을 수 없습니다."));
+
+        List<QuizAttemptDetailResponse.UserAnswerDetailResponse> answers = attempt.getUserAnswers().stream()
+            .map(ua -> {
+                Question q = ua.getQuestion();
+                QuestionResponse qr = new QuestionResponse();
+                if (q != null) {
+                    qr.setQuestionId(q.getQuestionId());
+                    qr.setType(q.getType());
+                    qr.setQuestionText(q.getQuestionText());
+                    try {
+                        qr.setOptions(objectMapper.readValue(q.getOptions(), List.class));
+                    } catch (Exception e) {
+                        qr.setOptions(new ArrayList<>());
+                    }
+                    qr.setCorrectAnswer(q.getCorrectAnswer());
+                    qr.setExplanation(q.getExplanation());
+                    qr.setSourceNoteId(q.getSourceNoteId());
+                    qr.setSourceBlockId(q.getSourceBlockId());
+                } else {
+                    qr.setQuestionText("(삭제된 문항입니다)");
+                    qr.setOptions(new ArrayList<>());
+                    qr.setCorrectAnswer("-");
+                }
+
+                return QuizAttemptDetailResponse.UserAnswerDetailResponse.builder()
+                    .question(qr)
+                    .submittedAnswer(ua.getSubmittedAnswer())
+                    .isCorrect(ua.getIsCorrect())
+                    .build();
+            })
+            .collect(Collectors.toList());
+
+        return QuizAttemptDetailResponse.builder()
+            .attemptId(attempt.getAttemptId())
+            .quizSetId(attempt.getQuizSet().getQuizSetId())
+            .courseId(attempt.getQuizSet().getCourse() != null ? attempt.getQuizSet().getCourse().getCourseId() : null)
+            .quizTitle(attempt.getQuizSet().getTitle())
+            .difficulty(attempt.getQuizSet().getDifficulty() != null ? attempt.getQuizSet().getDifficulty().name() : "NORMAL")
+            .score(attempt.getScore())
+            .createdAt(attempt.getStartTime())
+            .userAnswers(answers)
+            .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<QuizAttemptResponse> getAttemptsByQuizSet(Long quizSetId, Student student) {
+        return quizAttemptRepository.findByQuizSet_QuizSetIdAndStudent_StudId(quizSetId, student.getStudId()).stream()
+            .map(a -> QuizAttemptResponse.builder()
+                .attemptId(a.getAttemptId())
+                .quizSetId(a.getQuizSet().getQuizSetId())
+                .courseId(a.getQuizSet().getCourse() != null ? a.getQuizSet().getCourse().getCourseId() : null)
+                .quizTitle(a.getQuizSet().getTitle())
+                .score(a.getScore())
+                .totalQuestions(a.getQuizSet().getQuestions() != null ? a.getQuizSet().getQuestions().size() : 0)
+                .createdAt(a.getStartTime() != null ? a.getStartTime() : LocalDateTime.now())
+                .build())
+            .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+            .collect(Collectors.toList());
     }
 }

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useEditor, EditorContent, ReactRenderer, ReactNodeViewRenderer } from '@tiptap/react';
 import Document from '@tiptap/extension-document';
 import StarterKit from '@tiptap/starter-kit';
@@ -60,6 +60,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
   const lastSavedJson = useRef(null);
   const isInitialMount = useRef(true);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // 초기 콘텐츠 계산 로직을 함수로 분리
   const getInitialContent = () => {
@@ -412,6 +413,29 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
     return () => debouncedSaveToServer.cancel();
   }, [noteId, editor, initialData]); // initialData 추가하여 데이터 로딩 완료 시점에 반영되도록 함
 
+  // 출처 추적: 특정 블록으로 스크롤 및 하이라이팅
+  useEffect(() => {
+    if (!editor || !location.state?.scrollToBlockId) return;
+
+    const blockId = location.state.scrollToBlockId;
+    
+    const timer = setTimeout(() => {
+      const element = document.querySelector(`[data-id="${blockId}"]`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.classList.add('origin-highlight');
+        
+        // 애니메이션 완료 후 클래스 제거 및 상태 초기화
+        setTimeout(() => {
+          element.classList.remove('origin-highlight');
+          navigate(location.pathname, { replace: true, state: {} });
+        }, 3000);
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [editor, location.state, noteId, navigate, location.pathname]);
+
   return (
     <div className="relative">
       <QuizConfigModal 
@@ -426,6 +450,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
         <CBTPlayer 
           quizData={quizResult} 
           onClose={() => setQuizResult(null)} 
+          courseId={courseId}
         />
       )}
 
@@ -460,6 +485,30 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
           .uninote-editor p { margin-bottom: 0.5rem; line-height: 1.625; }
           .uninote-editor blockquote { border-left: 4px solid #e2e8f0; padding-left: 1rem; font-style: italic; color: #475569; margin: 1.5rem 0; }
           .uninote-editor img { max-width: 650px; width: 100%; height: auto; border-radius: 12px; margin: 1.5rem 0; border: 1px solid #f1f5f9; display: block; }
+          
+          /* 하이라이트 애니메이션 */
+          @keyframes highlight-fade {
+            0% { background-color: rgba(59, 130, 246, 0); }
+            20% { background-color: rgba(59, 130, 246, 0.2); }
+            50% { background-color: rgba(59, 130, 246, 0.3); }
+            100% { background-color: rgba(59, 130, 246, 0); }
+          }
+          .origin-highlight {
+            animation: highlight-fade 3s ease-in-out;
+            border-radius: 8px;
+            position: relative;
+          }
+          .origin-highlight::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: #2563eb;
+            border-radius: 2px;
+            animation: fade-in 0.5s ease-out;
+          }
           /* 페이지 링크 블록 스타일 고도화 */
           .page-link-wrapper {
             margin: 0.5rem 0;

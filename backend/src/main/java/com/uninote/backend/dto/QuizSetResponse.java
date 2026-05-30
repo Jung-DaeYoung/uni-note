@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 @Builder
 public class QuizSetResponse {
     private Long quizSetId;
+    private Long courseId;
     private String title;
     private String courseName;
     private QuizDifficulty difficulty;

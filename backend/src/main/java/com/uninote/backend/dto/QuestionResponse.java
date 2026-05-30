@@ -7,6 +7,9 @@ import java.util.List;
 
 @Data
 public class QuestionResponse {
+    @JsonProperty("questionId")
+    private Long questionId;
+
     @JsonProperty("type")
     private QuestionType type;
     

@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import AppLayout from '../components/layout/AppLayout';
 import client from '../api/client';
-import { BookOpen, BrainCircuit, Trash2, History, CheckCircle2, ChevronRight, Calendar, Search } from 'lucide-react';
+import { BookOpen, BrainCircuit, Trash2, History, CheckCircle2, ChevronRight, Calendar, Search, Bookmark, Folder, PlayCircle } from 'lucide-react';
 import CBTPlayer from '../components/editor/components/CBTPlayer';
 import QuizAttemptsModal from '../components/editor/components/QuizAttemptsModal';
 
 const QuizLibraryPage = () => {
-  const [activeTab, setActiveTab] = useState('quizzes'); // 'quizzes' | 'history'
+  const [activeTab, setActiveTab] = useState('quizzes'); // 'quizzes' | 'history' | 'incorrect'
   const [quizzes, setQuizzes] = useState([]);
   const [attempts, setAttempts] = useState([]);
+  const [incorrectGroups, setIncorrectGroups] = useState([]);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
   const [selectedAttempt, setSelectedAttempt] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -38,9 +39,22 @@ const QuizLibraryPage = () => {
     }
   };
 
+  const fetchIncorrectGroups = async () => {
+    setIsLoading(true);
+    try {
+      const res = await client.get('/quiz/incorrect/groups');
+      setIncorrectGroups(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'quizzes') fetchQuizzes();
-    else fetchHistory();
+    else if (activeTab === 'history') fetchHistory();
+    else if (activeTab === 'incorrect') fetchIncorrectGroups();
   }, [activeTab]);
 
   const handleRetake = async (quiz) => {
@@ -49,6 +63,30 @@ const QuizLibraryPage = () => {
       setSelectedQuiz({ ...res.data, quizSetId: quiz.quizSetId, courseId: quiz.courseId });
     } catch (err) {
       alert('퀴즈 정보를 불러오는 데 실패했습니다.');
+    }
+  };
+
+  const handlePracticeIncorrect = async (group) => {
+    if (group.itemCount === 0) {
+      alert('복습할 문제가 없습니다.');
+      return;
+    }
+    try {
+      const res = await client.get(`/quiz/incorrect/groups/${group.id}/practice`);
+      setSelectedQuiz(res.data);
+    } catch (err) {
+      alert('오답노트 정보를 불러오는 데 실패했습니다.');
+    }
+  };
+
+  const handleDeleteGroup = async (e, groupId) => {
+    e.stopPropagation();
+    if (!window.confirm('오답노트를 삭제하시겠습니까? (저장된 오답들도 함께 사라집니다)')) return;
+    try {
+      await client.delete(`/quiz/incorrect/groups/${groupId}`);
+      setIncorrectGroups(incorrectGroups.filter(g => g.id !== groupId));
+    } catch (err) {
+      alert('삭제 실패');
     }
   };
 
@@ -129,6 +167,13 @@ const QuizLibraryPage = () => {
               <History size={14} />
               풀이 기록
             </button>
+            <button 
+              onClick={() => setActiveTab('incorrect')}
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'incorrect' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <Bookmark size={14} />
+              오답노트
+            </button>
           </div>
         </header>
         
@@ -179,7 +224,7 @@ const QuizLibraryPage = () => {
               ))
             )}
           </div>
-        ) : (
+        ) : activeTab === 'history' ? (
           <div className="space-y-3">
             {isLoading ? (
               <div className="text-center py-20">
@@ -211,6 +256,44 @@ const QuizLibraryPage = () => {
                     </div>
                   </div>
                   <ChevronRight size={18} className="text-slate-300 group-hover:text-blue-600 transition-all group-hover:translate-x-1" />
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {isLoading ? (
+              <div className="col-span-3 text-center py-20">
+                <div className="animate-spin w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-sm font-bold text-slate-400">오답노트를 불러오는 중...</p>
+              </div>
+            ) : incorrectGroups.length === 0 ? (
+              <div className="col-span-3 text-center py-20 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                <Bookmark size={48} className="mx-auto mb-4 text-slate-200" />
+                <p className="font-bold text-slate-400 text-sm">아직 생성된 오답노트가 없습니다.</p>
+                <p className="text-[11px] font-bold text-slate-300 mt-1">퀴즈 풀이 결과에서 틀린 문제를 담아보세요!</p>
+              </div>
+            ) : (
+              incorrectGroups.map(group => (
+                <div key={group.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 hover:shadow-md transition-all group relative">
+                  <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mb-4 text-blue-600 group-hover:scale-110 transition-transform">
+                    <Folder size={24} />
+                  </div>
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="font-bold text-slate-900 line-clamp-1">{group.title}</h3>
+                    <button onClick={(e) => handleDeleteGroup(e, group.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-black mb-6 uppercase tracking-tight">{group.itemCount}개의 문항 저장됨</p>
+                  
+                  <button 
+                    onClick={() => handlePracticeIncorrect(group)}
+                    className="w-full py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2"
+                  >
+                    <PlayCircle size={14} />
+                    다시 풀기
+                  </button>
                 </div>
               ))
             )}

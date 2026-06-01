@@ -6,10 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="30d01469-6541-422c-aa84-b9d538b198a8" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/controller/QuizController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/controller/QuizController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/dto/QuestionResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/dto/QuestionResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/dto/QuizResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/dto/QuizResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/dto/QuizSetResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/dto/QuizSetResponse.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/QuizService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/QuizService.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />

@@ -390,4 +390,21 @@ public class QuizService {
             .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
             .collect(Collectors.toList());
     }
+
+    public QuestionResponse getQuestionResponse(Question q) {
+        QuestionResponse qr = new QuestionResponse();
+        qr.setQuestionId(q.getQuestionId());
+        qr.setType(q.getType());
+        qr.setQuestionText(q.getQuestionText());
+        try {
+            qr.setOptions(objectMapper.readValue(q.getOptions(), List.class));
+        } catch (Exception e) {
+            qr.setOptions(new ArrayList<>());
+        }
+        qr.setCorrectAnswer(q.getCorrectAnswer());
+        qr.setExplanation(q.getExplanation());
+        qr.setSourceNoteId(q.getSourceNoteId());
+        qr.setSourceBlockId(q.getSourceBlockId());
+        return qr;
+    }
 }

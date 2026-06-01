@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, CheckCircle, XCircle, BookOpen, RotateCcw, ExternalLink, Loader2 } from 'lucide-react';
+import { ChevronRight, ChevronLeft, CheckCircle, XCircle, BookOpen, RotateCcw, ExternalLink, Loader2, Bookmark } from 'lucide-react';
 import client from '../../../api/client';
+import IncorrectNoteModal from './IncorrectNoteModal';
 
 const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers = null }) => {
   const navigate = useNavigate();
@@ -9,6 +10,11 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
   const [answers, setAnswers] = useState(initialAnswers || {});
   const [submitted, setSubmitted] = useState(mode === 'report');
   const [isSaving, setIsSaving] = useState(false);
+  
+  // 신규: 오답노트 모달 관련 상태
+  const [isIncorrectModalOpen, setIsIncorrectModalOpen] = useState(false);
+  const [targetQuestionId, setTargetQuestionId] = useState(null);
+
   const scrollRef = useRef(null);
 
   // 리포트 모드일 경우 questions 구조가 다를 수 있으므로 정규화
@@ -85,6 +91,11 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
 
     return (
       <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto pb-20" ref={scrollRef}>
+        <IncorrectNoteModal 
+          isOpen={isIncorrectModalOpen} 
+          onClose={() => setIsIncorrectModalOpen(false)} 
+          questionId={targetQuestionId} 
+        />
         <div className="max-w-2xl mx-auto p-6">
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 mb-8 text-center">
             <h2 className="text-xl font-black mb-2">{mode === 'report' ? '과거 학습 결과' : '학습 결과 리포트'}</h2>
@@ -103,15 +114,29 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
                 <div key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative group">
                   <div className="flex justify-between items-start mb-2">
                     <p className="text-[10px] font-black text-slate-400">문제 {idx + 1}</p>
-                    {q.sourceBlockId && (
-                      <button 
-                        onClick={() => handleViewSource(q)}
-                        className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 bg-blue-50/50 hover:bg-blue-600 hover:text-white px-2.5 py-1 rounded-full transition-all active:scale-95 shadow-sm"
-                      >
-                        <ExternalLink size={10} />
-                        원문 보기
-                      </button>
-                    )}
+                    <div className="flex gap-2">
+                      {q.sourceBlockId && (
+                        <button 
+                          onClick={() => handleViewSource(q)}
+                          className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 bg-blue-50/50 hover:bg-blue-600 hover:text-white px-2.5 py-1 rounded-full transition-all active:scale-95 shadow-sm"
+                        >
+                          <ExternalLink size={10} />
+                          원문 보기
+                        </button>
+                      )}
+                      {!isCorrect && (
+                        <button 
+                          onClick={() => {
+                            setTargetQuestionId(q.questionId);
+                            setIsIncorrectModalOpen(true);
+                          }}
+                          className="flex items-center gap-1.5 text-[9px] font-black text-amber-600 bg-amber-50/50 hover:bg-amber-600 hover:text-white px-2.5 py-1 rounded-full transition-all active:scale-95 shadow-sm"
+                        >
+                          <Bookmark size={10} />
+                          오답노트 담기
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <h3 className="text-md font-bold mb-4">{q.questionText}</h3>
                   <div className="space-y-2 mb-4">

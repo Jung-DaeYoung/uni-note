@@ -10,5 +10,6 @@ import java.util.List;
 public class DashboardResponse {
     private String studentName;
     private List<CourseResponse> courses;
-    private List<PostResponse> recentPosts; // 추가됨
+    private List<PostResponse> recentPosts;
+    private List<NoteSummaryResponse> recentNotes; // 최근 노트 기록 추가
 }

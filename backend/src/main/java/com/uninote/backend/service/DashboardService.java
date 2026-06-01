@@ -4,8 +4,10 @@ import com.uninote.backend.domain.Enrollment;
 import com.uninote.backend.domain.Student;
 import com.uninote.backend.dto.CourseResponse;
 import com.uninote.backend.dto.DashboardResponse;
+import com.uninote.backend.dto.NoteSummaryResponse;
 import com.uninote.backend.dto.PostResponse;
 import com.uninote.backend.repository.EnrollmentRepository;
+import com.uninote.backend.repository.NoteRepository;
 import com.uninote.backend.repository.PostRepository;
 import com.uninote.backend.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,7 @@ public class DashboardService {
     private final EnrollmentRepository enrollmentRepository;
     private final StudentRepository studentRepository;
     private final PostRepository postRepository;
+    private final NoteRepository noteRepository; // 추가
 
     public DashboardResponse getDashboardData(String studentNum) {
         Student student = studentRepository.findByStudentNum(studentNum)
@@ -36,6 +39,17 @@ public class DashboardService {
                         .courseName(enrollment.getCourse().getCourseName())
                         .courseCode(enrollment.getCourse().getCourseCode())
                         .professorName(enrollment.getCourse().getProfessor().getName())
+                        .build())
+                .collect(Collectors.toList());
+
+        // 최근 수정된 노트 6개 조회
+        List<NoteSummaryResponse> recentNotes = noteRepository.findTop6ByStudentOrderByUpdatedAtDesc(student).stream()
+                .map(note -> NoteSummaryResponse.builder()
+                        .noteId(note.getNoteId())
+                        .courseId(note.getCourse().getCourseId()) // 추가
+                        .title(note.getTitle())
+                        .courseName(note.getCourse().getCourseName())
+                        .updatedAt(note.getUpdatedAt())
                         .build())
                 .collect(Collectors.toList());
 
@@ -65,6 +79,7 @@ public class DashboardService {
                 .studentName(student.getName())
                 .courses(courseList)
                 .recentPosts(recentPosts)
+                .recentNotes(recentNotes) // 최근 노트 추가
                 .build();
     }
 }

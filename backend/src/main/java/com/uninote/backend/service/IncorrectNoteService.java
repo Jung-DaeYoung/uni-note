@@ -17,7 +17,7 @@ public class IncorrectNoteService {
     private final IncorrectNoteGroupRepository groupRepository;
     private final IncorrectNoteItemRepository itemRepository;
     private final QuestionRepository questionRepository;
-    private final QuizService quizService;
+    private final QuestionResponseMapper questionResponseMapper;
 
     @Transactional(readOnly = true)
     public List<IncorrectNoteGroupResponse> getMyGroups(Student student) {
@@ -97,16 +97,7 @@ public class IncorrectNoteService {
         }
 
         List<QuestionResponse> questions = group.getItems().stream()
-            .map(item -> {
-                Question q = item.getQuestion();
-                QuestionResponse qr = new QuestionResponse();
-                qr.setQuestionId(q.getQuestionId());
-                qr.setType(q.getType());
-                qr.setQuestionText(q.getQuestionText());
-                // options, explanation 등 QuizService의 로직 재활용 필요 (또는 별도 유틸리티화)
-                // 여기서는 간단히 QuizService의 형식을 따름 (실제 구현 시 DTO 변환 로직 중복 제거 권장)
-                return quizService.getQuestionResponse(q); 
-            })
+            .map(item -> questionResponseMapper.toResponse(item.getQuestion()))
             .collect(Collectors.toList());
 
         return QuizSetDetailResponse.builder()

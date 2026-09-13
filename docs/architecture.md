@@ -1,73 +1,65 @@
-# UniNote System Architecture & Data Flow
+# UniNote 아키텍처
 
-이 문서는 UniNote 프로젝트의 전체적인 시스템 아키텍처와 데이터 흐름을 정의합니다.
+## 전체 구조
 
----
+UniNote는 React/Vite 프론트엔드와 Spring Boot 백엔드가 REST API로 통신하는 웹 애플리케이션이다.
 
-## 1. 전체 시스템 아키텍처 (System Overview)
-
-UniNote는 클라이언트-서버 모델을 따르는 **Full-Stack 웹 애플리케이션**입니다.
-
-```mermaid
-graph LR
-    subgraph Client [Frontend - React]
-        UI[User Interface / Tailwind CSS]
-        State[React Router / Axios / AuthContext]
-    end
-
-    subgraph Server [Backend - Spring Boot]
-        Auth[Spring Security / JWT]
-        Controller[REST Controller]
-        Service[Business Service / Authorization]
-        Repo[JPA Repository]
-        ExceptionHandler[GlobalExceptionHandler]
-    end
-
-    subgraph Storage [Database]
-        DB[(MySQL / MariaDB)]
-    end
-
-    Client -- HTTP Request (JWT) --> Auth
-    Auth -- Authorized --> Controller
-    Controller --> Service
-    Service --> Repo
-    Repo --> DB
-    Controller -.-> ExceptionHandler
+```text
+React pages/components
+  -> Context 및 Axios client
+  -> Spring Security / JWT filter
+  -> Controller
+  -> Service
+  -> Spring Data JPA Repository
+  -> MySQL
 ```
 
----
+## Backend
 
-## 2. 레이어별 상세 구조 (Layered Architecture)
+- `controller`: HTTP 요청과 DTO를 받아 Service를 호출한다.
+- `service`: 인증된 사용자 기준의 기능 처리, 수강 권한 확인, 엔티티 조회·저장, 응답 DTO 변환을 담당한다.
+- `domain`: 학생·강의·노트·게시판·퀴즈 및 학습 이력 Entity를 정의한다.
+- `dto`: API 요청·응답 모델을 정의한다.
+- `repository`: Spring Data JPA 기반 DB 조회와 저장을 담당한다.
+- `security`: JWT 검증 후 학번을 `Authentication` principal로 설정한다.
+- `exception`: `CourseAccessException` 등의 예외를 JSON 오류 응답으로 변환한다.
 
-### 2.1. Frontend (React)
-- **View Layer (`src/pages`)**: `AppLayout`을 도입하여 사이드바 및 헤더를 중앙화함.
-- **API Layer (`src/api`)**: `axios` 인터셉터를 통해 401(인증), 403(인가) 에러를 중앙 처리함.
-- **State/Security (`src/context`, `src/routes`)**: `AuthContext`로 전역 인증 관리 및 `ProtectedRoute`를 통한 접근 제어 추상화.
+## Frontend
 
-### 2.2. Backend (Spring Boot)
-- **Presentation Layer (`controller`)**: 클라이언트 요청 수신 및 비즈니스 예외 중앙 처리.
-- **Business Layer (`service`)**: 비즈니스 로직과 함께 **인가(Authorization) 검증** 수행(`validateEnrollment`).
-- **Security Layer (`security`)**: JWT 유효성 검사.
-- **Exception Layer (`exception`)**: `GlobalExceptionHandler`를 통해 표준화된 `ErrorResponse` 응답 제공.
+- `src/pages`: 로그인, 대시보드, 강의 상세, 퀴즈 보관함 화면을 구성한다.
+- `src/components`: 공통 레이아웃, Tiptap 에디터, 퀴즈·오답노트 UI를 제공한다.
+- `src/context`: 인증, 강의, 노트 트리 상태를 관리한다.
+- `src/routes`: 보호된 라우트를 처리한다.
+- `src/api/client.js`: `/api` 기본 URL, JWT 헤더 추가, 401/403 전역 처리를 담당한다.
 
----
+## 핵심 흐름
 
-## 3. 핵심 데이터 흐름 (Core Data Flow)
+### 로그인
 
-### 3.1. 인증 및 보안 흐름 (Authentication & Authorization Flow)
-1. **인증(Auth)**: JWT를 통해 사용자를 식별.
-2. **인가(Authz)**: 서비스 계층에서 접근 리소스가 사용자 소유인지(수강 중인 강의인지) 검증.
-3. **중앙화된 예외 처리**: 검증 실패 시 `CourseAccessException` 등을 발생시켜 일관된 JSON 에러 응답.
+1. `LoginPage`가 `POST /api/auth/login`으로 학번과 비밀번호를 전송한다.
+2. `AuthService`가 학생을 조회하고 JWT를 발급한다.
+3. 프론트엔드는 토큰을 `localStorage`에 저장한다.
+4. 이후 Axios 요청에 `Authorization: Bearer <token>`이 추가된다.
+5. `JwtFilter`가 토큰을 검증하고 학번을 인증 주체로 설정한다.
 
----
+### 노트
 
-## 4. 데이터베이스 엔티티 관계 (ERD Concept)
+1. 강의 상세 화면이 강의별 노트 트리를 조회한다.
+2. `NoteService`가 강의·학생·부모 노트 관계를 기준으로 노트를 생성하거나 조회한다.
+3. `NotionEditor`가 Tiptap JSON을 편집하고 localStorage에 임시 저장한다.
+4. 변경 내용은 debounce 후 노트 저장 API로 전송된다.
+5. 노트는 계층형 `parentNote` 관계와 Tiptap 콘텐츠를 유지한다.
 
-- **Student / Professor**: 회원 정보 및 권한.
-- **Course**: 강의 정보 (강좌명, 교수, 시간표).
-- **Enrollment**: 수강 신청 정보 (Student <-> Course 다대다 연결).
-- **Note**: 강의별 개인 필기 데이터 (Course-Student 복합 관계).
-- **Post**: 강의별 익명 게시글 데이터 (Course 소속).
+### 게시판
 
----
-*마지막 업데이트: 2026-04-10 (Gemini CLI)*
+1. 강의 상세 화면이 강의별 게시글을 조회한다.
+2. `PostService`가 게시글·댓글 CRUD와 작성자 확인을 처리한다.
+3. `Post`와 `Comment`는 학생을 내부 작성자로 보유하며 응답에서는 익명 표시와 본인 여부를 사용한다.
+
+### 퀴즈
+
+1. 에디터가 노트 ID, 난이도, 문제 유형별 개수를 `QuizController`에 전송한다.
+2. `QuizService`가 노트 콘텐츠와 첨부 미디어를 처리해 외부 AI 요청을 구성한다.
+3. 생성 결과를 `QuizSet`과 `Question`으로 저장하며 문항에 출처 노트·블록 ID를 기록한다.
+4. 사용자가 답안을 제출하면 `QuizAttempt`와 `UserAnswer`를 저장한다.
+5. 오답 문항은 `IncorrectNoteGroup`과 `IncorrectNoteItem`으로 그룹화해 재풀이에 사용한다.

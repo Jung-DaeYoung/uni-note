@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useEditor, EditorContent, ReactRenderer, ReactNodeViewRenderer } from '@tiptap/react';
 import Document from '@tiptap/extension-document';
 import StarterKit from '@tiptap/starter-kit';
@@ -8,7 +8,6 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import { all, createLowlight } from 'lowlight'
-import debounce from 'lodash.debounce';
 import Image from '@tiptap/extension-image';
 import tippy from 'tippy.js';
 import { 
@@ -36,6 +35,9 @@ import BlockHandle from './components/BlockHandle.jsx';
 import QuizConfigModal from './components/QuizConfigModal';
 import CBTPlayer from './components/CBTPlayer';
 import CodeBlockComponent from './components/CodeBlockComponent';
+import useNoteUploads from './hooks/useNoteUploads';
+import useNoteAutosave from './hooks/useNoteAutosave';
+import useSourceBlockScroll from './hooks/useSourceBlockScroll';
 
 import 'highlight.js/styles/atom-one-dark.css'
 
@@ -53,98 +55,17 @@ const CustomDocument = Document.extend({
   content: 'heading block*',
 });
 
-const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => { 
-  const [saveStatus, setSaveStatus] = useState('synced');
+const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
   const [quizResult, setQuizResult] = useState(null);
-  const lastSavedJson = useRef(null);
-  const isInitialMount = useRef(true);
   const navigate = useNavigate();
-  const location = useLocation();
 
-  // 초기 콘텐츠 계산 로직을 함수로 분리
-  const getInitialContent = () => {
-    const serverData = initialData?.content ? JSON.parse(initialData.content) : null;
-    const localData = JSON.parse(localStorage.getItem(`note-temp-${noteId}`) || 'null');
-    
-    // 로컬 스토리지 데이터가 서버 데이터보다 최신인 경우 우선 사용
-    if (localData && (!serverData || localData.timestamp > (initialData?.updatedAt || 0))) {
-      return localData.content;
-    }
-    
-    if (serverData) return serverData;
-
-    // 빈 텍스트 노드 에러 방지: title이 있을 때만 text 노드 생성
-    const title = initialData?.title || '';
-    return {
-      type: 'doc',
-      content: [{ 
-        type: 'heading', 
-        attrs: { level: 1 }, 
-        content: title ? [{ type: 'text', text: title }] : [] 
-      }]
-    };
-  };
-
-  const handleImageUpload = async (file) => {
-    // ... (기존 로직 유지)
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const response = await client.post('/upload/image', formData);
-      const serverUrl = 'http://localhost:8080'; // 백엔드 서버 주소
-      return serverUrl + response.data.url;
-    } catch (error) {
-      console.error("이미지 업로드 실패:", error);
-      return null;
-    }
-  };
-
-  const handlePdfUpload = async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const response = await client.post('/upload/file', formData);
-      const serverUrl = 'http://localhost:8080';
-      return {
-        url: serverUrl + response.data.url,
-        title: response.data.title
-      };
-    } catch (error) {
-      console.error("PDF 업로드 실패:", error);
-      return null;
-    }
-  };
-
-  const debouncedSaveToServer = useCallback(
-    debounce(async (editor, id) => {
-      // ... (기존 로직 유지)
-      const jsonContent = editor.getJSON();
-      const titleNode = jsonContent.content[0];
-      const title = titleNode?.content?.[0]?.text || '제목 없음';
-      const plainText = editor.getText();
-      const previewText = plainText.substring(title.length, title.length + 200).trim();
-
-      if (JSON.stringify(jsonContent) === JSON.stringify(lastSavedJson.current)) return;
-      
-      setSaveStatus('saving');
-      try {
-        await client.put(`/notes/${id}`, { 
-          title: title,
-          content: JSON.stringify(jsonContent),
-          previewText: previewText,
-          searchContent: plainText
-        });
-        lastSavedJson.current = jsonContent;
-        setSaveStatus('synced');
-        if (onSaved) onSaved();
-      } catch (error) {
-        console.error("서버 저장 실패:", error);
-        setSaveStatus('error');
-      }
-    }, 2000),
-    [onSaved]
-  );
+  const { handleImageUpload, handlePdfUpload } = useNoteUploads();
+  const { saveStatus, getInitialContent, handleEditorUpdate, syncEditor, cancelPendingSave } = useNoteAutosave({
+    noteId,
+    initialData,
+    onSaved,
+  });
 
   const editor = useEditor({
     extensions: [
@@ -388,9 +309,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
       }
     },
     onUpdate: ({ editor }) => {
-      const json = editor.getJSON();
-      localStorage.setItem(`note-temp-${noteId}`, JSON.stringify({ content: json, timestamp: Date.now() }));
-      if (!isInitialMount.current) debouncedSaveToServer(editor, noteId);
+      handleEditorUpdate(editor);
     },
   });
 
@@ -398,43 +317,11 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
   // 단, 부모에서 <NotionEditor key={noteId} />를 사용한다면 이 Effect는 아예 필요 없음
   useEffect(() => {
     if (!editor) return;
+    syncEditor(editor);
+    return () => cancelPendingSave();
+  }, [noteId, editor, initialData, syncEditor, cancelPendingSave]); // initialData 추가하여 데이터 로딩 완료 시점에 반영되도록 함
 
-    // 만약 에디터에 이미 내용이 있고, 로드된 ID와 현재 ID가 다르다면 (부모에서 key를 안 썼을 경우 대비)
-    const currentContent = editor.getJSON();
-    const initialContent = getInitialContent();
-    
-    if (JSON.stringify(currentContent) !== JSON.stringify(initialContent)) {
-      editor.commands.setContent(initialContent, false); // emitUpdate: false로 불필요한 저장 방지
-    }
-
-    lastSavedJson.current = initialContent;
-    isInitialMount.current = false;
-
-    return () => debouncedSaveToServer.cancel();
-  }, [noteId, editor, initialData]); // initialData 추가하여 데이터 로딩 완료 시점에 반영되도록 함
-
-  // 출처 추적: 특정 블록으로 스크롤 및 하이라이팅
-  useEffect(() => {
-    if (!editor || !location.state?.scrollToBlockId) return;
-
-    const blockId = location.state.scrollToBlockId;
-    
-    const timer = setTimeout(() => {
-      const element = document.querySelector(`[data-id="${blockId}"]`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        element.classList.add('origin-highlight');
-        
-        // 애니메이션 완료 후 클래스 제거 및 상태 초기화
-        setTimeout(() => {
-          element.classList.remove('origin-highlight');
-          navigate(location.pathname, { replace: true, state: {} });
-        }, 3000);
-      }
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, [editor, location.state, noteId, navigate, location.pathname]);
+  useSourceBlockScroll(editor);
 
   return (
     <div className="relative">

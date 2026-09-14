@@ -9,6 +9,9 @@ import TaskItem from '@tiptap/extension-task-item';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import { all, createLowlight } from 'lowlight'
 import Image from '@tiptap/extension-image';
+import Heading from '@tiptap/extension-heading';
+import Paragraph from '@tiptap/extension-paragraph';
+import { splitBlockAs } from '@tiptap/pm/commands';
 import tippy from 'tippy.js';
 import { 
   PenLine, 
@@ -51,8 +54,54 @@ const CustomCodeBlock = CodeBlockLowlight.extend({
 })
 
 // 첫 번째 블록을 제목으로 강제하는 커스텀 도큐먼트
+// (heading 뒤에는 어떤 block이든 올 수 있어, 이 제약 자체는 Enter로 생성되는
+//  다음 블록의 타입과는 무관하다)
 const CustomDocument = Document.extend({
   content: 'heading block*',
+});
+
+// heading에서 Enter 입력 시 다음 블록이 heading이 아닌 paragraph로 생성되도록 처리
+// 원인: @tiptap/starter-kit이 Heading을 Paragraph보다 먼저 스키마에 등록해서,
+//       ProseMirror의 기본 분할 로직(defaultBlockAt)이 다음 블록의 기본 타입으로
+//       heading을 먼저 선택한다(CustomDocument의 첫 heading 제약과는 무관).
+// 해결: splitBlockAs의 콜백에서 분할될 새 블록의 타입을 paragraph로 직접 지정한다.
+const CustomHeading = Heading.extend({
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      Enter: () => this.editor.commands.command(({ state, dispatch }) => {
+        if (state.selection.$from.parent.type.name !== this.name) return false;
+        const splitAsParagraph = splitBlockAs(() => ({ type: state.schema.nodes.paragraph }));
+        return splitAsParagraph(state, dispatch);
+      }),
+    };
+  },
+});
+
+// paragraph에서 Enter 입력 시 새 블록도 heading이 아닌 paragraph로 생성되도록 처리
+// 원인: CustomHeading과 동일하게, ProseMirror의 기본 분할 로직(defaultBlockAt)이
+//       스키마 등록 순서상 heading을 다음 블록의 기본 타입으로 먼저 선택한다.
+// 해결: splitBlockAs의 콜백에서 분할될 새 블록의 타입을 paragraph로 직접 지정한다.
+// 단, listItem/taskItem 내부의 paragraph는 목록 자체의 Enter 동작(항목 분리/해제)을
+// 그대로 사용해야 하므로 조상에 listItem/taskItem이 있으면 false를 반환해 위임한다.
+const CustomParagraph = Paragraph.extend({
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      Enter: () => this.editor.commands.command(({ state, dispatch }) => {
+        const { $from } = state.selection;
+        if ($from.parent.type.name !== this.name) return false;
+
+        for (let d = $from.depth - 1; d >= 0; d -= 1) {
+          const ancestorType = $from.node(d).type.name;
+          if (ancestorType === 'listItem' || ancestorType === 'taskItem') return false;
+        }
+
+        const splitAsParagraph = splitBlockAs(() => ({ type: state.schema.nodes.paragraph }));
+        return splitAsParagraph(state, dispatch);
+      }),
+    };
+  },
 });
 
 const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
@@ -71,10 +120,17 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
     extensions: [
       CustomDocument,
       StarterKit.configure({
-        document: false, 
-        heading: { levels: [1, 2, 3] },
+        document: false,
+        heading: false,
+        paragraph: false,
         codeBlock: false,
+        // TrailingNode 기본값은 문서 스키마(CustomDocument: 'heading block*')의
+        // 시작 노드 타입(heading)을 문서 끝에 자동 삽입할 노드로 오판해, 마지막 블록이
+        // heading이 아닐 때마다 빈 H1을 계속 추가했다. paragraph로 명시해 방지한다.
+        trailingNode: { node: 'paragraph' },
       }),
+      CustomHeading.configure({ levels: [1, 2, 3] }),
+      CustomParagraph,
       Placeholder.configure({
         placeholder: ({ node, pos }) => {
           if (pos === 0) return '제목을 입력하세요';
@@ -210,9 +266,21 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
           render: () => {
             let component;
             let popup;
+            // ReactRenderer는 매 onUpdate(render())마다 새 ref 콜백을 생성해 전달하는데,
+            // 그로 인해 React가 이전 ref를 잠깐 null로 해제했다가 다시 붙이는 타이밍이 생긴다.
+            // 그 사이 Enter가 눌리면 component.ref가 null이라 onKeyDown이 undefined를
+            // 반환해 Suggestion이 이를 처리되지 않은 것으로 보고 일반 줄바꿈이 발생했다.
+            // 여기서는 identity가 바뀌지 않는 안정적인 ref 콜백을 직접 넘겨 이 문제를 없앤다.
+            let suggestionRef = null;
+            const setSuggestionRef = (ref) => {
+              suggestionRef = ref;
+            };
             return {
               onStart: (props) => {
-                component = new ReactRenderer(SuggestionList, { props, editor: props.editor });
+                component = new ReactRenderer(SuggestionList, {
+                  props: { ...props, ref: setSuggestionRef },
+                  editor: props.editor,
+                });
                 popup = tippy('body', {
                   getReferenceClientRect: props.clientRect,
                   appendTo: () => document.body,
@@ -232,7 +300,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
                   popup[0].hide();
                   return true;
                 }
-                return component.ref?.onKeyDown(props);
+                return suggestionRef?.onKeyDown(props) ?? false;
               },
               onExit() {
                 if (popup && popup[0]) {
@@ -447,8 +515,8 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
           .uninote-editor ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; }
           .uninote-editor ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1rem; }
           .uninote-editor [data-type="taskList"] { list-style: none; padding: 0; }
-          .uninote-editor [data-type="taskItem"] { display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.25rem; }
-          .uninote-editor [data-type="taskItem"] input { margin-top: 0.4rem; cursor: pointer; }
+          .uninote-editor li[data-checked] { display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.25rem; }
+          .uninote-editor li[data-checked] input { margin-top: 0.4rem; cursor: pointer; }
           .ProseMirror > * { padding-left: 32px !important; position: relative; transition: background 0.2s; min-height: 1.5em; }
           .ProseMirror > *:hover { background: rgba(55, 53, 47, 0.04); border-radius: 6px; }
           .custom-scrollbar::-webkit-scrollbar { width: 4px; }

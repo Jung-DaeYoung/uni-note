@@ -7,6 +7,11 @@ const useNoteAutosave = ({ noteId, initialData, onSaved }) => {
   const [saveStatus, setSaveStatus] = useState('synced');
   const lastSavedJson = useRef(null);
   const isInitialMount = useRef(true);
+  // 이 훅 인스턴스(=노트 하나)당 최초 1회만 에디터 콘텐츠를 서버/로컬 데이터와 동기화한다.
+  // NotionEditor는 <NotionEditor key={noteId} />로 노트마다 새로 마운트되므로,
+  // 최초 동기화 이후에는 initialData/editor 참조가 바뀌어 effect가 다시 실행되더라도
+  // 사용자가 편집 중인(아직 저장 전인) 내용을 오래된 서버 콘텐츠로 덮어써서는 안 된다.
+  const hasSyncedRef = useRef(false);
 
   const getInitialContent = useCallback(() => {
     const serverData = initialData?.content ? JSON.parse(initialData.content) : null;
@@ -71,9 +76,13 @@ const useNoteAutosave = ({ noteId, initialData, onSaved }) => {
   }, [noteId, debouncedSaveToServer]);
 
   // noteId가 바뀔 때 에디터 인스턴스는 유지하되 내용만 초기화해야 할 경우를 위해 남겨둠
-  // 단, 부모에서 <NotionEditor key={noteId} />를 사용한다면 이 호출은 사실상 no-op
+  // 단, 부모에서 <NotionEditor key={noteId} />를 사용한다면 이 호출은 사실상 no-op.
+  // hasSyncedRef로 노트당 최초 1회만 실행되도록 막아, effect 재실행(예: React
+  // StrictMode의 이중 호출, initialData/editor 참조 변경 등)으로 인해 사용자가
+  // 이미 입력 중인 내용이 뒤늦게 오래된 initialData로 덮어써지는 것을 방지한다.
   const syncEditor = useCallback((editor) => {
-    if (!editor) return;
+    if (!editor || hasSyncedRef.current) return;
+    hasSyncedRef.current = true;
 
     const currentContent = editor.getJSON();
     const initialContent = getInitialContent();

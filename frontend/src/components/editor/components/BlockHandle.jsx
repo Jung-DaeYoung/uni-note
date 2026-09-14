@@ -25,9 +25,10 @@ const BlockHandle = ({ editor }) => {
           if (dom instanceof HTMLElement) {
             const rect = dom.getBoundingClientRect();
             const editorRect = view.dom.getBoundingClientRect();
+            const handleTop = rect.top - editorRect.top;
 
             setPos({
-              top: rect.top - editorRect.top,
+              top: handleTop,
               left: 0,
             });
             setCurrentNode({ node, pos: start - 1 });
@@ -113,7 +114,6 @@ const BlockHandle = ({ editor }) => {
       type: currentNode.node.type?.name,
       text: currentNode.node.textContent
     };
-    console.log("AI 연동 데이터:", data);
     alert(`블록 ID: ${data.id}\nAI 기능을 요청합니다.`);
     setIsMenuOpen(false);
   };

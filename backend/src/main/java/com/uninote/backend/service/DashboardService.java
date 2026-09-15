@@ -1,11 +1,14 @@
 package com.uninote.backend.service;
 
+import com.uninote.backend.domain.Course;
 import com.uninote.backend.domain.Enrollment;
+import com.uninote.backend.domain.Post;
 import com.uninote.backend.domain.Student;
 import com.uninote.backend.dto.CourseResponse;
 import com.uninote.backend.dto.DashboardResponse;
 import com.uninote.backend.dto.NoteSummaryResponse;
 import com.uninote.backend.dto.PostResponse;
+import com.uninote.backend.exception.ResourceNotFoundException;
 import com.uninote.backend.repository.EnrollmentRepository;
 import com.uninote.backend.repository.NoteRepository;
 import com.uninote.backend.repository.PostRepository;
@@ -29,7 +32,7 @@ public class DashboardService {
 
     public DashboardResponse getDashboardData(String studentNum) {
         Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new IllegalArgumentException("학생을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResourceNotFoundException("학생을 찾을 수 없습니다."));
 
         List<Enrollment> enrollments = enrollmentRepository.findByStudent(student);
 
@@ -53,8 +56,15 @@ public class DashboardService {
                         .build())
                 .collect(Collectors.toList());
 
-        // 최신 게시글 5개 조회 및 변환
-        List<PostResponse> recentPosts = postRepository.findTop5ByOrderByCreatedAtDesc().stream()
+        // 최신 게시글 5개 조회 및 변환 (수강 중인 강의로 범위 한정)
+        List<Course> enrolledCourses = enrollments.stream()
+                .map(Enrollment::getCourse)
+                .collect(Collectors.toList());
+
+        List<PostResponse> recentPosts = (enrolledCourses.isEmpty()
+                ? List.<Post>of()
+                : postRepository.findTop5ByCourseInOrderByCreatedAtDesc(enrolledCourses))
+                .stream()
                 .map(post -> {
                     String authorName = "익명";
                     boolean isAuthor = false;

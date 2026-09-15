@@ -5,8 +5,8 @@ build/
 
 # --- Backend Secrets & Config (CRITICAL) ---
 # 로컬 설정 파일 및 환경 변수 정보는 제외합니다.
+# application-prod.yaml은 비밀값 없이 환경 변수 플레이스홀더만 담아(P1-6) 커밋 대상이다.
 src/main/resources/application-local.yaml
-src/main/resources/application-prod.yaml
 .env
 
 # --- Compiled Java ---

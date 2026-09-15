@@ -1,31 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, ArrowRight, MessageSquare, Clock, FileText } from 'lucide-react';
-import client from '../api/client';
 import AppLayout from '../components/layout/AppLayout';
+import { useCourses } from '../context/CourseContext';
 
 const DashboardPage = () => {
-  const [courses, setCourses] = useState([]);
-  const [recentPosts, setRecentPosts] = useState([]);
-  const [recentNotes, setRecentNotes] = useState([]); // 신규
-  const [studentName, setStudentName] = useState('');
+  // 사이드바(AppLayout)가 이미 같은 /dashboard/courses 응답을 CourseContext로 불러오므로,
+  // 대시보드 페이지에서 동일한 요청을 다시 보내지 않고 그대로 재사용한다.
+  const { courses, recentPosts, recentNotes, studentName } = useCourses();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const response = await client.get('/dashboard/courses');
-        const { courses, recentPosts, recentNotes, studentName } = response.data;
-        setCourses(courses || []);
-        setRecentPosts(recentPosts || []);
-        setRecentNotes(recentNotes || []); // 신규
-        setStudentName(studentName || '사용자');
-      } catch (error) {
-        console.error("대시보드 데이터 로딩 실패", error);
-      }
-    };
-    fetchDashboardData();
-  }, []);
 
   const formatTime = (dateStr) => {
     const now = new Date();
@@ -43,7 +26,7 @@ const DashboardPage = () => {
       <div className="p-6 max-w-6xl mx-auto space-y-8 font-sans">
         {/* Header Section */}
         <div className="mb-2">
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">반갑습니다, {studentName}님! 👋</h2>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">반갑습니다, {studentName || '사용자'}님! 👋</h2>
           <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-[0.2em]">Learning Hub Overview</p>
         </div>
 

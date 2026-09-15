@@ -22,3 +22,13 @@ spring:
 jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION}
+
+cors:
+  # 콤마로 구분된 허용 origin 목록. 배포 환경에서는 실제 프론트 origin으로 덮어쓴다.
+  allowed-origins: http://localhost:5173
+
+file-access:
+  # 서명 도입(P1-1) 이전 "/uploads/{fileName}" 정적 경로로 발급되어 이미 저장된 노트가
+  # 참조 중인 파일만 예외적으로 허용하는 화이트리스트(2단계, newProblem.md 항목 참고).
+  # 새로 업로드되는 파일은 전부 서명이 발급되므로 여기 추가할 필요가 없다.
+  legacy-allowed-files: 7f2c74e7-436e-46f6-995c-060ef2555af4.png,fea32432-aea3-409b-8d79-b6538896be15.pdf,582a2243-f47d-4bbc-97a8-71147387ee66.png

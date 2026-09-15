@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 import client from '../api/client';
 
 // 익명 게시판(글/댓글) 목록·상세·작성·수정·삭제 상태와 대시보드 postId 딥링크를 담당한다.
@@ -16,16 +17,21 @@ const useCourseBoard = ({ courseId, searchString }) => {
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingCommentContent, setEditingCommentContent] = useState('');
 
+  // 빠른 강의 전환 시 이전 요청을 취소해, 늦게 도착한 응답이 현재 courseId의
+  // 게시판 상태를 덮어쓰지 않도록 한다.
   useEffect(() => {
+    const controller = new AbortController();
     const fetchPosts = async () => {
       try {
-        const postsRes = await client.get(`/posts/${courseId}`);
+        const postsRes = await client.get(`/posts/${courseId}`, { signal: controller.signal });
         setPosts(postsRes.data || []);
       } catch (error) {
+        if (axios.isCancel(error)) return;
         console.error("데이터 로딩 실패", error);
       }
     };
     fetchPosts();
+    return () => controller.abort();
   }, [courseId]);
 
   // 대시보드에서 넘어온 postId 처리

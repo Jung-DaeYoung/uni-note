@@ -6,12 +6,29 @@
   <component name="ChangeListManager">
     <list default="true" id="30d01469-6541-422c-aa84-b9d538b198a8" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/../PLANS.md" beforeDir="false" afterPath="$PROJECT_DIR$/../PLANS.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/config/WebConfig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/controller/ImageUploadController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/controller/ImageUploadController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/controller/NoteController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/controller/NoteController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/controller/QuizController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/controller/QuizController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/exception/GlobalExceptionHandler.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/exception/GlobalExceptionHandler.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/repository/NoteRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/repository/NoteRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/repository/PostRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/repository/PostRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/security/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/security/SecurityConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/AuthService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/AuthService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/DashboardService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/DashboardService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/IncorrectNoteService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/IncorrectNoteService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/NoteService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/NoteService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/PostService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/PostService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/QuizService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uninote/backend/service/QuizService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../docs/current-plan.md" beforeDir="false" afterPath="$PROJECT_DIR$/../docs/current-plan.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../frontend/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../frontend/src/components/editor/NotionEditor.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend/src/components/editor/NotionEditor.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../frontend/src/components/editor/extensions/SlashCommand.js" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend/src/components/editor/extensions/SlashCommand.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../frontend/src/components/editor/hooks/useNoteAutosave.js" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend/src/components/editor/hooks/useNoteAutosave.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../frontend/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../frontend/src/api/client.js" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend/src/api/client.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../frontend/src/components/editor/extensions/PdfBlock.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend/src/components/editor/extensions/PdfBlock.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../frontend/src/components/editor/hooks/useNoteUploads.js" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend/src/components/editor/hooks/useNoteUploads.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../frontend/src/context/AuthContext.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/../frontend/src/context/AuthContext.jsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -100,6 +117,7 @@
       <workItem from="1789194260542" duration="949000" />
       <workItem from="1789284247799" duration="489000" />
       <workItem from="1789287608858" duration="3345000" />
+      <workItem from="1789367772826" duration="3255000" />
     </task>
     <servers />
   </component>

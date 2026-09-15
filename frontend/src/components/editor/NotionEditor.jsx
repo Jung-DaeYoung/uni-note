@@ -8,7 +8,7 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import { all, createLowlight } from 'lowlight'
-import Image from '@tiptap/extension-image';
+import BaseImage from '@tiptap/extension-image';
 import Heading from '@tiptap/extension-heading';
 import Paragraph from '@tiptap/extension-paragraph';
 import { splitBlockAs } from '@tiptap/pm/commands';
@@ -38,7 +38,7 @@ import BlockHandle from './components/BlockHandle.jsx';
 import QuizConfigModal from './components/QuizConfigModal';
 import CBTPlayer from './components/CBTPlayer';
 import CodeBlockComponent from './components/CodeBlockComponent';
-import useNoteUploads from './hooks/useNoteUploads';
+import useNoteUploads, { isAllowedFileUrl } from './hooks/useNoteUploads';
 import useNoteAutosave from './hooks/useNoteAutosave';
 import useSourceBlockScroll from './hooks/useSourceBlockScroll';
 
@@ -50,6 +50,27 @@ const lowlight = createLowlight(all)
 const CustomCodeBlock = CodeBlockLowlight.extend({
   addNodeView() {
     return ReactNodeViewRenderer(CodeBlockComponent)
+  },
+})
+
+// 노트 콘텐츠(JSON)에 저장된 src를 그대로 신뢰하지 않고, 렌더링/직렬화 시점에
+// 우리 서버가 실제로 서빙하는 경로인지 다시 검증한다(스킴/오리진 조작 방지).
+const Image = BaseImage.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      src: {
+        default: null,
+        parseHTML: (element) => {
+          const src = element.getAttribute('src');
+          return isAllowedFileUrl(src) ? src : null;
+        },
+        renderHTML: (attributes) => {
+          if (!isAllowedFileUrl(attributes.src)) return {};
+          return { src: attributes.src };
+        },
+      },
+    };
   },
 })
 
@@ -109,8 +130,8 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
   const [quizResult, setQuizResult] = useState(null);
   const navigate = useNavigate();
 
-  const { handleImageUpload, handlePdfUpload } = useNoteUploads();
-  const { saveStatus, getInitialContent, handleEditorUpdate, syncEditor, cancelPendingSave } = useNoteAutosave({
+  const { handleImageUpload, handlePdfUpload, uploadStatus, uploadError, clearUploadError } = useNoteUploads();
+  const { saveStatus, getInitialContent, handleEditorUpdate, syncEditor, cancelPendingSave, retrySave } = useNoteAutosave({
     noteId,
     initialData,
     onSaved,
@@ -421,7 +442,32 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
         <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">
           {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'error' ? 'Error' : 'Synced'}
         </span>
+        {saveStatus === 'error' && (
+          <button
+            onClick={() => retrySave(editor)}
+            className="text-[9px] font-black text-red-600 uppercase tracking-wider underline hover:text-red-700"
+          >
+            Retry
+          </button>
+        )}
       </div>
+
+      {uploadStatus === 'uploading' && (
+        <div className="absolute -top-10 left-0 flex items-center gap-1.5 px-3 py-1 bg-blue-50 rounded-full border border-blue-100 z-10 shadow-sm">
+          <span className="text-[9px] font-black text-blue-600 uppercase tracking-wider">업로드 중...</span>
+        </div>
+      )}
+      {uploadStatus === 'error' && uploadError && (
+        <div className="absolute -top-10 left-0 flex items-center gap-1.5 px-3 py-1 bg-red-50 rounded-full border border-red-100 z-10 shadow-sm">
+          <span className="text-[9px] font-black text-red-600 uppercase tracking-wider">{uploadError}</span>
+          <button
+            onClick={clearUploadError}
+            className="text-[9px] font-black text-red-400 hover:text-red-600 uppercase tracking-wider"
+          >
+            닫기
+          </button>
+        </div>
+      )}
 
       <section className="relative min-h-[850px] bg-white rounded-[2.5rem] px-12 py-8 shadow-2xl shadow-slate-200/40 border border-slate-100 ring-1 ring-slate-50">
         <style>{`

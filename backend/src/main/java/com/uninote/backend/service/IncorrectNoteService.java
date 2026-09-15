@@ -2,6 +2,9 @@ package com.uninote.backend.service;
 
 import com.uninote.backend.domain.*;
 import com.uninote.backend.dto.*;
+import com.uninote.backend.exception.CourseAccessException;
+import com.uninote.backend.exception.InvalidRequestException;
+import com.uninote.backend.exception.ResourceNotFoundException;
 import com.uninote.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -37,7 +40,8 @@ public class IncorrectNoteService {
         
         if (request.getGroupId() != null) {
             group = groupRepository.findById(request.getGroupId())
-                .orElseThrow(() -> new IllegalArgumentException("오답노트를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResourceNotFoundException("오답노트를 찾을 수 없습니다."));
+            validateOwnership(group, student);
         } else if (request.getNewGroupTitle() != null && !request.getNewGroupTitle().trim().isEmpty()) {
             group = groupRepository.findByStudent_StudIdAndTitle(student.getStudId(), request.getNewGroupTitle())
                 .orElseGet(() -> {
@@ -47,11 +51,11 @@ public class IncorrectNoteService {
                     return groupRepository.save(newGroup);
                 });
         } else {
-            throw new IllegalArgumentException("그룹 ID 또는 새 그룹 제목이 필요합니다.");
+            throw new InvalidRequestException("그룹 ID 또는 새 그룹 제목이 필요합니다.");
         }
 
         Question question = questionRepository.findById(request.getQuestionId())
-            .orElseThrow(() -> new IllegalArgumentException("문제를 찾을 수 없습니다."));
+            .orElseThrow(() -> new ResourceNotFoundException("문제를 찾을 수 없습니다."));
 
         // 중복 체크
         if (itemRepository.findByGroup_IdAndQuestion_QuestionId(group.getId(), question.getQuestionId()).isEmpty()) {
@@ -65,23 +69,19 @@ public class IncorrectNoteService {
     @Transactional
     public void deleteGroup(Long groupId, Student student) {
         IncorrectNoteGroup group = groupRepository.findById(groupId)
-            .orElseThrow(() -> new IllegalArgumentException("오답노트를 찾을 수 없습니다."));
-        
-        if (!group.getStudent().getStudId().equals(student.getStudId())) {
-            throw new RuntimeException("삭제 권한이 없습니다.");
-        }
-        
+            .orElseThrow(() -> new ResourceNotFoundException("오답노트를 찾을 수 없습니다."));
+
+        validateOwnership(group, student);
+
         groupRepository.delete(group);
     }
 
     @Transactional
     public void removeItemFromGroup(Long groupId, Long questionId, Student student) {
         IncorrectNoteGroup group = groupRepository.findById(groupId)
-            .orElseThrow(() -> new IllegalArgumentException("오답노트를 찾을 수 없습니다."));
-        
-        if (!group.getStudent().getStudId().equals(student.getStudId())) {
-            throw new RuntimeException("권한이 없습니다.");
-        }
+            .orElseThrow(() -> new ResourceNotFoundException("오답노트를 찾을 수 없습니다."));
+
+        validateOwnership(group, student);
 
         itemRepository.findByGroup_IdAndQuestion_QuestionId(groupId, questionId)
             .ifPresent(itemRepository::delete);
@@ -90,11 +90,9 @@ public class IncorrectNoteService {
     @Transactional(readOnly = true)
     public QuizSetDetailResponse getPracticeSession(Long groupId, Student student) {
         IncorrectNoteGroup group = groupRepository.findById(groupId)
-            .orElseThrow(() -> new IllegalArgumentException("오답노트를 찾을 수 없습니다."));
-        
-        if (!group.getStudent().getStudId().equals(student.getStudId())) {
-            throw new RuntimeException("권한이 없습니다.");
-        }
+            .orElseThrow(() -> new ResourceNotFoundException("오답노트를 찾을 수 없습니다."));
+
+        validateOwnership(group, student);
 
         List<QuestionResponse> questions = group.getItems().stream()
             .map(item -> questionResponseMapper.toResponse(item.getQuestion()))
@@ -106,5 +104,11 @@ public class IncorrectNoteService {
             .difficulty(QuizDifficulty.NORMAL)
             .questions(questions)
             .build();
+    }
+
+    private void validateOwnership(IncorrectNoteGroup group, Student student) {
+        if (!group.getStudent().getStudId().equals(student.getStudId())) {
+            throw new CourseAccessException("본인 오답노트 그룹만 접근할 수 있습니다.");
+        }
     }
 }

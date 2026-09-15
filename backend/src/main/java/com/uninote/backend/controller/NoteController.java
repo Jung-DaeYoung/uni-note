@@ -47,8 +47,9 @@ public class NoteController {
     @PutMapping("/notes/{noteId}")
     public ResponseEntity<NoteResponse> saveNote(
             @PathVariable Long noteId,
+            @AuthenticationPrincipal String studentNum,
             @RequestBody NoteRequest request) {
-        return ResponseEntity.ok(noteService.saveNote(noteId, request));
+        return ResponseEntity.ok(noteService.saveNote(noteId, studentNum, request));
     }
 
     // 노트 삭제

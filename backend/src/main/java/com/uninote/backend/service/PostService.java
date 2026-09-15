@@ -2,6 +2,8 @@ package com.uninote.backend.service;
 
 import com.uninote.backend.domain.*;
 import com.uninote.backend.dto.*;
+import com.uninote.backend.exception.CourseAccessException;
+import com.uninote.backend.exception.ResourceNotFoundException;
 import com.uninote.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,10 +21,14 @@ public class PostService {
     private final CourseRepository courseRepository;
     private final StudentRepository studentRepository;
     private final CommentRepository commentRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
     public List<PostResponse> getPosts(Long courseId, String studentNum) {
         Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid course ID"));
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid course ID"));
+        Student student = studentRepository.findByStudentNum(studentNum)
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid student number"));
+        validateEnrollment(student, courseId);
 
         return postRepository.findByCourseOrderByCreatedAtDesc(course).stream()
                 .map(post -> convertToResponse(post, studentNum))
@@ -32,9 +38,10 @@ public class PostService {
     @Transactional
     public PostResponse savePost(Long courseId, String studentNum, PostRequest request) {
         Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid course ID"));
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid course ID"));
         Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid student number"));
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid student number"));
+        validateEnrollment(student, courseId);
 
         Post post = new Post();
         post.setCourse(course);
@@ -50,9 +57,10 @@ public class PostService {
     @Transactional
     public void addComment(Long postId, String studentNum, String content) {
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid post ID"));
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid post ID"));
         Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid student number"));
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid student number"));
+        validateEnrollment(student, post.getCourse().getCourseId());
 
         Comment comment = Comment.builder()
                 .content(content)
@@ -66,11 +74,11 @@ public class PostService {
     @Transactional
     public void updateComment(Long commentId, String studentNum, String content) {
         Comment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid comment ID"));
-        
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid comment ID"));
+
         // 작성자 본인 확인
         if (!comment.getStudent().getStudentNum().trim().equals(studentNum.trim())) {
-            throw new IllegalArgumentException("작성자 본인만 수정할 수 있습니다.");
+            throw new CourseAccessException("작성자 본인만 수정할 수 있습니다.");
         }
         
         comment.setContent(content);
@@ -79,11 +87,11 @@ public class PostService {
     @Transactional
     public void deleteComment(Long commentId, String studentNum) {
         Comment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid comment ID"));
-        
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid comment ID"));
+
         // 작성자 본인 확인
         if (!comment.getStudent().getStudentNum().trim().equals(studentNum.trim())) {
-            throw new IllegalArgumentException("작성자 본인만 삭제할 수 있습니다.");
+            throw new CourseAccessException("작성자 본인만 삭제할 수 있습니다.");
         }
         
         commentRepository.delete(comment);
@@ -92,11 +100,11 @@ public class PostService {
     @Transactional
     public void deletePost(Long postId, String studentNum) {
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid post ID"));
-        
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid post ID"));
+
         // 작성자 본인 확인
         if (!post.getStudent().getStudentNum().equals(studentNum)) {
-            throw new IllegalArgumentException("작성자 본인만 삭제할 수 있습니다.");
+            throw new CourseAccessException("작성자 본인만 삭제할 수 있습니다.");
         }
         
         postRepository.delete(post);
@@ -105,17 +113,23 @@ public class PostService {
     @Transactional
     public PostResponse updatePost(Long postId, String studentNum, PostRequest request) {
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid post ID"));
-        
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid post ID"));
+
         // 작성자 본인 확인
         if (!post.getStudent().getStudentNum().equals(studentNum)) {
-            throw new IllegalArgumentException("작성자 본인만 수정할 수 있습니다.");
+            throw new CourseAccessException("작성자 본인만 수정할 수 있습니다.");
         }
         
         post.setTitle(request.getTitle());
         post.setContent(request.getContent());
         
         return convertToResponse(post, studentNum);
+    }
+
+    private void validateEnrollment(Student student, Long courseId) {
+        if (!enrollmentRepository.existsByStudentAndCourse_CourseId(student, courseId)) {
+            throw new CourseAccessException("해당 강의를 수강하지 않습니다.");
+        }
     }
 
     private PostResponse convertToResponse(Post post, String studentNum) {

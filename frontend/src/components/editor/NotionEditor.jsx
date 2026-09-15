@@ -430,22 +430,22 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
         />
       )}
 
-      <div className="absolute -top-10 right-0 flex items-center gap-1.5 px-3 py-1 bg-white/50 backdrop-blur rounded-full border border-slate-100 z-10 shadow-sm">
-        <button 
+      <div className="absolute -top-10 right-0 flex items-center gap-1.5 px-3 py-1 bg-white/50 dark:bg-slate-900/50 backdrop-blur rounded-full border border-slate-100 dark:border-slate-700 z-10 shadow-sm">
+        <button
           onClick={() => setIsQuizModalOpen(true)}
-          className="flex items-center gap-1.5 hover:bg-blue-50 px-2 py-0.5 rounded-full transition-colors text-blue-600"
+          className="flex items-center gap-1.5 hover:bg-blue-50 dark:hover:bg-blue-500/10 px-2 py-0.5 rounded-full transition-colors text-blue-600 dark:text-blue-400"
         >
           <BrainCircuit size={12} />
           <span className="text-[9px] font-black uppercase tracking-wider">AI 문제 생성</span>
         </button>
         <div className={`w-1.5 h-1.5 rounded-full ${saveStatus === 'saving' ? 'bg-blue-500 animate-pulse' : saveStatus === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
-        <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">
+        <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
           {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'error' ? 'Error' : 'Synced'}
         </span>
         {saveStatus === 'error' && (
           <button
             onClick={() => retrySave(editor)}
-            className="text-[9px] font-black text-red-600 uppercase tracking-wider underline hover:text-red-700"
+            className="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider underline hover:text-red-700 dark:hover:text-red-300"
           >
             Retry
           </button>
@@ -453,23 +453,23 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
       </div>
 
       {uploadStatus === 'uploading' && (
-        <div className="absolute -top-10 left-0 flex items-center gap-1.5 px-3 py-1 bg-blue-50 rounded-full border border-blue-100 z-10 shadow-sm">
-          <span className="text-[9px] font-black text-blue-600 uppercase tracking-wider">업로드 중...</span>
+        <div className="absolute -top-10 left-0 flex items-center gap-1.5 px-3 py-1 bg-blue-50 dark:bg-blue-500/10 rounded-full border border-blue-100 dark:border-blue-500/30 z-10 shadow-sm">
+          <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider">업로드 중...</span>
         </div>
       )}
       {uploadStatus === 'error' && uploadError && (
-        <div className="absolute -top-10 left-0 flex items-center gap-1.5 px-3 py-1 bg-red-50 rounded-full border border-red-100 z-10 shadow-sm">
-          <span className="text-[9px] font-black text-red-600 uppercase tracking-wider">{uploadError}</span>
+        <div className="absolute -top-10 left-0 flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-500/10 rounded-full border border-red-100 dark:border-red-500/20 z-10 shadow-sm">
+          <span className="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider">{uploadError}</span>
           <button
             onClick={clearUploadError}
-            className="text-[9px] font-black text-red-400 hover:text-red-600 uppercase tracking-wider"
+            className="text-[9px] font-black text-red-400 dark:text-red-400/70 hover:text-red-600 dark:hover:text-red-300 uppercase tracking-wider"
           >
             닫기
           </button>
         </div>
       )}
 
-      <section className="relative min-h-[850px] bg-white rounded-[2.5rem] px-12 py-8 shadow-2xl shadow-slate-200/40 border border-slate-100 ring-1 ring-slate-50">
+      <section className="relative min-h-[850px] bg-white dark:bg-slate-900 rounded-[2.5rem] px-12 py-8 shadow-2xl shadow-slate-200/40 dark:shadow-slate-950/40 border border-slate-100 dark:border-slate-700 ring-1 ring-slate-50 dark:ring-slate-800">
         <style>{`
           .uninote-editor { color: #1e293b; font-size: 0.9375rem; }
           .ProseMirror h1:first-child { 
@@ -568,14 +568,31 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
           .custom-scrollbar::-webkit-scrollbar { width: 4px; }
           .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
           .no-scrollbar::-webkit-scrollbar { display: none; }
+
+          /* 야간모드: 위 규칙은 그대로 두고 .dark 조상이 있을 때만 덮어쓴다 */
+          .dark .uninote-editor { color: #cbd5e1; }
+          .dark .ProseMirror h1:first-child { border-bottom-color: #334155; }
+          .dark .uninote-editor h1 { color: #f1f5f9; }
+          .dark .uninote-editor h2 { color: #e2e8f0; }
+          .dark .uninote-editor blockquote { border-left-color: #475569; color: #94a3b8; }
+          .dark .uninote-editor img { border-color: #334155; }
+          .dark .page-link-container { background: #1e293b; border-color: #334155; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+          .dark .page-link-container:hover { background: #273449; border-color: #475569; }
+          .dark .page-link-title-text { color: #cbd5e1; }
+          .dark .page-link-container:hover .page-link-title-text { border-bottom-color: #64748b; }
+          .dark .code-block-wrapper pre { background: #0f172a; border-color: #334155; }
+          .dark .code-block-wrapper pre code { color: #cbd5e1; }
+          .dark .ProseMirror code { background: rgba(148, 163, 184, 0.16); }
+          .dark .ProseMirror > *:hover { background: rgba(148, 163, 184, 0.08); }
+          .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
         `}</style>
         <div className="relative z-20">
           {editor && <BlockHandle editor={editor} />}
           <EditorContent editor={editor} />
         </div>
-        <div className="absolute top-0 left-12 w-[1px] h-full bg-red-50/50" />
+        <div className="absolute top-0 left-12 w-[1px] h-full bg-red-50/50 dark:bg-red-500/10" />
         <div className="absolute top-10 right-10 opacity-5">
-          <PenLine size={120} className="text-slate-900" />
+          <PenLine size={120} className="text-slate-900 dark:text-slate-100" />
         </div>
       </section>
     </div>

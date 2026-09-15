@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  LogOut, 
+import {
+  LayoutDashboard,
+  LogOut,
   Menu,
   BrainCircuit,
   ChevronDown,
   ChevronRight,
   BookOpen,
-  PenLine
+  PenLine,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCourses } from '../../context/CourseContext';
+import { useTheme } from '../../context/ThemeContext';
 
 const AppLayout = ({ children, sidebarContent, headerContent }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -20,6 +23,7 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { courses } = useCourses();
+  const { theme, toggleTheme } = useTheme();
 
   const toggleDashboard = (e) => {
     e.stopPropagation();
@@ -34,7 +38,7 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans text-slate-900 dark:text-slate-100">
       {/* Sidebar */}
       <aside 
         className={`bg-slate-900 text-white flex flex-col transition-all duration-300 ease-in-out overflow-hidden ${
@@ -131,18 +135,27 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto relative flex flex-col">
-        <header className="h-12 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center px-4 sticky top-0 z-50 shrink-0">
-          <button 
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
-            className="p-1.5 rounded-lg hover:bg-slate-100 transition-all text-slate-500 hover:text-slate-900 active:scale-95"
+        <header className="h-12 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 flex items-center px-4 sticky top-0 z-50 shrink-0">
+          <button
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 active:scale-95"
             title={isSidebarCollapsed ? "사이드바 열기" : "사이드바 접기"}
           >
             <Menu size={20} />
           </button>
-          
+
           <div className="ml-4 flex-1 flex items-center h-full overflow-hidden">
             {headerContent}
           </div>
+
+          <button
+            onClick={toggleTheme}
+            className="ml-auto p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 active:scale-95 shrink-0"
+            title={theme === 'dark' ? '라이트 모드로 전환' : '야간 모드로 전환'}
+            aria-label={theme === 'dark' ? '라이트 모드로 전환' : '야간 모드로 전환'}
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
         </header>
 
         <div className="p-0 flex-1 overflow-y-auto">

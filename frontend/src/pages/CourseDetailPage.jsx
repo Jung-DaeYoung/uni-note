@@ -70,21 +70,21 @@ const CourseDetailPage = () => {
   const headerContent = useMemo(() => (
     <div className="flex items-center justify-between w-full pr-4 h-full">
       <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
-        <Link to="/dashboard" className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-900 transition-colors">
+        <Link to="/dashboard" className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition-colors">
           <Home size={14} />
         </Link>
-        <ChevronRight size={10} className="text-slate-300 shrink-0" />
-        <div className="flex items-center gap-1 shrink-0 px-1.5 py-0.5 bg-slate-50 rounded border border-slate-100">
-          <FolderOpen size={12} className="text-blue-500" />
-          <span className="text-xs font-bold text-slate-600 truncate max-w-[120px]">{courseName}</span>
+        <ChevronRight size={10} className="text-slate-300 dark:text-slate-600 shrink-0" />
+        <div className="flex items-center gap-1 shrink-0 px-1.5 py-0.5 bg-slate-50 dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700">
+          <FolderOpen size={12} className="text-blue-500 dark:text-blue-400" />
+          <span className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate max-w-[120px]">{courseName}</span>
         </div>
 
         {noteData?.breadcrumbs?.map((bc) => (
           <React.Fragment key={bc.noteId}>
-            <ChevronRight size={10} className="text-slate-300 shrink-0" />
+            <ChevronRight size={10} className="text-slate-300 dark:text-slate-600 shrink-0" />
             <Link
               to={`/course/${courseId}/note/${bc.noteId}`}
-              className="text-xs font-bold text-slate-400 hover:text-blue-600 transition-colors truncate max-w-[120px]"
+              className="text-xs font-bold text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate max-w-[120px]"
             >
               {bc.title}
             </Link>
@@ -93,8 +93,8 @@ const CourseDetailPage = () => {
 
         {noteData && (
           <>
-            <ChevronRight size={10} className="text-slate-300 shrink-0" />
-            <span className="text-xs font-black text-slate-900 truncate max-w-[180px]">
+            <ChevronRight size={10} className="text-slate-300 dark:text-slate-600 shrink-0" />
+            <span className="text-xs font-black text-slate-900 dark:text-slate-100 truncate max-w-[180px]">
               {noteData.title || '제목 없음'}
             </span>
           </>
@@ -106,8 +106,8 @@ const CourseDetailPage = () => {
           onClick={() => setIsBoardOpen(!isBoardOpen)}
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
             isBoardOpen
-            ? 'bg-slate-900 text-white shadow-inner'
-            : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            ? 'bg-slate-900 dark:bg-slate-700 text-white shadow-inner'
+            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
           }`}
         >
           <MessageSquare size={12} />
@@ -121,15 +121,15 @@ const CourseDetailPage = () => {
   return (
     <NoteTreeProvider noteTree={noteTree}>
       <AppLayout sidebarContent={sidebarContent} headerContent={headerContent}>
-        <div className="flex h-[calc(100vh-48px)] bg-slate-50 overflow-hidden relative font-sans">
+        <div className="flex h-[calc(100vh-48px)] bg-slate-50 dark:bg-slate-950 overflow-hidden relative font-sans">
           {/* Left: Lecture Note Area */}
-          <main className={`flex-1 overflow-y-auto transition-all duration-500 ease-in-out bg-white ${isBoardOpen ? (isBoardMaximized ? 'opacity-0 invisible' : 'mr-[400px]') : 'mr-0'}`}>
+          <main className={`flex-1 overflow-y-auto transition-all duration-500 ease-in-out bg-white dark:bg-slate-950 ${isBoardOpen ? (isBoardMaximized ? 'opacity-0 invisible' : 'mr-[400px]') : 'mr-0'}`}>
             <div className={`mx-auto transition-all duration-500 pt-8 ${isBoardOpen ? 'max-w-4xl' : 'max-w-7xl'}`}>
               <div className="px-8 pb-10">
                 {noteId && noteData && noteData.noteId === parseInt(noteId) ? (
                   <NotionEditor key={noteId} noteId={noteId} courseId={courseId} initialData={noteData} onSaved={() => fetchTree()} />
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-40 opacity-20">
+                  <div className="flex flex-col items-center justify-center py-40 opacity-20 text-slate-900 dark:text-slate-100">
                     <FileText size={64} className="mb-4" />
                     <p className="font-black uppercase tracking-widest">노트를 불러오는 중...</p>
                   </div>

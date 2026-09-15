@@ -32,16 +32,16 @@ const PdfBlockComponent = ({ node }) => {
 
   return (
     <NodeViewWrapper className="pdf-block-wrapper" data-type="pdf-block">
-      <div className="group flex items-center gap-4 p-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-2xl transition-all duration-200 cursor-default select-none">
-        <div className="w-12 h-12 flex items-center justify-center bg-red-100 text-red-600 rounded-xl shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+      <div className="group flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-2xl transition-all duration-200 cursor-default select-none">
+        <div className="w-12 h-12 flex items-center justify-center bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl shrink-0 shadow-sm group-hover:scale-105 transition-transform">
           <FileText size={24} strokeWidth={2.5} />
         </div>
-        
+
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-slate-800 truncate leading-tight mb-0.5">
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate leading-tight mb-0.5">
             {title || '이름 없는 PDF 파일'}
           </p>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+          <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
             {isSrcTrusted ? 'PDF Document' : '허용되지 않은 파일 경로'}
           </p>
         </div>
@@ -52,20 +52,20 @@ const PdfBlockComponent = ({ node }) => {
               href={src}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              className="p-2 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
               title="새 탭에서 열기"
             >
               <ExternalLink size={18} />
             </a>
           ) : (
-            <span className="p-2 text-slate-300 cursor-not-allowed" title="허용되지 않은 파일 경로">
+            <span className="p-2 text-slate-300 dark:text-slate-600 cursor-not-allowed" title="허용되지 않은 파일 경로">
               <ExternalLink size={18} />
             </span>
           )}
           <button
             onClick={handleDownload}
             disabled={!isSrcTrusted}
-            className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            className="p-2 text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             title="다운로드"
           >
             <Download size={18} />

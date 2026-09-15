@@ -52,23 +52,23 @@ const CodeBlockComponent = ({ node: { attrs: { language } }, updateAttributes, e
       >
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2 bg-white text-blue-600 text-[11px] font-black px-3 py-1.5 rounded-lg border-2 border-blue-100 shadow-sm hover:border-blue-400 transition-all min-w-[100px] justify-between"
+          className="flex items-center gap-2 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 text-[11px] font-black px-3 py-1.5 rounded-lg border-2 border-blue-100 dark:border-blue-500/30 shadow-sm hover:border-blue-400 dark:hover:border-blue-400 transition-all min-w-[100px] justify-between"
         >
           <span>{currentLanguage.toUpperCase()}</span>
           <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {isOpen && (
-          <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="p-2 border-b border-slate-50 flex items-center gap-2 bg-slate-50">
-              <Search size={12} className="text-slate-400" />
+          <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-150">
+            <div className="p-2 border-b border-slate-50 dark:border-slate-800 flex items-center gap-2 bg-slate-50 dark:bg-slate-800">
+              <Search size={12} className="text-slate-400 dark:text-slate-500" />
               <input
                 ref={inputRef}
                 type="text"
                 placeholder="언어 검색..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-transparent border-none outline-none text-[11px] font-bold text-slate-600 w-full placeholder:text-slate-400"
+                className="bg-transparent border-none outline-none text-[11px] font-bold text-slate-600 dark:text-slate-300 w-full placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </div>
             <div className="max-h-60 overflow-y-auto py-1 custom-scrollbar">
@@ -78,16 +78,16 @@ const CodeBlockComponent = ({ node: { attrs: { language } }, updateAttributes, e
                     key={lang}
                     onClick={() => handleSelect(lang)}
                     className={`w-full text-left px-3 py-1.5 text-[11px] font-bold transition-colors ${
-                      lang === currentLanguage 
-                        ? 'bg-blue-50 text-blue-600' 
-                        : 'text-slate-600 hover:bg-slate-50'
+                      lang === currentLanguage
+                        ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                     }`}
                   >
                     {lang.toUpperCase()}
                   </button>
                 ))
               ) : (
-                <div className="px-3 py-2 text-[10px] text-slate-400 italic text-center">
+                <div className="px-3 py-2 text-[10px] text-slate-400 dark:text-slate-500 italic text-center">
                   결과 없음
                 </div>
               )}

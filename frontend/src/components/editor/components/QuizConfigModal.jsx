@@ -97,18 +97,18 @@ const QuizConfigModal = ({ isOpen, onClose, courseId, currentNoteId, onGenerated
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-        <div className="p-4 border-b flex justify-between items-center bg-slate-50">
-          <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
-            <BookOpen size={16} className="text-blue-600" /> AI 문제 생성 설정
+      <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+        <div className="p-4 border-b dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800">
+          <h2 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <BookOpen size={16} className="text-blue-600 dark:text-blue-400" /> AI 문제 생성 설정
           </h2>
-          <button onClick={onClose}><X size={16} /></button>
+          <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"><X size={16} /></button>
         </div>
 
         <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
           <div>
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">범위 선택</label>
-            <div className="mt-2 space-y-1 border rounded-xl p-3 bg-slate-50/50">
+            <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">범위 선택</label>
+            <div className="mt-2 space-y-1 border dark:border-slate-700 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-800/50">
               {(() => {
                 const renderNote = (note, level = 0) => {
                   const hasChildren = note.children && note.children.length > 0;
@@ -116,27 +116,27 @@ const QuizConfigModal = ({ isOpen, onClose, courseId, currentNoteId, onGenerated
 
                   return (
                     <React.Fragment key={note.noteId}>
-                      <div 
-                        className="flex items-center gap-1 hover:bg-white rounded-lg cursor-pointer transition-colors group"
+                      <div
+                        className="flex items-center gap-1 hover:bg-white dark:hover:bg-slate-800 rounded-lg cursor-pointer transition-colors group"
                         style={{ paddingLeft: `${level * 16 + 4}px` }}
                       >
-                        <div 
+                        <div
                           onClick={(e) => hasChildren && toggleExpand(e, note.noteId)}
-                          className={`p-1 rounded hover:bg-slate-200 transition-colors ${!hasChildren ? 'invisible' : ''}`}
+                          className={`p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors ${!hasChildren ? 'invisible' : ''}`}
                         >
-                          <ChevronRight 
-                            size={14} 
-                            className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} 
+                          <ChevronRight
+                            size={14}
+                            className={`text-slate-400 dark:text-slate-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                           />
                         </div>
                         <label className="flex flex-1 items-center gap-2 py-1.5 cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 transition-all"
-                            checked={selectedIds.includes(note.noteId)} 
-                            onChange={() => toggleNote(note.noteId)} 
+                          <input
+                            type="checkbox"
+                            className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 transition-all"
+                            checked={selectedIds.includes(note.noteId)}
+                            onChange={() => toggleNote(note.noteId)}
                           />
-                          <span className={`flex-1 truncate text-xs ${selectedIds.includes(note.noteId) ? 'font-bold text-slate-900' : 'text-slate-600 group-hover:text-slate-900'}`}>
+                          <span className={`flex-1 truncate text-xs ${selectedIds.includes(note.noteId) ? 'font-bold text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100'}`}>
                             {note.title || '제목 없는 노트'}
                           </span>
                         </label>
@@ -155,31 +155,31 @@ const QuizConfigModal = ({ isOpen, onClose, courseId, currentNoteId, onGenerated
           </div>
 
           <div>
-            <label className="text-[10px] font-black text-slate-500 uppercase">문제 유형 및 문항 수</label>
+            <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">문제 유형 및 문항 수</label>
             <div className="mt-2 space-y-2">
               {Object.keys(activeTypes).map(type => (
                 <div key={type} className="flex items-center gap-2">
                   <input type="checkbox" checked={activeTypes[type]} onChange={() => setActiveTypes({...activeTypes, [type]: !activeTypes[type]})} />
-                  <span className="text-xs flex-1">{type === 'MULTIPLE_CHOICE' ? '객관식' : type === 'OX' ? 'OX 퀴즈' : '주관식'}</span>
-                  <input type="number" className="border rounded-lg text-xs p-1 w-16" value={typeCounts[type]} onChange={(e) => setTypeCounts({...typeCounts, [type]: parseInt(e.target.value)})} disabled={!activeTypes[type]} />
+                  <span className="text-xs flex-1 text-slate-700 dark:text-slate-300">{type === 'MULTIPLE_CHOICE' ? '객관식' : type === 'OX' ? 'OX 퀴즈' : '주관식'}</span>
+                  <input type="number" className="border dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 rounded-lg text-xs p-1 w-16" value={typeCounts[type]} onChange={(e) => setTypeCounts({...typeCounts, [type]: parseInt(e.target.value)})} disabled={!activeTypes[type]} />
                 </div>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="text-[10px] font-black text-slate-500 uppercase">난이도</label>
-            <select className="w-full mt-1 border rounded-lg text-xs p-2" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+            <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">난이도</label>
+            <select className="w-full mt-1 border dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 rounded-lg text-xs p-2" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
               <option value="EASY">하 (기초)</option>
               <option value="NORMAL">중 (보통)</option>
               <option value="HARD">상 (심화)</option>
               </select>
               </div>
               </div>
-        <div className="p-5 border-t flex gap-3 bg-slate-50/50">
-          <button 
-            onClick={onClose} 
-            className="flex-1 text-xs font-bold py-3 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all"
+        <div className="p-5 border-t dark:border-slate-700 flex gap-3 bg-slate-50/50 dark:bg-slate-800/50">
+          <button
+            onClick={onClose}
+            className="flex-1 text-xs font-bold py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-all"
           >
             취소
           </button>

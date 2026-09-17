@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 
 // 학습 보관함의 탭별 조회(퀴즈/풀이 이력/오답노트)와 재풀이·이력·삭제 액션을 담당한다.
 const useQuizLibrary = (activeTab) => {
+  const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [incorrectGroups, setIncorrectGroups] = useState([]);
@@ -12,6 +14,14 @@ const useQuizLibrary = (activeTab) => {
 
   const [isAttemptsModalOpen, setIsAttemptsModalOpen] = useState(false);
   const [targetQuiz, setTargetQuiz] = useState(null);
+
+  // 오답노트 탭 상단의 통계 카드/오늘의 복습/취약 영역
+  const [incorrectSummary, setIncorrectSummary] = useState(null);
+  const [courseStats, setCourseStats] = useState([]);
+  const [typeStats, setTypeStats] = useState([]);
+  const [todayReview, setTodayReview] = useState([]);
+  const [reviewCourseFilter, setReviewCourseFilter] = useState(null);
+  const [isOverviewLoading, setIsOverviewLoading] = useState(false);
 
   const fetchQuizzes = async () => {
     try {
@@ -46,13 +56,47 @@ const useQuizLibrary = (activeTab) => {
     }
   };
 
+  const fetchTodayReview = async (courseId) => {
+    try {
+      const res = await client.get('/quiz/incorrect/review-today', {
+        params: courseId ? { courseId } : {},
+      });
+      setTodayReview(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchIncorrectOverview = async () => {
+    setIsOverviewLoading(true);
+    try {
+      const [summaryRes, courseRes, typeRes] = await Promise.all([
+        client.get('/quiz/incorrect/summary'),
+        client.get('/quiz/incorrect/statistics/courses'),
+        client.get('/quiz/incorrect/statistics/types'),
+      ]);
+      setIncorrectSummary(summaryRes.data);
+      setCourseStats(courseRes.data);
+      setTypeStats(typeRes.data);
+      await fetchTodayReview(reviewCourseFilter);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsOverviewLoading(false);
+    }
+  };
+
   // 탭 전환 시 해당 탭 데이터를 조회한다. fetch* 함수 내부에서 로딩/결과 상태를 갱신하므로
   // 렌더링 중 파생 상태로 옮길 수 없는 통상적인 "탭 변경 → 데이터 조회" 동기화다.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (activeTab === 'quizzes') fetchQuizzes();
     else if (activeTab === 'history') fetchHistory();
-    else if (activeTab === 'incorrect') fetchIncorrectGroups();
+    else if (activeTab === 'incorrect') {
+      fetchIncorrectGroups();
+      fetchIncorrectOverview();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const handleRetake = async (quiz) => {
@@ -75,6 +119,34 @@ const useQuizLibrary = (activeTab) => {
     } catch {
       alert('오답노트 정보를 불러오는 데 실패했습니다.');
     }
+  };
+
+  const handleReviewCourseFilterChange = (courseId) => {
+    setReviewCourseFilter(courseId);
+    fetchTodayReview(courseId);
+  };
+
+  const handleViewReviewSource = (item) => {
+    const q = item.question;
+    if (!q.sourceNoteId || !q.sourceBlockId) {
+      alert('출처 정보를 찾을 수 없습니다.');
+      return;
+    }
+    navigate(`/course/${item.courseId}/note/${q.sourceNoteId}`, {
+      state: { scrollToBlockId: q.sourceBlockId },
+    });
+  };
+
+  // QuizConfigModal/IncorrectNoteService.getPracticeSession과 동일한 관례(quizSetId: -1)로
+  // CBTPlayer가 그대로 재사용할 수 있는 가상 세션을 클라이언트에서 직접 구성한다.
+  const handlePracticeReviewQuestion = (item) => {
+    setSelectedQuiz({
+      quizSetId: -1,
+      title: '오늘의 복습',
+      difficulty: 'NORMAL',
+      questions: [item.question],
+      courseId: item.courseId,
+    });
   };
 
   const handleDeleteGroup = async (e, groupId) => {
@@ -130,6 +202,15 @@ const useQuizLibrary = (activeTab) => {
     handleViewAttempt,
     handleOpenAttempts,
     handleDelete,
+    incorrectSummary,
+    courseStats,
+    typeStats,
+    todayReview,
+    reviewCourseFilter,
+    isOverviewLoading,
+    handleReviewCourseFilterChange,
+    handleViewReviewSource,
+    handlePracticeReviewQuestion,
   };
 };
 

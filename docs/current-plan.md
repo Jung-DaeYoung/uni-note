@@ -1,239 +1,468 @@
-# 현재 작업 계획: UniNote 야간모드 (완료)
+# 현재 작업 계획: 스마트 오답 복습·취약 개념 리포트
 
-## 진행 결과 (2026-09-15)
+## 1. 개발 목표
 
-- `frontend/src/context/ThemeContext.jsx` 신규 — `uninote-theme` localStorage 키, 기본값 `light`(OS 설정 무시), `document.documentElement`에 `dark` 클래스 토글, 탭 간 storage 이벤트 동기화.
-- `index.css`에 `@custom-variant dark (&:where(.dark, .dark *));` 한 줄 추가(Tailwind v4가 OS 설정 대신 `.dark` 클래스를 기준으로 삼도록).
-- `main.jsx`에 `ThemeProvider`를 최상위(AuthProvider보다 바깥)로 배치.
-- `AppLayout.jsx` 헤더에 Moon/Sun 토글 버튼 추가, 사이드바(`<aside>`)는 원래도 항상 어두운 디자인이라 변경하지 않음.
-- 나머지 15개 파일(페이지 3, 에디터 핵심 1, 에디터 하위 컴포넌트 8, 게시판 1, 퀴즈 패널 3)에 `dark:` variant 클래스 추가. `NotionEditor.jsx`의 인라인 `<style>` 블록에는 `.dark ...` 규칙을 순수 추가(기존 규칙 무변경).
-  - 계획 수립 시 목록에 있던 `NoteTreeItem.jsx`는 실제로 사이드바(`<aside>`) 안에서만 렌더링됨을 코드로 재확인해 제외(이미 항상-어두운 배경에 맞는 색상이라 변경 불필요).
-- 의미 색상(정답=초록/오답=빨강/경고=호박/만점=에메랄드)은 옅은 배경을 `bg-*-500/10` 투명도 방식으로 변환해 다크 배경에서도 대비를 유지.
-- 검증: `npm run lint`(22 errors/2 warnings — `ThemeContext.jsx`가 `AuthContext.jsx`/`CourseContext.jsx`와 동일한 기존 패턴의 `react-refresh/only-export-components`에 걸려 +1, 신규 버그 아님), `npm run build` 정상.
-- 브라우저 라이브 검증(테스트 계정): 토글 클릭↔전환, localStorage 반영, 새로고침 유지, 손상된 값 → 라이트 폴백, 대시보드·강의상세·에디터·Slash Command(메뉴/방향키/Enter 선택/자동저장)·게시판(글 보기/댓글 작성)·퀴즈 보관함 3탭·퀴즈 풀이·결과 리포트(정답/오답 색상)·오답노트 재풀이·AI 문제 생성 모달까지 전부 다크 모드에서 정상 동작 확인. 라이트 모드 복귀도 회귀 없이 확인.
+현재 UniNote의 오답노트는 사용자가 틀린 문제를 직접 그룹에 저장하고 다시 푸는 기능까지 구현되어 있다.
 
-## 목표
+이번 작업에서는 오답노트를 다음 학습 흐름으로 확장한다.
 
-로그인 이후 UniNote 전체 학습 화면에서 야간모드를 제공한다. 노트 작성과 퀴즈 풀이를 오래 사용하는 사용자의 눈 피로를 줄이고, 기존 UI·API·DB 계약을 유지하면서 프론트엔드 테마 전환 기능을 추가한다.
+```text
+오답 저장
+→ 오답 이력 집계
+→ 반복 오답·취약 영역 분석
+→ 오늘 복습할 문제 추천
+→ 기존 오답 재풀이
+→ 복습 결과 반영
+```
 
-## 적용 범위
+초기 버전은 AI 없이 규칙 기반 분석으로 구현한다. 통계와 복습 추천이 안정화된 후 AI를 사용해 취약 개념 설명과 복습 가이드를 추가한다.
 
-- 대시보드
-- 강의 상세 화면
-- Tiptap 노트 에디터
-- 노트 트리와 페이지 링크
-- 익명 게시판과 댓글
-- 퀴즈 보관함
-- 퀴즈 풀이·결과 화면
-- 오답노트
-- 모달·입력창·상태 메시지
-- 공통 레이아웃과 상단 헤더
+## 2. 현재 구현과 추가 범위
 
-## 제외 범위
+### 현재 구현된 기능
 
-- 백엔드 API 및 DB 변경
-- 사용자 테마 설정의 서버 저장
-- 운영자 테마 설정
-- 사용자 지정 색상 테마
-- 고대비 모드
-- 모바일 전용 별도 테마
-- 로그인 화면의 전면 테마 재설계
+- 퀴즈 결과에서 문제별 정답·오답 표시
+- 서버 재채점 및 `QuizAttempt`·`UserAnswer` 저장
+- 오답노트 그룹 생성·조회·삭제
+- 오답 문제 그룹 저장 및 중복 방지
+- 오답 그룹 전체 다시 풀기
+- 문제의 정답·해설·원본 노트 보기
 
-## 작업 원칙
+### 이번에 추가할 기능
 
-- 기존 기능과 API 응답 계약을 변경하지 않는다.
-- 기존 라이트모드의 화면 동작과 시각적 계층을 유지한다.
-- 색상만 어둡게 바꾸지 말고 텍스트·테두리·입력·hover·focus·disabled 상태의 대비를 함께 조정한다.
-- 새로운 테마 라이브러리를 추가하지 않는다.
-- 공통 테마 상태와 기존 Tailwind 클래스 패턴을 재사용한다.
-- Slash Command, 자동 저장, 업로드, 퀴즈 풀이 로직은 변경하지 않는다.
-- 관련 없는 사용자 변경 사항을 덮어쓰거나 되돌리지 않는다.
+- 문제별 풀이·오답 횟수
+- 최근 풀이일·최근 오답일
+- 문제별 정답률
+- 강의별 정답률
+- 문제 유형별 정답률
+- 반복 오답 분류
+- 오늘의 복습 문제 목록
+- 복습 우선순위
+- 기존 오답 재풀이 연결
+- 복습 결과 반영
 
-# 1. 현재 UI 구조와 색상 기준 확인
+## 3. 제외 범위
 
-## 확인 대상
+초기 MVP에서는 다음을 구현하지 않는다.
 
-- `frontend/src/index.css`
-- `frontend/src/App.css`
-- `frontend/src/main.jsx`
-- `frontend/src/App.jsx`
-- `frontend/src/components/layout/AppLayout.jsx`
-- `frontend/src/pages/DashboardPage.jsx`
-- `frontend/src/pages/CourseDetailPage.jsx`
+- AI 기반 오답 설명
+- 복잡한 머신러닝 추천
+- 학습 시간 측정
+- 별도 통합 활동 로그 시스템
+- 실시간 알림
+- 고도화된 간격 반복 알고리즘
+- 문제 내용 snapshot 저장
+
+AI 오답 분석과 간격 반복 복습은 MVP 검증 이후 별도 확장 단계로 진행한다.
+
+## 4. 작업 원칙
+
+- 기존 퀴즈·오답노트·풀이 기록 API 계약을 유지한다.
+- 통계는 인증된 현재 학생의 데이터만 포함한다.
+- 서비스 계층에서 학생·퀴즈·문제·오답 그룹의 소유권을 검증한다.
+- 통계 계산과 복습 우선순위는 우선 서버의 결정적 규칙으로 구현한다.
+- AI는 통계 계산을 대체하지 않고 설명·요약·복습 가이드에만 사용한다.
+- 새 라이브러리와 범용 추천 프레임워크를 추가하지 않는다.
+- 기존 `CBTPlayer`와 오답 재풀이 흐름을 최대한 재사용한다.
+- 기존 기능과 관련 없는 사용자 변경 사항을 덮어쓰거나 되돌리지 않는다.
+
+# 1단계: 오답 문제 소유권 및 데이터 경계 보완
+
+## 문제
+
+현재 `IncorrectNoteService.addToGroup()`은 그룹 소유권과 문제 존재 여부를 확인하지만, 해당 문제가 현재 사용자의 퀴즈에 속하는지 명시적으로 확인해야 한다.
+
+## 수정 방향
+
+문제 저장 전에 다음 관계를 검증한다.
+
+```text
+Question
+→ QuizSet
+→ QuizSet.student == 현재 사용자
+```
+
+현재 사용자가 소유한 퀴즈의 문제만 자신의 오답 그룹에 추가할 수 있어야 한다.
+
+## 대상
+
+- `backend/src/main/java/com/uninote/backend/service/IncorrectNoteService.java`
+- `backend/src/main/java/com/uninote/backend/repository/QuestionRepository.java`
+- `backend/src/main/java/com/uninote/backend/service/QuizService.java`
+- `backend/src/test/java/com/uninote/backend/service/IncorrectNoteServiceTest.java`
+
+## 검증
+
+- 본인 퀴즈의 문제는 저장 가능
+- 다른 사용자의 문제는 `403`
+- 존재하지 않는 문제는 `404`
+- 다른 사용자의 오답 그룹에는 저장 불가
+- 같은 그룹의 같은 문제는 중복 저장되지 않음
+
+# 2단계: 오답 통계 조회 API
+
+기존 `QuizAttempt`, `UserAnswer`, `Question`, `QuizSet`, `IncorrectNoteItem` 데이터를 활용해 통계를 계산한다.
+
+## 2-1. 전체 오답 요약
+
+```text
+GET /api/quiz/incorrect/summary
+```
+
+응답 항목 예시:
+
+- 전체 풀이 횟수
+- 전체 문제 수
+- 정답 수
+- 오답 수
+- 전체 정답률
+- 복습 대상 수
+- 반복 오답 수
+
+## 2-2. 강의별 통계
+
+```text
+GET /api/quiz/incorrect/statistics/courses
+```
+
+응답 항목 예시:
+
+- 강의 ID·강의명
+- 전체 문제 수
+- 정답 수·오답 수
+- 강의별 정답률
+- 복습 대상 수
+
+## 2-3. 문제 유형별 통계
+
+```text
+GET /api/quiz/incorrect/statistics/types
+```
+
+응답 항목 예시:
+
+- 문제 유형
+- 풀이 수
+- 오답 수
+- 문제 유형별 정답률
+
+## 2-4. 문제별 오답 통계
+
+```text
+GET /api/quiz/incorrect/questions
+```
+
+응답 항목 예시:
+
+- 문제 ID·문제 내용
+- 강의 정보
+- 원본 노트·블록 ID
+- 풀이 횟수
+- 오답 횟수
+- 정답 횟수
+- 최근 풀이일
+- 최근 오답일
+- 문제별 정답률
+- 복습 우선순위
+
+## 구현 방향
+
+- 전체·강의별·유형별 통계는 Repository 집계 쿼리 또는 projection을 우선 검토한다.
+- 문제별 상세 목록은 필요한 관계를 조회한 뒤 Service에서 조합할 수 있다.
+- 현재 데이터 규모에 맞춰 과도하게 복잡한 통합 쿼리를 만들지 않는다.
+- 조회 결과는 현재 학생 소유의 풀이 기록만 사용한다.
+
+## 대상
+
+- `backend/src/main/java/com/uninote/backend/controller/IncorrectNoteController.java`
+- `backend/src/main/java/com/uninote/backend/service/IncorrectNoteService.java`
+- `backend/src/main/java/com/uninote/backend/repository/UserAnswerRepository.java`
+- `backend/src/main/java/com/uninote/backend/repository/QuizAttemptRepository.java`
+- `backend/src/main/java/com/uninote/backend/repository/QuestionRepository.java`
+- 관련 통계 DTO와 projection
+
+# 3단계: 복습 우선순위 규칙
+
+문제별 통계에 기반해 복습 우선순위를 결정한다.
+
+## 우선순위 기준
+
+### 높은 우선순위
+
+- 최근 풀이에서 틀림
+- 2회 이상 반복 오답
+- 문제별 정답률이 50% 미만
+- 오랫동안 복습하지 않음
+
+### 중간 우선순위
+
+- 한 번 틀렸지만 아직 재풀이하지 않음
+- 문제별 정답률이 50~75%
+- 최근 오답이지만 반복 횟수가 낮음
+
+### 낮은 우선순위
+
+- 최근 재풀이에서 맞음
+- 문제별 정답률이 75% 이상
+- 반복 오답이 아님
+
+## 초기 정렬 순서
+
+복잡한 점수 공식을 먼저 도입하지 않고 다음 순서로 정렬한다.
+
+```text
+반복 오답 수
+→ 최근 오답 여부
+→ 마지막 복습일
+→ 문제 생성일
+```
+
+필요성이 확인되면 이후 `priorityScore`를 도입한다.
+
+# 4단계: 오늘의 복습 API
+
+## API
+
+```text
+GET /api/quiz/incorrect/review-today
+```
+
+선택 쿼리:
+
+```text
+GET /api/quiz/incorrect/review-today?limit=10&courseId=1
+```
+
+## 응답 항목
+
+- 문제 본문·정답·해설
+- 문제 유형과 선택지
+- 강의 ID·강의명
+- 원본 노트·블록 ID
+- 오답 횟수
+- 최근 오답일
+- 복습 우선순위
+
+## 기존 기능 연결
+
+복습 문제를 선택하면 기존 오답 재풀이 또는 `CBTPlayer` 흐름을 재사용한다.
+
+```text
+오늘의 복습 목록
+→ 문제 선택
+→ 기존 CBTPlayer 진입
+→ 풀이
+→ 서버 재채점
+→ 복습 결과 반영
+```
+
+초기에는 복습 문제를 기존 `QuizSetDetailResponse`와 호환되는 형태로 묶어 전달하는 방식을 우선 검토한다.
+
+# 5단계: 복습 결과 반영
+
+현재 `QuizAttempt`를 일반 퀴즈 풀이와 오답 재풀이로 구분하는 별도 필드는 없다.
+
+## MVP 방향
+
+- 기존 `QuizAttempt` 저장 구조를 유지한다.
+- 복습도 일반 풀이 기록으로 저장한다.
+- 문제별 최신 정답 여부를 다음 통계 계산에 반영한다.
+- 별도 복습 유형 필드는 API·DB 변경 영향이 확인된 후 추가한다.
+
+## 후속 확장 후보
+
+```java
+public enum QuizAttemptType {
+    GENERATED_QUIZ,
+    INCORRECT_REVIEW
+}
+```
+
+단, 이 필드는 MVP 범위에 포함하지 않는다.
+
+# 6단계: 프론트엔드 오답 리포트 화면
+
+## 1차 위치
+
+현재 `QuizLibraryPage`의 오답노트 탭을 확장한다.
+
+```text
+오답노트
+├─ 오늘의 복습
+├─ 전체 요약
+├─ 취약 강의
+├─ 문제 유형별 통계
+├─ 반복 오답
+└─ 기존 오답 그룹
+```
+
+## UI 구성
+
+### 상단 요약 카드
+
+```text
+전체 정답률 | 반복 오답 | 오늘의 복습 | 저장된 오답
+```
+
+### 오늘의 복습 영역
+
+```text
+오늘의 복습 문제
+
+[자료구조] 트리 순회 문제   반복 오답 3회   [원문 보기] [다시 풀기]
+[운영체제] 프로세스 문제   오답 2회       [원문 보기] [다시 풀기]
+```
+
+### 취약 영역
+
+```text
+취약 강의
+자료구조   정답률 55%
+운영체제   정답률 68%
+
+취약 유형
+단답형     정답률 41%
+객관식     정답률 78%
+```
+
+## 대상
+
 - `frontend/src/pages/QuizLibraryPage.jsx`
-- `frontend/src/components/editor/NotionEditor.jsx`
-- `frontend/src/components/course/CourseBoardPanel.jsx`
-- `frontend/src/components/quiz/`
-- `frontend/src/components/editor/components/`
+- `frontend/src/hooks/useQuizLibrary.js`
+- `frontend/src/components/quiz/IncorrectGroupsPanel.jsx`
+- 신규 통계 카드 컴포넌트
+- 신규 복습 목록 컴포넌트
+- 필요 시 `frontend/src/components/editor/components/CBTPlayer.jsx`
 
-## 확인 내용
+## 상태 처리
 
-- `bg-white`, `bg-slate-*`, `text-slate-*`, `border-slate-*` 사용 위치를 파악한다.
-- Tiptap 내부 콘텐츠와 모달의 별도 스타일을 확인한다.
-- 현재 사이드바의 어두운 색상과 코드 블록의 `atom-one-dark` 테마가 다크 테마와 충돌하지 않는지 확인한다.
-- 기존 라이트모드에서 유지해야 할 주요 상태 스타일을 목록화한다.
+- 로딩 상태
+- 풀이 기록이 없는 빈 상태
+- 복습 대상이 없는 상태
+- API 오류 상태
+- 강의 필터 상태
+- 야간모드 상태
 
-# 2. 테마 상태와 저장 구현
+# 7단계: AI 오답 분석 확장
 
-## 구현 방향
+규칙 기반 통계와 복습 추천이 안정화된 후 별도 단계로 진행한다.
 
-1. `ThemeContext` 또는 동일한 책임의 `useTheme` 구조를 추가한다.
-2. 테마 상태는 `light`와 `dark`를 지원한다.
-3. `localStorage` 키는 `uninote-theme`로 사용한다.
-4. 초기 로딩 시 저장된 테마를 복구한다.
-5. `document.documentElement`에 `dark` 클래스를 적용·제거한다.
-6. 저장값이 없거나 유효하지 않으면 `light`를 기본값으로 사용한다.
-7. 테마 변경 시 새로고침 후에도 설정이 유지되도록 한다.
+## AI 입력
 
-## 보호할 동작
+서버에서 선별한 데이터만 전달한다.
 
-- AuthContext의 로그인·로그아웃 동작
-- CourseContext의 강의 데이터 조회
-- 라우팅과 ProtectedRoute
-- JWT 저장·복구
-- 노트 자동 저장과 localStorage 임시 저장 키
+- 반복 오답 문제
+- 문제 유형
+- 정답·해설
+- 원본 노트 텍스트
+- 사용자 제출 답안
+- 오답 횟수
 
-# 3. 공통 레이아웃 테마 전환
+## AI 출력
 
-## 대상
+- 취약 개념
+- 오답 원인 설명
+- 원본 노트 기반 복습 가이드
+- 다음 학습 노트 추천
 
-- `frontend/src/main.jsx`
-- `frontend/src/components/layout/AppLayout.jsx`
-- `frontend/src/index.css`
+## AI 적용 원칙
 
-## 구현 방향
+- 통계 계산은 서버의 규칙 기반 로직을 사용한다.
+- AI는 설명·요약·학습 가이드 생성에만 사용한다.
+- AI 실패 시 기본 통계와 복습 목록은 정상 제공한다.
+- AI 분석 결과에도 `sourceNoteId`, `sourceBlockId` 출처를 유지한다.
+- 생성 시각·대상 문제·모델 정보 저장 여부는 별도 검토한다.
 
-1. 애플리케이션 루트에 테마 Provider를 배치한다.
-2. `AppLayout` 상단 헤더에 야간모드 토글 버튼을 추가한다.
-3. 토글 버튼은 현재 상태를 아이콘·`title` 또는 접근 가능한 라벨로 표시한다.
-4. `html.dark` 기준의 전역 배경·텍스트·스크롤 동작을 정의한다.
-5. 기존 사이드바의 어두운 색상은 중복되거나 과도하게 변경하지 않는다.
-6. 테마 전환 시 화면 깜빡임과 레이아웃 이동을 최소화한다.
+# 8단계: 테스트 계획
 
-## 색상 기준
+## 백엔드 보안·권한
 
-| 용도 | 라이트모드 | 야간모드 |
-|---|---|---|
-| 전체 배경 | `slate-50` | `slate-950` |
-| 카드 | `white` | `slate-900` |
-| 기본 텍스트 | `slate-900` | `slate-100` |
-| 보조 텍스트 | `slate-500` | `slate-400` |
-| 테두리 | `slate-100/200` | `slate-700` |
-| 입력 배경 | `slate-50` | `slate-800` |
-| 주요 강조 | 기존 blue 계열 | 기존 blue 계열 유지 |
+- 다른 학생의 문제를 오답노트에 추가할 수 없음
+- 다른 학생의 오답 그룹에 접근할 수 없음
+- 존재하지 않는 문제·그룹은 `404`
+- 잘못된 요청은 `400`
 
-# 4. 핵심 학습 화면 적용
+## 백엔드 통계
 
-## 적용 순서
+- 풀이 기록이 없을 때 빈 통계 반환
+- 정답·오답 수가 정확히 계산됨
+- 여러 퀴즈의 동일 문제가 올바르게 집계됨
+- 강의별 통계가 현재 학생 데이터만 포함함
+- 문제 유형별 통계가 정확함
+- 문제별 최근 풀이일·최근 오답일이 정확함
 
-1. `DashboardPage`
-2. `CourseDetailPage`
-3. `NotionEditor`
-4. 노트 트리·페이지 링크
-5. `CourseBoardPanel`
-6. `QuizLibraryPage`
-7. `CBTPlayer`
-8. `IncorrectGroupsPanel`
-9. 퀴즈·오답 관련 모달
+## 복습 추천
 
-## 적용 기준
+- 반복 오답이 우선 선택됨
+- 최근 오답이 우선 선택됨
+- `limit` 값이 적용됨
+- `courseId` 필터가 적용됨
+- 복습 대상이 없으면 빈 배열 반환
 
-- 페이지 배경과 카드 배경을 야간 색상으로 변경한다.
-- 제목·본문·보조 설명의 대비를 확보한다.
-- 테두리와 구분선을 야간 배경에서 식별 가능하게 조정한다.
-- 입력창, placeholder, 버튼의 hover·focus 상태를 함께 조정한다.
-- 정답·오답·경고·성공 색상은 의미가 유지되도록 명도와 배경을 조절한다.
-- 게시판의 익명 사용자 표시와 댓글 구분이 야간에도 명확해야 한다.
+## 프론트엔드
 
-# 5. Tiptap 에디터와 콘텐츠 블록 점검
+- 오답 통계 카드 표시
+- 오늘의 복습 목록 표시
+- 강의 필터 작동
+- 다시 풀기 버튼 작동
+- 원문 보기 이동
+- 로딩·빈 상태·오류 상태 표시
+- 야간모드 표시
+- 기존 오답 그룹 UI 회귀
 
-## 대상
+## 기존 기능 회귀
 
-- `frontend/src/components/editor/NotionEditor.jsx`
-- `frontend/src/components/editor/components/BlockHandle.jsx`
-- `frontend/src/components/editor/components/CodeBlockComponent.jsx`
-- `frontend/src/components/editor/extensions/PdfBlock.jsx`
-- `frontend/src/components/editor/extensions/PageLink.jsx`
-- `frontend/src/components/editor/components/SuggestionList.jsx`
+- 오답 그룹 생성·삭제
+- 문제 추가·중복 방지
+- 오답 그룹 재풀이
+- 기존 퀴즈 풀이·채점
+- 원본 노트 이동
 
-## 점검 항목
+## 실행 명령
 
-- 본문·제목·placeholder 색상
-- 선택 영역과 커서 주변 상태
-- 인용구·링크·목록·체크박스
-- 코드 블록과 `atom-one-dark` highlight 테마
-- 이미지·PDF 블록 배경과 버튼
-- Slash Command 메뉴와 검색 결과
-- Block handle과 hover 상태
-- 업로드 진행·실패 배너
-
-## 제한
-
-- 에디터 저장 JSON 형식을 변경하지 않는다.
-- 이미지·PDF URL 검증 로직을 변경하지 않는다.
-- Slash Command 메뉴 구성, 필터링, 우선순위와 실행 로직을 변경하지 않는다.
-
-# 6. 사용자 상태와 접근성 보완
-
-## 확인 대상
-
-- hover
-- focus
-- active
-- disabled
-- error
-- success
-- loading
-- placeholder
-- modal backdrop
-- scrollbar
-
-## 구현 기준
-
-- 토글 버튼에 키보드 접근성과 접근 가능한 이름을 제공한다.
-- 야간모드에서 텍스트와 주요 컨트롤의 대비를 확인한다.
-- 색상만으로 정답·오답 상태를 구분하지 않고 기존 아이콘·문구를 유지한다.
-- 모달 backdrop이 콘텐츠를 충분히 구분하되 과도하게 밝지 않도록 한다.
-
-# 7. 검증
-
-## 기능 검증
-
-- 라이트모드와 야간모드 전환
-- 새로고침 후 테마 유지
-- 로그인·로그아웃 후 테마 유지
-- 대시보드·강의·노트·게시판·퀴즈·오답노트 화면 이동
-- 모달 열기·닫기
-- 노트 편집·자동 저장
-- 이미지·PDF 표시
-- Slash Command 전체 동작
-- 퀴즈 풀이·결과·오답노트 재풀이
-
-## 명령어
-
+- `backend\gradlew.bat test`
 - `frontend\npm.cmd run lint`
 - `frontend\npm.cmd run build`
 
-## 완료 조건
-
-- 헤더에서 야간모드를 켜고 끌 수 있다.
-- 선택한 테마가 새로고침 후 유지된다.
-- 모든 주요 보호 화면이 야간모드에서 깨지지 않는다.
-- 노트 에디터와 퀴즈 풀이가 야간모드에서도 정상적으로 사용할 수 있다.
-- 입력·모달·오류·정답·오답 상태의 대비가 확보된다.
-- 기존 자동 저장·업로드·게시판·퀴즈·오답노트 동작이 유지된다.
-- 프론트 lint와 build가 통과한다.
-
-# 실행 순서
+# 9단계: 권장 실행 순서
 
 ```text
-현재 UI와 색상 사용 확인
-→ 테마 상태·localStorage 구현
-→ AppLayout 토글 연결
-→ 전역 레이아웃·대시보드 적용
-→ 노트 에디터·노트 트리 적용
-→ 게시판·퀴즈·오답노트 적용
-→ 모달·입력·상태 스타일 보완
-→ 에디터·업로드·Slash Command 회귀 확인
-→ lint/build 실행
+현재 오답 데이터와 권한 경계 확인
+→ 오답 문제 소유권 검증 보완
+→ 통계 DTO·Repository 집계 설계
+→ 전체·강의별·유형별 통계 API 구현
+→ 문제별 오답 이력 API 구현
+→ 복습 우선순위 규칙 구현
+→ 오늘의 복습 API 구현
+→ QuizLibraryPage 오답노트 탭 개편
+→ 기존 CBTPlayer로 복습 연결
+→ 복습 결과가 통계에 반영되는지 검증
+→ 백엔드 테스트 작성·실행
+→ 프론트 lint/build 및 화면 회귀 확인
+→ 이후 AI 오답 분석 설계·구현
 ```
+
+# 10단계: 완료 조건
+
+## MVP
+
+- 사용자는 자신의 오답 통계를 볼 수 있다.
+- 문제별 오답 횟수와 최근 풀이일을 확인할 수 있다.
+- 반복 오답 문제가 우선 표시된다.
+- 오늘의 복습 문제를 바로 풀 수 있다.
+- 문제에서 원본 노트로 이동할 수 있다.
+- 다른 사용자의 문제나 오답 그룹에 접근할 수 없다.
+- 기존 퀴즈·오답노트 기능이 유지된다.
+- 백엔드 테스트와 프론트 lint/build가 통과한다.
+
+## 기대 효과
+
+현재:
+
+> 틀린 문제를 저장하고 다시 푼다.
+
+개발 후:
+
+> 어떤 문제를 왜 다시 공부해야 하는지 확인하고, 추천된 문제를 바로 복습한다.
+
+이 기능은 기존 데이터를 최대한 재사용하면서 UniNote를 AI 퀴즈 생성 도구에서 개인별 학습 약점을 분석하고 재학습까지 관리하는 서비스로 확장한다.

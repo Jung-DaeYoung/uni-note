@@ -191,6 +191,117 @@ class QuizServiceTest {
     }
 
     @Test
+    void saveAttemptPersistsVirtualSessionWithNullQuizSetWhenQuizSetIdIsSentinel() {
+        // 오답노트 재풀이/오늘의 복습은 IncorrectNoteService.getPracticeSession()이 반환하는
+        // quizSetId(-1L) 관례를 그대로 사용한다 — 이전에는 quizSetRepository.findById(-1L)이
+        // 404를 던졌고 프론트가 그 오류를 조용히 삼켜 풀이 결과가 전혀 저장되지 않았다.
+        Question question = new Question();
+        question.setQuestionId(5L);
+        question.setQuizSet(quizSet); // quizSet.student == owner
+        question.setCorrectAnswer("A");
+        when(questionRepository.findById(5L)).thenReturn(Optional.of(question));
+
+        QuizAttemptRequest.UserAnswerRequest answer = new QuizAttemptRequest.UserAnswerRequest();
+        answer.setQuestionId(5L);
+        answer.setSubmittedAnswer("A");
+
+        QuizAttemptRequest request = new QuizAttemptRequest();
+        request.setQuizSetId(-1L);
+        request.setUserAnswers(List.of(answer));
+
+        quizService.saveAttempt(request, owner);
+
+        ArgumentCaptor<QuizAttempt> attemptCaptor = ArgumentCaptor.forClass(QuizAttempt.class);
+        verify(quizAttemptRepository).save(attemptCaptor.capture());
+        assertThat(attemptCaptor.getValue().getQuizSet()).isNull();
+        assertThat(attemptCaptor.getValue().getScore()).isEqualTo(1);
+        verify(userAnswerRepository).save(any());
+        verify(quizSetRepository, never()).findById(any());
+    }
+
+    @Test
+    void saveAttemptRejectsVirtualSessionQuestionOwnedByAnotherStudent() {
+        QuizSet othersQuizSet = new QuizSet();
+        othersQuizSet.setQuizSetId(60L);
+        othersQuizSet.setStudent(other);
+
+        Question othersQuestion = new Question();
+        othersQuestion.setQuestionId(6L);
+        othersQuestion.setQuizSet(othersQuizSet);
+        othersQuestion.setCorrectAnswer("A");
+        when(questionRepository.findById(6L)).thenReturn(Optional.of(othersQuestion));
+
+        QuizAttemptRequest.UserAnswerRequest answer = new QuizAttemptRequest.UserAnswerRequest();
+        answer.setQuestionId(6L);
+        answer.setSubmittedAnswer("A");
+
+        QuizAttemptRequest request = new QuizAttemptRequest();
+        request.setQuizSetId(-1L);
+        request.setUserAnswers(List.of(answer));
+
+        assertThatThrownBy(() -> quizService.saveAttempt(request, owner))
+                .isInstanceOf(CourseAccessException.class);
+
+        verify(quizAttemptRepository, never()).save(any());
+    }
+
+    @Test
+    void saveAttemptRejectsNamedQuizSetOwnedByAnotherStudent() {
+        QuizSet othersQuizSet = new QuizSet();
+        othersQuizSet.setQuizSetId(50L);
+        othersQuizSet.setStudent(other);
+        when(quizSetRepository.findById(50L)).thenReturn(Optional.of(othersQuizSet));
+
+        QuizAttemptRequest.UserAnswerRequest answer = new QuizAttemptRequest.UserAnswerRequest();
+        answer.setQuestionId(7L);
+        answer.setSubmittedAnswer("A");
+
+        QuizAttemptRequest request = new QuizAttemptRequest();
+        request.setQuizSetId(50L);
+        request.setUserAnswers(List.of(answer));
+
+        assertThatThrownBy(() -> quizService.saveAttempt(request, owner))
+                .isInstanceOf(CourseAccessException.class);
+
+        verify(quizAttemptRepository, never()).save(any());
+        verifyNoInteractions(questionRepository);
+    }
+
+    @Test
+    void getMyAttemptsHandlesNullQuizSetGracefully() {
+        UserAnswer ua1 = new UserAnswer();
+        UserAnswer ua2 = new UserAnswer();
+        attempt.setQuizSet(null); // 가상 세션(오답 복습) 기록
+        attempt.setUserAnswers(List.of(ua1, ua2));
+
+        when(quizAttemptRepository.findByStudent_StudId(owner.getStudId())).thenReturn(List.of(attempt));
+
+        List<QuizAttemptResponse> responses = quizService.getMyAttempts(owner);
+
+        assertThat(responses).hasSize(1);
+        QuizAttemptResponse response = responses.get(0);
+        assertThat(response.getQuizSetId()).isNull();
+        assertThat(response.getCourseId()).isNull();
+        assertThat(response.getQuizTitle()).isEqualTo("오답 복습");
+        assertThat(response.getTotalQuestions()).isEqualTo(2);
+        verifyNoInteractions(questionRepository);
+    }
+
+    @Test
+    void getAttemptDetailHandlesNullQuizSetGracefully() {
+        attempt.setQuizSet(null);
+
+        when(quizAttemptRepository.findById(70L)).thenReturn(Optional.of(attempt));
+
+        var response = quizService.getAttemptDetail(70L, owner);
+
+        assertThat(response.getQuizSetId()).isNull();
+        assertThat(response.getCourseId()).isNull();
+        assertThat(response.getQuizTitle()).isEqualTo("오답 복습");
+        assertThat(response.getDifficulty()).isEqualTo("NORMAL");
+    }
+
+    @Test
     void getQuizDetailThrowsResourceNotFoundWhenQuizSetDoesNotExist() {
         when(quizSetRepository.findById(999L)).thenReturn(Optional.empty());
 

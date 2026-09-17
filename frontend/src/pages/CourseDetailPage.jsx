@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   MessageSquare,
@@ -6,10 +6,13 @@ import {
   ChevronRight,
   FileText,
   Home,
-  FolderOpen
+  FolderOpen,
+  BrainCircuit
 } from 'lucide-react';
 import AppLayout from '../components/layout/AppLayout';
 import NotionEditor from '../components/editor/NotionEditor';
+import QuizConfigModal from '../components/editor/components/QuizConfigModal';
+import CBTPlayer from '../components/editor/components/CBTPlayer';
 import { NoteTreeProvider } from '../context/NoteTreeContext';
 import { useCourses } from '../context/CourseContext';
 import NoteTreeItem from '../components/course/NoteTreeItem';
@@ -37,6 +40,21 @@ const CourseDetailPage = () => {
 
   const board = useCourseBoard({ courseId, searchString: location.search });
   const { isBoardOpen, setIsBoardOpen, isBoardMaximized } = board;
+
+  const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
+  const [quizResult, setQuizResult] = useState(null);
+  const [saveState, setSaveState] = useState({ status: 'synced', retry: () => {} });
+
+  // noteId가 바뀌면 이전 노트의 저장 상태가 새 노트 헤더에 잠깐이라도 남지 않도록
+  // 렌더 중에 상태를 초기화한다(effect가 아닌 렌더 단계에서 처리하는 React 권장 패턴).
+  const [savedForNoteId, setSavedForNoteId] = useState(noteId);
+  if (noteId !== savedForNoteId) {
+    setSavedForNoteId(noteId);
+    setSaveState({ status: 'synced', retry: () => {} });
+  }
+
+  const handleSaveStateChange = useCallback((state) => setSaveState(state), []);
+  const handleNoteSaved = useCallback(() => fetchTree(), [fetchTree]);
 
   // --- Sidebar Content ---
   const sidebarContent = useMemo(() => (
@@ -102,6 +120,31 @@ const CourseDetailPage = () => {
       </nav>
 
       <div className="flex items-center gap-2 shrink-0 ml-4">
+        {noteId && (
+          <>
+            <button
+              onClick={() => setIsQuizModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-all"
+            >
+              <BrainCircuit size={12} />
+              AI 문제 생성
+            </button>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+              <div className={`w-1.5 h-1.5 rounded-full ${saveState.status === 'saving' ? 'bg-blue-500 animate-pulse' : saveState.status === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
+              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                {saveState.status === 'saving' ? 'Saving...' : saveState.status === 'error' ? 'Error' : 'Synced'}
+              </span>
+              {saveState.status === 'error' && (
+                <button
+                  onClick={saveState.retry}
+                  className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider underline hover:text-red-700 dark:hover:text-red-300"
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+          </>
+        )}
         <button
           onClick={() => setIsBoardOpen(!isBoardOpen)}
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
@@ -116,10 +159,20 @@ const CourseDetailPage = () => {
       </div>
     </div>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [courseId, courseName, noteData, isBoardOpen]);
+  ), [courseId, courseName, noteData, isBoardOpen, noteId, saveState]);
 
   return (
     <NoteTreeProvider noteTree={noteTree}>
+      <QuizConfigModal
+        isOpen={isQuizModalOpen}
+        onClose={() => setIsQuizModalOpen(false)}
+        courseId={courseId}
+        currentNoteId={noteId}
+        onGenerated={(res) => setQuizResult(res)}
+      />
+      {quizResult && (
+        <CBTPlayer quizData={quizResult} onClose={() => setQuizResult(null)} courseId={courseId} />
+      )}
       <AppLayout sidebarContent={sidebarContent} headerContent={headerContent}>
         <div className="flex h-[calc(100vh-48px)] bg-slate-50 dark:bg-slate-950 overflow-hidden relative font-sans">
           {/* Left: Lecture Note Area */}
@@ -127,7 +180,7 @@ const CourseDetailPage = () => {
             <div className={`mx-auto transition-all duration-500 pt-8 ${isBoardOpen ? 'max-w-4xl' : 'max-w-7xl'}`}>
               <div className="px-8 pb-10">
                 {noteId && noteData && noteData.noteId === parseInt(noteId) ? (
-                  <NotionEditor key={noteId} noteId={noteId} courseId={courseId} initialData={noteData} onSaved={() => fetchTree()} />
+                  <NotionEditor key={noteId} noteId={noteId} courseId={courseId} initialData={noteData} onSaved={handleNoteSaved} onSaveStateChange={handleSaveStateChange} />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-40 opacity-20 text-slate-900 dark:text-slate-100">
                     <FileText size={64} className="mb-4" />

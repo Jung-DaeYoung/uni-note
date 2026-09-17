@@ -57,7 +57,7 @@ UniNote는 Spring Boot 백엔드와 React/Vite 프론트엔드로 구성된 풀�
 
 ## AI 협업 방식
 
-### Codex
+### GitHub Copilot CLI
 
 분석 → 요구사항 확인 → 구현 계획 작성 → 결과 검토
 
@@ -69,10 +69,10 @@ UniNote는 Spring Boot 백엔드와 React/Vite 프론트엔드로 구성된 풀�
 
 ### 기본 흐름
 
-`Codex 분석 → current-plan.md → Claude Code 구현 → Codex 검토`
+`GitHub Copilot CLI 분석 → current-plan.md → Claude Code 구현 → GitHub Copilot CLI 검토`
 
 ## 작업 계획 문서
 
 - `PLANS.md`는 전체 작업 우선순위를 정의한다.
-- `current-plan.md`는 현재 작업의 상세 구현 계획이며, Codex가 분석 후 작성하고 Claude Code가 이를 기준으로 구현한다.
+- `current-plan.md`는 현재 작업의 상세 구현 계획이며, GitHub Copilot CLI가 분석 후 작성하고 Claude Code가 이를 기준으로 구현한다.
 - 작업 완료 후 `current-plan.md`는 다음 작업에 맞게 갱신한다.

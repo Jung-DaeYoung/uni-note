@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEditor, EditorContent, ReactRenderer, ReactNodeViewRenderer } from '@tiptap/react';
 import Document from '@tiptap/extension-document';
@@ -24,7 +24,6 @@ import {
   Quote, 
   Image as ImageIcon,
   FilePlus,
-  BrainCircuit,
   FileText
 } from 'lucide-react';
 
@@ -35,8 +34,6 @@ import PageLink from './extensions/PageLink.jsx';
 import PdfBlock from './extensions/PdfBlock.jsx';
 import SuggestionList from './components/SuggestionList.jsx';
 import BlockHandle from './components/BlockHandle.jsx';
-import QuizConfigModal from './components/QuizConfigModal';
-import CBTPlayer from './components/CBTPlayer';
 import CodeBlockComponent from './components/CodeBlockComponent';
 import useNoteUploads, { isAllowedFileUrl } from './hooks/useNoteUploads';
 import useNoteAutosave from './hooks/useNoteAutosave';
@@ -125,9 +122,7 @@ const CustomParagraph = Paragraph.extend({
   },
 });
 
-const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
-  const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
-  const [quizResult, setQuizResult] = useState(null);
+const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChange }) => {
   const navigate = useNavigate();
 
   const { handleImageUpload, handlePdfUpload, uploadStatus, uploadError, clearUploadError } = useNoteUploads();
@@ -410,48 +405,25 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved }) => {
     return () => cancelPendingSave();
   }, [noteId, editor, initialData, syncEditor, cancelPendingSave]); // initialData 추가하여 데이터 로딩 완료 시점에 반영되도록 함
 
+  // retrySave/editor 참조 자체는 의존성으로 쓰지 않는다: editor 인스턴스가 렌더마다
+  // 새 참조로 보일 수 있어 이를 deps에 넣으면 onSaveStateChange 호출 → 부모 setState →
+  // 재렌더 → deps 변경으로 이어지는 무한 루프가 발생한다. saveStatus 변경 시에만
+  // 부모에 알리고, retry는 ref를 통해 항상 최신 함수를 호출한다.
+  const retrySaveRef = useRef(retrySave);
+  const editorRef = useRef(editor);
+  useEffect(() => {
+    retrySaveRef.current = retrySave;
+    editorRef.current = editor;
+  });
+
+  useEffect(() => {
+    onSaveStateChange?.({ status: saveStatus, retry: () => retrySaveRef.current(editorRef.current) });
+  }, [saveStatus, onSaveStateChange]);
+
   useSourceBlockScroll(editor);
 
   return (
     <div className="relative">
-      <QuizConfigModal 
-        isOpen={isQuizModalOpen} 
-        onClose={() => setIsQuizModalOpen(false)}
-        courseId={courseId}
-        currentNoteId={noteId}
-        onGenerated={(res) => setQuizResult(res)}
-      />
-
-      {quizResult && (
-        <CBTPlayer 
-          quizData={quizResult} 
-          onClose={() => setQuizResult(null)} 
-          courseId={courseId}
-        />
-      )}
-
-      <div className="absolute -top-10 right-0 flex items-center gap-1.5 px-3 py-1 bg-white/50 dark:bg-slate-900/50 backdrop-blur rounded-full border border-slate-100 dark:border-slate-700 z-10 shadow-sm">
-        <button
-          onClick={() => setIsQuizModalOpen(true)}
-          className="flex items-center gap-1.5 hover:bg-blue-50 dark:hover:bg-blue-500/10 px-2 py-0.5 rounded-full transition-colors text-blue-600 dark:text-blue-400"
-        >
-          <BrainCircuit size={12} />
-          <span className="text-[9px] font-black uppercase tracking-wider">AI 문제 생성</span>
-        </button>
-        <div className={`w-1.5 h-1.5 rounded-full ${saveStatus === 'saving' ? 'bg-blue-500 animate-pulse' : saveStatus === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
-        <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-          {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'error' ? 'Error' : 'Synced'}
-        </span>
-        {saveStatus === 'error' && (
-          <button
-            onClick={() => retrySave(editor)}
-            className="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider underline hover:text-red-700 dark:hover:text-red-300"
-          >
-            Retry
-          </button>
-        )}
-      </div>
-
       {uploadStatus === 'uploading' && (
         <div className="absolute -top-10 left-0 flex items-center gap-1.5 px-3 py-1 bg-blue-50 dark:bg-blue-500/10 rounded-full border border-blue-100 dark:border-blue-500/30 z-10 shadow-sm">
           <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider">업로드 중...</span>

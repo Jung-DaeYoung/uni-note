@@ -6,6 +6,9 @@ import QuizAttemptsModal from '../components/editor/components/QuizAttemptsModal
 import QuizListPanel from '../components/quiz/QuizListPanel';
 import QuizHistoryPanel from '../components/quiz/QuizHistoryPanel';
 import IncorrectGroupsPanel from '../components/quiz/IncorrectGroupsPanel';
+import IncorrectSummaryCards from '../components/quiz/IncorrectSummaryCards';
+import TodayReviewList from '../components/quiz/TodayReviewList';
+import WeakAreaBreakdown from '../components/quiz/WeakAreaBreakdown';
 import useQuizLibrary from '../hooks/useQuizLibrary';
 
 const QuizLibraryPage = () => {
@@ -26,6 +29,15 @@ const QuizLibraryPage = () => {
     handleViewAttempt,
     handleOpenAttempts,
     handleDelete,
+    incorrectSummary,
+    courseStats,
+    typeStats,
+    todayReview,
+    reviewCourseFilter,
+    isOverviewLoading,
+    handleReviewCourseFilterChange,
+    handleViewReviewSource,
+    handlePracticeReviewQuestion,
   } = useQuizLibrary(activeTab);
 
   return (
@@ -102,12 +114,34 @@ const QuizLibraryPage = () => {
             onViewAttempt={handleViewAttempt}
           />
         ) : (
-          <IncorrectGroupsPanel
-            incorrectGroups={incorrectGroups}
-            isLoading={isLoading}
-            onPracticeIncorrect={handlePracticeIncorrect}
-            onDeleteGroup={handleDeleteGroup}
-          />
+          <div className="space-y-8">
+            <IncorrectSummaryCards
+              summary={incorrectSummary}
+              todayReviewCount={todayReview.length}
+              savedCount={incorrectGroups.reduce((sum, g) => sum + g.itemCount, 0)}
+              isLoading={isOverviewLoading}
+            />
+            <TodayReviewList
+              items={todayReview}
+              isLoading={isOverviewLoading}
+              courseOptions={courseStats}
+              courseFilter={reviewCourseFilter}
+              onCourseFilterChange={handleReviewCourseFilterChange}
+              onViewSource={handleViewReviewSource}
+              onPracticeOne={handlePracticeReviewQuestion}
+            />
+            <WeakAreaBreakdown
+              courseStats={courseStats}
+              typeStats={typeStats}
+              isLoading={isOverviewLoading}
+            />
+            <IncorrectGroupsPanel
+              incorrectGroups={incorrectGroups}
+              isLoading={isLoading}
+              onPracticeIncorrect={handlePracticeIncorrect}
+              onDeleteGroup={handleDeleteGroup}
+            />
+          </div>
         )}
       </div>
     </AppLayout>

@@ -155,10 +155,22 @@ public class QuizService {
             .build();
     }
 
+    // quizSetId가 없거나 음수면 가상 세션(오답노트 재풀이/오늘의 복습)으로 간주해 quizSet 없이
+    // 저장한다. IncorrectNoteService.getPracticeSession()이 반환하는 quizSetId(-1L)과 동일한
+    // 관례를 공유한다 — 전에는 이 경로가 quizSetRepository.findById(-1L)에서 404로 실패했고,
+    // 프론트(CBTPlayer.handleSubmit)가 그 오류를 조용히 삼켜 사용자에게는 저장된 것처럼
+    // 보였지만 실제로는 QuizAttempt/UserAnswer가 전혀 남지 않았다.
     @Transactional
     public void saveAttempt(QuizAttemptRequest request, Student student) {
-        QuizSet quizSet = quizSetRepository.findById(request.getQuizSetId())
-            .orElseThrow(() -> new ResourceNotFoundException("퀴즈를 찾을 수 없습니다."));
+        Long requestedQuizSetId = request.getQuizSetId();
+        boolean isVirtualSession = requestedQuizSetId == null || requestedQuizSetId < 0;
+
+        QuizSet quizSet = null;
+        if (!isVirtualSession) {
+            quizSet = quizSetRepository.findById(requestedQuizSetId)
+                .orElseThrow(() -> new ResourceNotFoundException("퀴즈를 찾을 수 없습니다."));
+            validateOwnership(quizSet.getStudent(), student, "본인 퀴즈만 풀이할 수 있습니다.");
+        }
 
         // 제출된 답안을 서버가 직접 채점한다. 클라이언트가 보낸 score/isCorrect는 신뢰하지 않는다.
         List<UserAnswer> gradedAnswers = new ArrayList<>();
@@ -167,8 +179,13 @@ public class QuizService {
             Question question = questionRepository.findById(uar.getQuestionId())
                 .orElseThrow(() -> new ResourceNotFoundException("문제를 찾을 수 없습니다."));
 
-            if (!question.getQuizSet().getQuizSetId().equals(quizSet.getQuizSetId())) {
-                throw new InvalidRequestException("해당 퀴즈에 속하지 않는 문제입니다.");
+            if (quizSet != null) {
+                if (!question.getQuizSet().getQuizSetId().equals(quizSet.getQuizSetId())) {
+                    throw new InvalidRequestException("해당 퀴즈에 속하지 않는 문제입니다.");
+                }
+            } else {
+                // 가상 세션은 단일 quizSet이 없으므로 문제 단위로 소유권을 검증한다.
+                validateOwnership(question.getQuizSet().getStudent(), student, "본인 문제만 풀이할 수 있습니다.");
             }
 
             boolean isCorrect = isAnswerCorrect(uar.getSubmittedAnswer(), question.getCorrectAnswer());
@@ -184,7 +201,7 @@ public class QuizService {
         }
 
         QuizAttempt attempt = new QuizAttempt();
-        attempt.setQuizSet(quizSet);
+        attempt.setQuizSet(quizSet); // 가상 세션이면 null
         attempt.setStudent(student);
         attempt.setScore(correctCount);
         attempt.setStatus(QuizStatus.COMPLETED);
@@ -239,12 +256,13 @@ public class QuizService {
             })
             .collect(Collectors.toList());
 
+        QuizSet quizSet = attempt.getQuizSet();
         return QuizAttemptDetailResponse.builder()
             .attemptId(attempt.getAttemptId())
-            .quizSetId(attempt.getQuizSet().getQuizSetId())
-            .courseId(attempt.getQuizSet().getCourse() != null ? attempt.getQuizSet().getCourse().getCourseId() : null)
-            .quizTitle(attempt.getQuizSet().getTitle())
-            .difficulty(attempt.getQuizSet().getDifficulty() != null ? attempt.getQuizSet().getDifficulty().name() : "NORMAL")
+            .quizSetId(quizSet != null ? quizSet.getQuizSetId() : null)
+            .courseId(quizSet != null && quizSet.getCourse() != null ? quizSet.getCourse().getCourseId() : null)
+            .quizTitle(quizSet != null ? quizSet.getTitle() : "오답 복습")
+            .difficulty(quizSet != null && quizSet.getDifficulty() != null ? quizSet.getDifficulty().name() : "NORMAL")
             .score(attempt.getScore())
             .createdAt(attempt.getStartTime())
             .userAnswers(answers)
@@ -261,7 +279,9 @@ public class QuizService {
     // 대신 등장한 quizSetId들의 개수를 한 번의 쿼리로 배치 조회한다.
     private List<QuizAttemptResponse> convertToAttemptResponses(List<QuizAttempt> attempts) {
         List<Long> quizSetIds = attempts.stream()
-                .map(a -> a.getQuizSet().getQuizSetId())
+                .map(QuizAttempt::getQuizSet)
+                .filter(Objects::nonNull) // 가상 세션(quizSet=null) 기록은 문제 수 배치 조회 대상에서 제외
+                .map(QuizSet::getQuizSetId)
                 .distinct()
                 .collect(Collectors.toList());
         Map<Long, Long> questionCountByQuizSetId = quizSetIds.isEmpty()
@@ -270,15 +290,21 @@ public class QuizService {
                         .collect(Collectors.toMap(QuizSetQuestionCount::getQuizSetId, QuizSetQuestionCount::getCount));
 
         return attempts.stream()
-                .map(a -> QuizAttemptResponse.builder()
-                    .attemptId(a.getAttemptId())
-                    .quizSetId(a.getQuizSet().getQuizSetId())
-                    .courseId(a.getQuizSet().getCourse() != null ? a.getQuizSet().getCourse().getCourseId() : null)
-                    .quizTitle(a.getQuizSet().getTitle())
-                    .score(a.getScore())
-                    .totalQuestions(questionCountByQuizSetId.getOrDefault(a.getQuizSet().getQuizSetId(), 0L).intValue())
-                    .createdAt(a.getStartTime() != null ? a.getStartTime() : LocalDateTime.now()) // Null 방어
-                    .build())
+                .map(a -> {
+                    QuizSet quizSet = a.getQuizSet();
+                    Integer totalQuestions = quizSet != null
+                            ? questionCountByQuizSetId.getOrDefault(quizSet.getQuizSetId(), 0L).intValue()
+                            : a.getUserAnswers().size(); // 가상 세션은 문제 수를 직접 센다
+                    return QuizAttemptResponse.builder()
+                        .attemptId(a.getAttemptId())
+                        .quizSetId(quizSet != null ? quizSet.getQuizSetId() : null)
+                        .courseId(quizSet != null && quizSet.getCourse() != null ? quizSet.getCourse().getCourseId() : null)
+                        .quizTitle(quizSet != null ? quizSet.getTitle() : "오답 복습")
+                        .score(a.getScore())
+                        .totalQuestions(totalQuestions)
+                        .createdAt(a.getStartTime() != null ? a.getStartTime() : LocalDateTime.now()) // Null 방어
+                        .build();
+                })
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt())) // 안전한 정렬
                 .collect(Collectors.toList());
     }

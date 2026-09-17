@@ -52,6 +52,39 @@ public class IncorrectNoteController {
         return ResponseEntity.ok(incorrectNoteService.getPracticeSession(groupId, student));
     }
 
+    @GetMapping("/summary")
+    public ResponseEntity<IncorrectSummaryResponse> getSummary(Principal principal) {
+        Student student = getStudent(principal);
+        return ResponseEntity.ok(incorrectNoteService.getSummary(student));
+    }
+
+    @GetMapping("/statistics/courses")
+    public ResponseEntity<List<CourseIncorrectStatResponse>> getCourseStatistics(Principal principal) {
+        Student student = getStudent(principal);
+        return ResponseEntity.ok(incorrectNoteService.getCourseStatistics(student));
+    }
+
+    @GetMapping("/statistics/types")
+    public ResponseEntity<List<QuestionTypeIncorrectStatResponse>> getTypeStatistics(Principal principal) {
+        Student student = getStudent(principal);
+        return ResponseEntity.ok(incorrectNoteService.getTypeStatistics(student));
+    }
+
+    @GetMapping("/questions")
+    public ResponseEntity<List<IncorrectQuestionStatResponse>> getQuestionStatistics(Principal principal) {
+        Student student = getStudent(principal);
+        return ResponseEntity.ok(incorrectNoteService.getQuestionStatistics(student));
+    }
+
+    @GetMapping("/review-today")
+    public ResponseEntity<List<TodayReviewQuestionResponse>> getTodayReview(
+            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(required = false) Long courseId,
+            Principal principal) {
+        Student student = getStudent(principal);
+        return ResponseEntity.ok(incorrectNoteService.getTodayReview(student, limit, courseId));
+    }
+
     private Student getStudent(Principal principal) {
         return studentRepository.findByStudentNum(principal.getName())
                 .orElseThrow(() -> new ResourceNotFoundException("학생 정보를 찾을 수 없습니다."));

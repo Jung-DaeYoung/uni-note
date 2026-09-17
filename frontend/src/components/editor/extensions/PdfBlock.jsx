@@ -5,6 +5,9 @@ import { FileText, Download, ExternalLink } from 'lucide-react';
 import { API_BASE_URL } from '../../../api/client';
 import { isAllowedFileUrl } from '../hooks/useNoteUploads';
 
+// Tiptap 확장은 NodeView 컴포넌트를 같은 파일에 정의하는 것이 관례이며, 이 확장 하나만을
+// 위해 컴포넌트를 별도 파일로 분리하면 각 확장 파일마다 대응 파일이 늘어나는 비용이 더 크다.
+// eslint-disable-next-line react-refresh/only-export-components
 const PdfBlockComponent = ({ node }) => {
   const { src, title } = node.attrs;
   // src는 노트 콘텐츠(JSON)에 저장된 값을 그대로 신뢰하지 않고, 우리 서버가 실제로

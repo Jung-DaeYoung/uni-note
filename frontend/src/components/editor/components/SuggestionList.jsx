@@ -1,6 +1,6 @@
 import React, { forwardRef, useImperativeHandle, useState, useEffect } from 'react';
 
-export default forwardRef((props, ref) => {
+const SuggestionList = forwardRef((props, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const { items } = props;
 
@@ -98,3 +98,5 @@ export default forwardRef((props, ref) => {
     </div>
   );
 });
+
+export default SuggestionList;

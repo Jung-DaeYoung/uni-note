@@ -3,7 +3,10 @@ import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
 import React from 'react';
 import { useNoteTree } from '../../../context/NoteTreeContext';
 
-// 페이지 링크를 보여줄 React 컴포넌트
+// 페이지 링크를 보여줄 React 컴포넌트.
+// Tiptap 확장은 NodeView 컴포넌트를 같은 파일에 정의하는 것이 관례이며, 이 확장 하나만을
+// 위해 컴포넌트를 별도 파일로 분리하면 각 확장 파일마다 대응 파일이 늘어나는 비용이 더 크다.
+// eslint-disable-next-line react-refresh/only-export-components
 const PageLinkComponent = ({ node }) => {
   const { noteId, title: attrsTitle } = node.attrs;
   const { findTitle } = useNoteTree();

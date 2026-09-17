@@ -4,6 +4,7 @@ import com.uninote.backend.dto.NoteRequest;
 import com.uninote.backend.dto.NoteResponse;
 import com.uninote.backend.dto.NoteTreeResponse;
 import com.uninote.backend.service.NoteService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -48,7 +49,7 @@ public class NoteController {
     public ResponseEntity<NoteResponse> saveNote(
             @PathVariable Long noteId,
             @AuthenticationPrincipal String studentNum,
-            @RequestBody NoteRequest request) {
+            @Valid @RequestBody NoteRequest request) {
         return ResponseEntity.ok(noteService.saveNote(noteId, studentNum, request));
     }
 

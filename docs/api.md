@@ -55,6 +55,11 @@
 | DELETE | `/quiz/incorrect/groups/{groupId}` | 예 | 없음 | 빈 응답 |
 | DELETE | `/quiz/incorrect/groups/{groupId}/questions/{questionId}` | 예 | 없음 | 빈 응답 |
 | GET | `/quiz/incorrect/groups/{groupId}/practice` | 예 | 없음 | `QuizSetDetailResponse` |
+| GET | `/quiz/incorrect/summary` | 예 | 없음 | `IncorrectSummaryResponse` |
+| GET | `/quiz/incorrect/statistics/courses` | 예 | 없음 | `CourseIncorrectStatResponse[]` |
+| GET | `/quiz/incorrect/statistics/types` | 예 | 없음 | `QuestionTypeIncorrectStatResponse[]` |
+| GET | `/quiz/incorrect/questions` | 예 | 없음 | `IncorrectQuestionStatResponse[]` |
+| GET | `/quiz/incorrect/review-today` | 예 | query `limit`(기본 10), `courseId`(선택) | `TodayReviewQuestionResponse[]` |
 
 ## 파일
 

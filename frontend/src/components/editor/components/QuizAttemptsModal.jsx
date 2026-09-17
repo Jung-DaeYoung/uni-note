@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { X, History, CheckCircle2, ChevronRight, Loader2 } from 'lucide-react';
 import client from '../../../api/client';
 
@@ -6,13 +6,7 @@ const QuizAttemptsModal = ({ isOpen, onClose, quizSetId, quizTitle, onViewAttemp
   const [attempts, setAttempts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && quizSetId) {
-      fetchAttempts();
-    }
-  }, [isOpen, quizSetId]);
-
-  const fetchAttempts = async () => {
+  const fetchAttempts = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await client.get(`/quiz/${quizSetId}/attempts`);
@@ -22,7 +16,15 @@ const QuizAttemptsModal = ({ isOpen, onClose, quizSetId, quizTitle, onViewAttemp
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [quizSetId]);
+
+  useEffect(() => {
+    if (isOpen && quizSetId) {
+      // 모달이 열릴 때 서버 목록을 새로 불러오는 표준 fetch-on-open 패턴이다.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchAttempts();
+    }
+  }, [isOpen, quizSetId, fetchAttempts]);
 
   if (!isOpen) return null;
 

@@ -3,7 +3,7 @@ import { useNoteTree } from '../../../context/NoteTreeContext';
 import { X, Check, BookOpen, Loader2, ChevronRight } from 'lucide-react';
 import client from '../../../api/client';
 
-const QuizConfigModal = ({ isOpen, onClose, courseId, currentNoteId, onGenerated }) => {
+const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated }) => {
   const { noteTree } = useNoteTree();
   const [selectedIds, setSelectedIds] = useState([parseInt(currentNoteId)]);
   const [expandedIds, setExpandedIds] = useState([parseInt(currentNoteId)]); // 현재 노트의 부모들은 펼쳐진 상태로 시작하는 것이 좋지만, 일단 현재 노드만 포함
@@ -88,7 +88,7 @@ const QuizConfigModal = ({ isOpen, onClose, courseId, currentNoteId, onGenerated
       });
       onGenerated(response.data);
       onClose();
-    } catch (error) {
+    } catch {
       alert('문제 생성 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);

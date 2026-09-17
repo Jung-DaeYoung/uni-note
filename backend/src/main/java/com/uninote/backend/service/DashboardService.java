@@ -8,7 +8,6 @@ import com.uninote.backend.dto.CourseResponse;
 import com.uninote.backend.dto.DashboardResponse;
 import com.uninote.backend.dto.NoteSummaryResponse;
 import com.uninote.backend.dto.PostResponse;
-import com.uninote.backend.exception.ResourceNotFoundException;
 import com.uninote.backend.repository.EnrollmentRepository;
 import com.uninote.backend.repository.NoteRepository;
 import com.uninote.backend.repository.PostRepository;
@@ -31,8 +30,7 @@ public class DashboardService {
     private final NoteRepository noteRepository; // 추가
 
     public DashboardResponse getDashboardData(String studentNum) {
-        Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new ResourceNotFoundException("학생을 찾을 수 없습니다."));
+        Student student = studentRepository.getByStudentNum(studentNum);
 
         List<Enrollment> enrollments = enrollmentRepository.findByStudent(student);
 

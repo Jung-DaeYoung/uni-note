@@ -3,6 +3,7 @@ package com.uninote.backend.controller;
 import com.uninote.backend.dto.PostRequest;
 import com.uninote.backend.dto.PostResponse;
 import com.uninote.backend.service.PostService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -28,7 +29,7 @@ public class PostController {
     public ResponseEntity<PostResponse> savePost(
             @PathVariable Long courseId,
             @AuthenticationPrincipal String studentNum,
-            @RequestBody PostRequest request) {
+            @Valid @RequestBody PostRequest request) {
         return ResponseEntity.ok(postService.savePost(courseId, studentNum, request));
     }
 
@@ -36,7 +37,7 @@ public class PostController {
     public ResponseEntity<Void> addComment(
             @PathVariable Long postId,
             @AuthenticationPrincipal String studentNum,
-            @RequestBody com.uninote.backend.dto.CommentRequest request) {
+            @Valid @RequestBody com.uninote.backend.dto.CommentRequest request) {
         postService.addComment(postId, studentNum, request.getContent());
         return ResponseEntity.ok().build();
     }
@@ -45,7 +46,7 @@ public class PostController {
     public ResponseEntity<Void> updateComment(
             @PathVariable Long commentId,
             @AuthenticationPrincipal String studentNum,
-            @RequestBody com.uninote.backend.dto.CommentRequest request) {
+            @Valid @RequestBody com.uninote.backend.dto.CommentRequest request) {
         postService.updateComment(commentId, studentNum, request.getContent());
         return ResponseEntity.ok().build();
     }
@@ -70,7 +71,7 @@ public class PostController {
     public ResponseEntity<PostResponse> updatePost(
             @PathVariable Long postId,
             @AuthenticationPrincipal String studentNum,
-            @RequestBody PostRequest request) {
+            @Valid @RequestBody PostRequest request) {
         return ResponseEntity.ok(postService.updatePost(postId, studentNum, request));
     }
 }

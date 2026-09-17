@@ -6,10 +6,8 @@ import com.uninote.backend.domain.Student;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
-import java.util.Optional;
 
 public interface NoteRepository extends JpaRepository<Note, Long> {
-    Optional<Note> findByCourseAndStudent(Course course, Student student);
     List<Note> findByCourseAndParentNoteIsNullOrderByCreatedAtAsc(Course course);
     List<Note> findByCourseAndStudentAndParentNoteIsNullOrderByCreatedAtAsc(Course course, Student student);
     // 노트 트리 전체를 한 번에 조회해 자식 노트를 재귀적으로 lazy loading하는 N+1을 없앤다.

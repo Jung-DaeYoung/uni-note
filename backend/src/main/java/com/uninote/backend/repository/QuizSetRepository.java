@@ -13,8 +13,4 @@ public interface QuizSetRepository extends JpaRepository<QuizSet, Long> {
     // course를 fetch join해, 목록 변환 중 세트마다 강의를 lazy loading하는 N+1을 없앤다.
     @Query("SELECT qs FROM QuizSet qs LEFT JOIN FETCH qs.course WHERE qs.student.studId = :studId")
     List<QuizSet> findByStudent_StudId(@Param("studId") Long studId);
-
-    @Query("SELECT qs FROM QuizSet qs LEFT JOIN FETCH qs.course " +
-            "WHERE qs.course.courseId = :courseId AND qs.student.studId = :studId")
-    List<QuizSet> findByCourse_CourseIdAndStudent_StudId(@Param("courseId") Long courseId, @Param("studId") Long studId);
 }

@@ -46,8 +46,7 @@ public class NoteService {
     public List<NoteTreeResponse> getNoteTree(Long courseId, String studentNum) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("강의를 찾을 수 없습니다."));
-        Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new ResourceNotFoundException("학생을 찾을 수 없습니다."));
+        Student student = studentRepository.getByStudentNum(studentNum);
 
         validateEnrollment(student, courseId);
 
@@ -70,8 +69,7 @@ public class NoteService {
     public NoteResponse createNote(Long courseId, Long parentNoteId, String studentNum) {
         log.info("노트 생성 시도: courseId={}, parentNoteId={}, studentNum={}", courseId, parentNoteId, studentNum);
         
-        Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new ResourceNotFoundException("학생을 찾을 수 없습니다."));
+        Student student = studentRepository.getByStudentNum(studentNum);
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("강의를 찾을 수 없습니다."));
 
@@ -121,9 +119,8 @@ public class NoteService {
         Note note = noteRepository.findById(noteId)
                 .orElseThrow(() -> new ResourceNotFoundException("노트를 찾을 수 없습니다."));
 
-        Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new ResourceNotFoundException("학생을 찾을 수 없습니다."));
-        
+        Student student = studentRepository.getByStudentNum(studentNum);
+
         validateEnrollment(student, note.getCourse().getCourseId());
         validateOwnership(note, studentNum);
 

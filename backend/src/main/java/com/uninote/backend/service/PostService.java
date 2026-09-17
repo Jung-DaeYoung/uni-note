@@ -26,8 +26,7 @@ public class PostService {
     public List<PostResponse> getPosts(Long courseId, String studentNum) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid course ID"));
-        Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new ResourceNotFoundException("Invalid student number"));
+        Student student = studentRepository.getByStudentNum(studentNum);
         validateEnrollment(student, courseId);
 
         return postRepository.findByCourseOrderByCreatedAtDesc(course).stream()
@@ -39,8 +38,7 @@ public class PostService {
     public PostResponse savePost(Long courseId, String studentNum, PostRequest request) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid course ID"));
-        Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new ResourceNotFoundException("Invalid student number"));
+        Student student = studentRepository.getByStudentNum(studentNum);
         validateEnrollment(student, courseId);
 
         Post post = new Post();
@@ -58,8 +56,7 @@ public class PostService {
     public void addComment(Long postId, String studentNum, String content) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid post ID"));
-        Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new ResourceNotFoundException("Invalid student number"));
+        Student student = studentRepository.getByStudentNum(studentNum);
         validateEnrollment(student, post.getCourse().getCourseId());
 
         Comment comment = Comment.builder()

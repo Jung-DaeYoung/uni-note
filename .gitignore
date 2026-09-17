@@ -1,1 +1,5 @@
-.gitignore content placeholderbackend/uploads/
+# --- Uploaded files (runtime data, not source) ---
+backend/uploads/
+
+# --- IDE local state (per-machine, not shared) ---
+**/.idea/workspace.xml

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { registerLogoutHandler } from '../api/client';
 
 const AuthContext = createContext(null);
@@ -32,11 +32,11 @@ export const AuthProvider = ({ children }) => {
   });
   const [isAuthenticated, setIsAuthenticated] = useState(() => isTokenValid(localStorage.getItem('token')));
 
-  const login = (newToken) => {
+  const login = useCallback((newToken) => {
     localStorage.setItem('token', newToken);
     setToken(newToken);
     setIsAuthenticated(true);
-  };
+  }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
@@ -73,11 +73,15 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  return (
-    <AuthContext.Provider value={{ token, isAuthenticated, login, logout }}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({ token, isAuthenticated, login, logout }),
+    [token, isAuthenticated, login, logout]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+// Provider와 그 짝인 훅을 같은 파일에 두는 관례이며, 이 훅 하나만을 위해 파일을
+// 분리하면 Context/Provider/훅 세 파일로 흩어져 오히려 추적하기 어려워진다.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

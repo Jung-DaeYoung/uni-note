@@ -34,7 +34,9 @@ const BlockHandle = ({ editor }) => {
             setCurrentNode({ node, pos: start - 1 });
           }
         }
-      } catch (e) {}
+      } catch {
+        // 위치 계산 중 DOM 접근 실패는 무시한다.
+      }
     }
   }, [editor, isMenuOpen]);
 

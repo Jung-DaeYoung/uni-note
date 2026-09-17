@@ -148,7 +148,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
       CustomHeading.configure({ levels: [1, 2, 3] }),
       CustomParagraph,
       Placeholder.configure({
-        placeholder: ({ node, pos }) => {
+        placeholder: ({ pos }) => {
           if (pos === 0) return '제목을 입력하세요';
           return '오늘의 강의 내용을 기록하세요. "/"를 입력해 명령어를 확인하세요...';
         },
@@ -190,7 +190,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
                         }
                       })
                       .run();
-                  } catch (error) {
+                  } catch {
                     alert("하위 노트 생성에 실패했습니다.");
                   }
                 }
@@ -341,7 +341,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
         class: 'uninote-editor focus:outline-none min-h-[700px] text-lg leading-relaxed',
         spellcheck: 'false',
       },
-      handleClickOn: (view, pos, node, nodePos, event, direct) => {
+      handleClickOn: (view, pos, node) => {
         if (node.type.name === 'pageLink') {
           const { noteId } = node.attrs;
           if (noteId) {

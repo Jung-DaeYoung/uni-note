@@ -2,9 +2,9 @@ package com.uninote.backend.controller;
 
 import com.uninote.backend.domain.Student;
 import com.uninote.backend.dto.*;
-import com.uninote.backend.exception.ResourceNotFoundException;
 import com.uninote.backend.repository.StudentRepository;
 import com.uninote.backend.service.IncorrectNoteService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -26,7 +26,7 @@ public class IncorrectNoteController {
     }
 
     @PostMapping("/add-to-group")
-    public ResponseEntity<Void> addToGroup(@RequestBody AddToIncorrectRequest request, Principal principal) {
+    public ResponseEntity<Void> addToGroup(@Valid @RequestBody AddToIncorrectRequest request, Principal principal) {
         Student student = getStudent(principal);
         incorrectNoteService.addToGroup(request, student);
         return ResponseEntity.ok().build();
@@ -86,7 +86,6 @@ public class IncorrectNoteController {
     }
 
     private Student getStudent(Principal principal) {
-        return studentRepository.findByStudentNum(principal.getName())
-                .orElseThrow(() -> new ResourceNotFoundException("학생 정보를 찾을 수 없습니다."));
+        return studentRepository.getByStudentNum(principal.getName());
     }
 }

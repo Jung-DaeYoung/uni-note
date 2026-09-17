@@ -105,11 +105,22 @@ const useNoteAutosave = ({ noteId, initialData, onSaved }) => {
     [performSave]
   );
 
+  const saveDraftToLocalStorage = useCallback((id, json) => {
+    localStorage.setItem(`note-temp-${id}`, JSON.stringify({ content: json, timestamp: Date.now() }));
+  }, []);
+
+  // 서버 저장(2000ms)과는 별개로, 키 입력마다 즉시 실행되던 localStorage 기록만 짧게 debounce해
+  // 대형 문서에서 매 입력마다 JSON.stringify + setItem이 동기 실행되는 지연을 줄인다.
+  const debouncedSaveToLocalStorage = useMemo(
+    () => debounce(saveDraftToLocalStorage, 300),
+    [saveDraftToLocalStorage]
+  );
+
   const handleEditorUpdate = useCallback((editor) => {
     const json = editor.getJSON();
-    localStorage.setItem(`note-temp-${noteId}`, JSON.stringify({ content: json, timestamp: Date.now() }));
+    debouncedSaveToLocalStorage(noteId, json);
     if (!isInitialMount.current) debouncedSaveToServer(editor, noteId);
-  }, [noteId, debouncedSaveToServer]);
+  }, [noteId, debouncedSaveToLocalStorage, debouncedSaveToServer]);
 
   // 저장 실패(saveStatus === 'error') 후 사용자가 즉시 재시도할 수 있게 한다.
   // 대기 중인 debounce를 취소하고 현재 에디터 내용으로 바로 저장을 시도한다.
@@ -141,8 +152,9 @@ const useNoteAutosave = ({ noteId, initialData, onSaved }) => {
 
   const cancelPendingSave = useCallback(() => {
     debouncedSaveToServer.cancel();
+    debouncedSaveToLocalStorage.cancel();
     activeRequestControllerRef.current?.abort();
-  }, [debouncedSaveToServer]);
+  }, [debouncedSaveToServer, debouncedSaveToLocalStorage]);
 
   return { saveStatus, getInitialContent, handleEditorUpdate, syncEditor, cancelPendingSave, retrySave };
 };

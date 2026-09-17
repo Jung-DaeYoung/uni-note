@@ -10,8 +10,6 @@ import java.util.List;
 
 @Repository
 public interface QuestionRepository extends JpaRepository<Question, Long> {
-    List<Question> findByQuizSet_QuizSetId(Long quizSetId);
-
     // 풀이 기록 목록에서 세트별 문제 "개수"만 필요한 경우, 세트마다 전체 문제 컬렉션을
     // lazy loading하는 N+1 대신 한 번의 GROUP BY로 배치 조회한다.
     @Query("SELECT q.quizSet.quizSetId AS quizSetId, COUNT(q) AS count " +

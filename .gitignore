@@ -2,4 +2,7 @@
 backend/uploads/
 
 # --- IDE local state (per-machine, not shared) ---
-**/.idea/workspace.xml
+**/.idea/
+
+# --- Generated logs (per-machine, not source) ---
+**/*.log

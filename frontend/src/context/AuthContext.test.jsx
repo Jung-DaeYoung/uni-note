@@ -14,15 +14,19 @@ const makeToken = (expSecondsFromNow) => {
 };
 
 const Consumer = () => {
-  const { token, isAuthenticated, login, logout } = useAuth();
+  const { isAuthenticated, login, logout } = useAuth();
   return (
     <div>
       <span data-testid="authenticated">{String(isAuthenticated)}</span>
-      <span data-testid="token">{token || 'none'}</span>
       <button onClick={() => login(makeToken(3600))}>login</button>
       <button onClick={logout}>logout</button>
     </div>
   );
+};
+
+const LoginButton = ({ token }) => {
+  const { login } = useAuth();
+  return <button onClick={() => login(token)}>login-with-token</button>;
 };
 
 describe('AuthContext', () => {
@@ -42,7 +46,6 @@ describe('AuthContext', () => {
     );
 
     expect(screen.getByTestId('authenticated')).toHaveTextContent('false');
-    expect(screen.getByTestId('token')).toHaveTextContent('none');
   });
 
   it('localStorage에 만료된 토큰이 있으면 미인증 상태로 시작하고 토큰을 정리한다', () => {
@@ -59,8 +62,7 @@ describe('AuthContext', () => {
   });
 
   it('localStorage에 유효한 토큰이 있으면 인증 상태로 시작한다', () => {
-    const validToken = makeToken(3600);
-    localStorage.setItem('token', validToken);
+    localStorage.setItem('token', makeToken(3600));
 
     render(
       <AuthProvider>
@@ -69,7 +71,6 @@ describe('AuthContext', () => {
     );
 
     expect(screen.getByTestId('authenticated')).toHaveTextContent('true');
-    expect(screen.getByTestId('token')).toHaveTextContent(validToken);
   });
 
   it('login()은 토큰을 저장하고 인증 상태로 전환한다', async () => {
@@ -100,6 +101,54 @@ describe('AuthContext', () => {
 
     expect(screen.getByTestId('authenticated')).toHaveTextContent('false');
     expect(localStorage.getItem('token')).toBeNull();
+  });
+
+  it('login()은 형식이 잘못된 토큰을 저장하지 않는다', async () => {
+    const user = userEvent.setup();
+    render(
+      <AuthProvider>
+        <Consumer />
+        <LoginButton token="not-a-valid-jwt" />
+      </AuthProvider>
+    );
+
+    await user.click(screen.getByText('login-with-token'));
+
+    expect(screen.getByTestId('authenticated')).toHaveTextContent('false');
+    expect(localStorage.getItem('token')).toBeNull();
+  });
+
+  it('login()은 만료된 토큰을 저장하지 않는다', async () => {
+    const user = userEvent.setup();
+    render(
+      <AuthProvider>
+        <Consumer />
+        <LoginButton token={makeToken(-3600)} />
+      </AuthProvider>
+    );
+
+    await user.click(screen.getByText('login-with-token'));
+
+    expect(screen.getByTestId('authenticated')).toHaveTextContent('false');
+    expect(localStorage.getItem('token')).toBeNull();
+  });
+
+  it('이미 인증된 상태에서 유효하지 않은 토큰으로 login()을 호출해도 기존 세션이 유지된다', async () => {
+    const validToken = makeToken(3600);
+    localStorage.setItem('token', validToken);
+    const user = userEvent.setup();
+    render(
+      <AuthProvider>
+        <Consumer />
+        <LoginButton token="not-a-valid-jwt" />
+      </AuthProvider>
+    );
+    expect(screen.getByTestId('authenticated')).toHaveTextContent('true');
+
+    await user.click(screen.getByText('login-with-token'));
+
+    expect(screen.getByTestId('authenticated')).toHaveTextContent('true');
+    expect(localStorage.getItem('token')).toBe(validToken);
   });
 
   it('다른 탭에서 로그인하면 storage 이벤트로 인증 상태가 동기화된다', () => {

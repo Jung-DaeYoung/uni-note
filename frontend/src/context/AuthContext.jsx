@@ -26,22 +26,23 @@ const isTokenValid = (token) => {
 };
 
 export const AuthProvider = ({ children }) => {
+  // token은 항상 isTokenValid()를 통과한 값만 들어오므로(초기화·login·storage 동기화 모두
+  // 이 조건을 거침), isAuthenticated를 별도 상태로 두지 않고 token으로부터 파생시킨다.
   const [token, setToken] = useState(() => {
     const stored = localStorage.getItem('token');
     return isTokenValid(stored) ? stored : null;
   });
-  const [isAuthenticated, setIsAuthenticated] = useState(() => isTokenValid(localStorage.getItem('token')));
+  const isAuthenticated = token !== null;
 
   const login = useCallback((newToken) => {
+    if (!isTokenValid(newToken)) return;
     localStorage.setItem('token', newToken);
     setToken(newToken);
-    setIsAuthenticated(true);
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
     setToken(null);
-    setIsAuthenticated(false);
   }, []);
 
   useEffect(() => {
@@ -61,21 +62,15 @@ export const AuthProvider = ({ children }) => {
     // 다른 탭에서 로그인/로그아웃하면 localStorage 변경이 storage 이벤트로 전달된다.
     const handleStorage = (event) => {
       if (event.key !== 'token') return;
-      if (isTokenValid(event.newValue)) {
-        setToken(event.newValue);
-        setIsAuthenticated(true);
-      } else {
-        setToken(null);
-        setIsAuthenticated(false);
-      }
+      setToken(isTokenValid(event.newValue) ? event.newValue : null);
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const value = useMemo(
-    () => ({ token, isAuthenticated, login, logout }),
-    [token, isAuthenticated, login, logout]
+    () => ({ isAuthenticated, login, logout }),
+    [isAuthenticated, login, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

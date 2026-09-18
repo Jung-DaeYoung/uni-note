@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.Set;
 
@@ -48,6 +49,17 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().status()).isEqualTo(403);
         assertThat(response.getBody().errorCode()).isEqualTo("FORBIDDEN_COURSE_ACCESS");
         assertThat(response.getBody().message()).isEqualTo("해당 강의를 수강하지 않습니다.");
+    }
+
+    @Test
+    void mapsMaxUploadSizeExceededExceptionTo400() {
+        ResponseEntity<ErrorResponse> response = handler.handleMaxUploadSizeExceeded(
+                new MaxUploadSizeExceededException(10L * 1024 * 1024));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().status()).isEqualTo(400);
+        assertThat(response.getBody().errorCode()).isEqualTo("FILE_TOO_LARGE");
     }
 
     @Test

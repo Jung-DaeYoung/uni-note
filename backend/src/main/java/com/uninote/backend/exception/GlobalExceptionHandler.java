@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
@@ -75,6 +76,19 @@ public class GlobalExceptionHandler {
             HttpStatus.BAD_REQUEST.value(),
             "VALIDATION_FAILED",
             message
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    // 업로드 용량 제한(application.yaml의 spring.servlet.multipart.max-file-size) 초과.
+    // 컨트롤러에 도달하기 전 멀티파트 파서 단계에서 던져지므로 별도로 잡아줘야 500으로 새지 않는다.
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex) {
+        ErrorResponse error = new ErrorResponse(
+            LocalDateTime.now(),
+            HttpStatus.BAD_REQUEST.value(),
+            "FILE_TOO_LARGE",
+            "파일 크기가 허용된 용량을 초과했습니다."
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }

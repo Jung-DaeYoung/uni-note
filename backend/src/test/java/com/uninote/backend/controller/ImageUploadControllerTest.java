@@ -56,9 +56,16 @@ class ImageUploadControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    // 실제 PNG 시그니처(매직 바이트)를 그대로 담은 최소 바이트열. 완전한 유효 PNG는 아니지만
+    // 컨트롤러가 검사하는 8바이트 헤더는 실제 PNG와 동일하다.
+    private static final byte[] PNG_BYTES = {
+            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x00
+    };
+    private static final byte[] PDF_BYTES = "%PDF-1.4\n%%EOF".getBytes(StandardCharsets.US_ASCII);
+
     @Test
     void authenticatedUploadSucceedsAndReturnsSignedUrl() throws IOException {
-        MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", "hello".getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", PNG_BYTES);
 
         ResponseEntity<?> response = controller.uploadImage(file, "owner-num");
 
@@ -72,6 +79,41 @@ class ImageUploadControllerTest {
         String fileName = url.substring("/api/upload/view/".length(), url.indexOf('?'));
         createdFile = Paths.get("uploads").resolve(fileName);
         assertThat(Files.exists(createdFile)).isTrue();
+    }
+
+    @Test
+    void authenticatedPdfUploadSucceeds() throws IOException {
+        MockMultipartFile file = new MockMultipartFile("file", "doc.pdf", "application/pdf", PDF_BYTES);
+
+        ResponseEntity<?> response = controller.uploadFile(file, "owner-num");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        @SuppressWarnings("unchecked")
+        Map<String, String> body = (Map<String, String>) response.getBody();
+        String url = body.get("url");
+        String fileName = url.substring("/api/upload/view/".length(), url.indexOf('?'));
+        createdFile = Paths.get("uploads").resolve(fileName);
+        assertThat(Files.exists(createdFile)).isTrue();
+    }
+
+    @Test
+    void uploadImageRejectsContentThatDoesNotMatchDeclaredExtension() {
+        // 확장자는 .png이지만 실제 내용은 이미지가 아닌 임의의 텍스트 — 위장 업로드.
+        MockMultipartFile file = new MockMultipartFile("file", "fake.png", "image/png", "not an image".getBytes());
+
+        ResponseEntity<?> response = controller.uploadImage(file, "owner-num");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void uploadFileRejectsPdfExtensionWithNonPdfContent() {
+        // 확장자는 .pdf이지만 실제 내용은 PNG 매직 바이트 — 위장 업로드.
+        MockMultipartFile file = new MockMultipartFile("file", "fake.pdf", "application/pdf", PNG_BYTES);
+
+        ResponseEntity<?> response = controller.uploadFile(file, "owner-num");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     @Test

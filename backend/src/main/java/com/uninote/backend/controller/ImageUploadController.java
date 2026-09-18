@@ -34,6 +34,15 @@ public class ImageUploadController {
     private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(".png", ".jpg", ".jpeg", ".gif", ".webp");
     private static final Set<String> ALLOWED_FILE_EXTENSIONS = Set.of(".pdf");
 
+    // 확장자별 실제 파일 시그니처(매직 바이트). 확장자만 바꿔 위장한 파일을 걸러내기 위함이다.
+    private static final byte[] PNG_MAGIC = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+    private static final byte[] JPEG_MAGIC = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
+    private static final byte[] GIF87_MAGIC = "GIF87a".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] GIF89_MAGIC = "GIF89a".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] RIFF_MAGIC = "RIFF".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] WEBP_MAGIC = "WEBP".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] PDF_MAGIC = "%PDF-".getBytes(StandardCharsets.US_ASCII);
+
     private final String uploadDir = "uploads";
     // 기준 디렉터리(절대 경로, 정규화됨). 서빙 요청의 파일명이 이 밑을 벗어나면 거부한다.
     private final Path uploadBaseDir = Paths.get(uploadDir).toAbsolutePath().normalize();
@@ -210,8 +219,20 @@ public class ImageUploadController {
             return ResponseEntity.badRequest().body("허용되지 않는 파일 형식입니다.");
         }
 
+        byte[] content;
         try {
-            // 디렉토리 생성
+            content = file.getBytes();
+        } catch (IOException e) {
+            log.error("업로드 파일 읽기 실패", e);
+            return ResponseEntity.internalServerError().body("파일을 읽는 중 오류가 발생했습니다.");
+        }
+        // 클라이언트가 보낸 확장자/MIME은 신뢰할 수 없으므로, 실제 파일 시그니처(매직 바이트)로
+        // 다시 확인한다. 파일을 쓰기 전에 검증하므로 실패해도 정리할 생성물이 남지 않는다.
+        if (!matchesDeclaredType(content, extension)) {
+            return ResponseEntity.badRequest().body("파일 내용이 실제 형식과 일치하지 않습니다.");
+        }
+
+        try {
             Path copyLocation = Paths.get(uploadDir);
             if (!Files.exists(copyLocation)) {
                 Files.createDirectories(copyLocation);
@@ -221,9 +242,8 @@ public class ImageUploadController {
             // (원본 파일명은 저장 경로에 전혀 쓰이지 않는다)
             String fileName = UUID.randomUUID().toString() + extension;
 
-            // 파일 저장
             Path targetPath = copyLocation.resolve(fileName);
-            Files.copy(file.getInputStream(), targetPath);
+            Files.write(targetPath, content);
 
             // 업로더 본인만 접근 가능하도록 서명을 실어 URL 생성
             String signature = fileAccessSigner.sign(fileName, studentNum);
@@ -245,6 +265,30 @@ public class ImageUploadController {
             log.error("업로드 실패", e);
             return ResponseEntity.internalServerError().body("파일 저장 중 오류가 발생했습니다.");
         }
+    }
+
+    private boolean matchesDeclaredType(byte[] content, String extension) {
+        return switch (extension) {
+            case ".png" -> startsWith(content, PNG_MAGIC);
+            case ".jpg", ".jpeg" -> startsWith(content, JPEG_MAGIC);
+            case ".gif" -> startsWith(content, GIF87_MAGIC) || startsWith(content, GIF89_MAGIC);
+            case ".webp" -> content.length >= 12 && startsWith(content, RIFF_MAGIC)
+                    && Arrays.equals(Arrays.copyOfRange(content, 8, 12), WEBP_MAGIC);
+            case ".pdf" -> startsWith(content, PDF_MAGIC);
+            default -> false;
+        };
+    }
+
+    private boolean startsWith(byte[] content, byte[] prefix) {
+        if (content.length < prefix.length) {
+            return false;
+        }
+        for (int i = 0; i < prefix.length; i++) {
+            if (content[i] != prefix[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private String extractExtension(String originalFilename) {

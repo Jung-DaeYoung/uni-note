@@ -5,8 +5,10 @@ import com.uninote.backend.dto.*;
 import com.uninote.backend.repository.StudentRepository;
 import com.uninote.backend.service.IncorrectNoteService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
@@ -15,6 +17,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/quiz/incorrect")
 @RequiredArgsConstructor
+@Validated
 public class IncorrectNoteController {
     private final IncorrectNoteService incorrectNoteService;
     private final StudentRepository studentRepository;
@@ -33,21 +36,21 @@ public class IncorrectNoteController {
     }
 
     @DeleteMapping("/groups/{groupId}")
-    public ResponseEntity<Void> deleteGroup(@PathVariable Long groupId, Principal principal) {
+    public ResponseEntity<Void> deleteGroup(@PathVariable @Positive Long groupId, Principal principal) {
         Student student = getStudent(principal);
         incorrectNoteService.deleteGroup(groupId, student);
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/groups/{groupId}/questions/{questionId}")
-    public ResponseEntity<Void> removeItem(@PathVariable Long groupId, @PathVariable Long questionId, Principal principal) {
+    public ResponseEntity<Void> removeItem(@PathVariable @Positive Long groupId, @PathVariable @Positive Long questionId, Principal principal) {
         Student student = getStudent(principal);
         incorrectNoteService.removeItemFromGroup(groupId, questionId, student);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/groups/{groupId}/practice")
-    public ResponseEntity<QuizSetDetailResponse> getPracticeSession(@PathVariable Long groupId, Principal principal) {
+    public ResponseEntity<QuizSetDetailResponse> getPracticeSession(@PathVariable @Positive Long groupId, Principal principal) {
         Student student = getStudent(principal);
         return ResponseEntity.ok(incorrectNoteService.getPracticeSession(groupId, student));
     }

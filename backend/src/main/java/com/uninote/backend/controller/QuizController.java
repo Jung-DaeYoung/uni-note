@@ -5,8 +5,10 @@ import com.uninote.backend.dto.*;
 import com.uninote.backend.repository.StudentRepository;
 import com.uninote.backend.service.QuizService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.security.Principal;
@@ -14,19 +16,20 @@ import java.security.Principal;
 @RestController
 @RequestMapping("/api/quiz")
 @RequiredArgsConstructor
+@Validated
 public class QuizController {
     private final QuizService quizService;
     private final StudentRepository studentRepository;
 
     @DeleteMapping("/{quizSetId}")
-    public ResponseEntity<Void> deleteQuiz(@PathVariable Long quizSetId, Principal principal) {
+    public ResponseEntity<Void> deleteQuiz(@PathVariable @Positive Long quizSetId, Principal principal) {
         Student student = studentRepository.getByStudentNum(principal.getName());
         quizService.deleteQuiz(quizSetId, student);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{quizSetId}")
-    public ResponseEntity<QuizSetDetailResponse> getQuizDetail(@PathVariable Long quizSetId, Principal principal) {
+    public ResponseEntity<QuizSetDetailResponse> getQuizDetail(@PathVariable @Positive Long quizSetId, Principal principal) {
         Student student = studentRepository.getByStudentNum(principal.getName());
         return ResponseEntity.ok(quizService.getQuizDetail(quizSetId, student));
     }
@@ -59,13 +62,13 @@ public class QuizController {
     }
 
     @GetMapping("/attempts/{attemptId}")
-    public ResponseEntity<QuizAttemptDetailResponse> getAttemptDetail(@PathVariable Long attemptId, Principal principal) {
+    public ResponseEntity<QuizAttemptDetailResponse> getAttemptDetail(@PathVariable @Positive Long attemptId, Principal principal) {
         Student student = studentRepository.getByStudentNum(principal.getName());
         return ResponseEntity.ok(quizService.getAttemptDetail(attemptId, student));
     }
 
     @GetMapping("/{quizSetId}/attempts")
-    public ResponseEntity<List<QuizAttemptResponse>> getAttemptsByQuizSet(@PathVariable Long quizSetId, Principal principal) {
+    public ResponseEntity<List<QuizAttemptResponse>> getAttemptsByQuizSet(@PathVariable @Positive Long quizSetId, Principal principal) {
         Student student = studentRepository.getByStudentNum(principal.getName());
         return ResponseEntity.ok(quizService.getAttemptsByQuizSet(quizSetId, student));
     }

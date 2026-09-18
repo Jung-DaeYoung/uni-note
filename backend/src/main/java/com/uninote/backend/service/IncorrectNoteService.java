@@ -212,8 +212,8 @@ public class IncorrectNoteService {
 
     @Transactional(readOnly = true)
     public List<TodayReviewQuestionResponse> getTodayReview(Student student, int limit, Long courseId) {
-        if (limit < 1) {
-            throw new InvalidRequestException("limit은 1 이상이어야 합니다.");
+        if (limit < 1 || limit > 100) {
+            throw new InvalidRequestException("limit은 1 이상 100 이하여야 합니다.");
         }
 
         return buildQuestionReviewStats(student).stream()

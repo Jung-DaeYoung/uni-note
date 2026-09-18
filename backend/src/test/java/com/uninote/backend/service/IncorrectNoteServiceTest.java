@@ -308,6 +308,12 @@ class IncorrectNoteServiceTest {
     }
 
     @Test
+    void getTodayReviewRejectsTooLargeLimit() {
+        assertThatThrownBy(() -> incorrectNoteService.getTodayReview(owner, 101, null))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
     void getTodayReviewReturnsEmptyListWhenNoReviewTargets() {
         LocalDateTime old = LocalDateTime.now().minusDays(30);
         // 정답률 100%, 반복 오답 없음, 최근 풀이도 정답 → LOW 등급이라 복습 대상에서 제외된다.

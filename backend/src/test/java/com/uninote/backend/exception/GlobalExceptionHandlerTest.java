@@ -1,5 +1,6 @@
 package com.uninote.backend.exception;
 
+import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
@@ -7,6 +8,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -45,6 +48,17 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().status()).isEqualTo(403);
         assertThat(response.getBody().errorCode()).isEqualTo("FORBIDDEN_COURSE_ACCESS");
         assertThat(response.getBody().message()).isEqualTo("해당 강의를 수강하지 않습니다.");
+    }
+
+    @Test
+    void mapsConstraintViolationExceptionTo400WithValidationFailedCode() {
+        ResponseEntity<ErrorResponse> response = handler.handleConstraintViolation(
+                new ConstraintViolationException(Set.of()));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().status()).isEqualTo(400);
+        assertThat(response.getBody().errorCode()).isEqualTo("VALIDATION_FAILED");
     }
 
     @Test

@@ -118,7 +118,9 @@ class QuizServiceTest {
     }
 
     @Test
-    void saveAttemptGradesServerSideIgnoringClientSuppliedScoreAndIsCorrect() {
+    void saveAttemptGradesServerSideFromActualAnswers() {
+        // QuizAttemptRequest에는 score/isCorrect 입력 필드 자체가 없다(API 계약에서 제거됨).
+        // 서버는 오직 submittedAnswer와 문제의 correctAnswer만으로 정답 여부와 점수를 계산한다.
         Question correctQuestion = new Question();
         correctQuestion.setQuestionId(1L);
         correctQuestion.setQuizSet(quizSet);
@@ -136,16 +138,13 @@ class QuizServiceTest {
         QuizAttemptRequest.UserAnswerRequest answer1 = new QuizAttemptRequest.UserAnswerRequest();
         answer1.setQuestionId(1L);
         answer1.setSubmittedAnswer("  paris "); // 대소문자/공백만 다름 -> 실제로는 정답
-        answer1.setIsCorrect(false); // 클라이언트가 조작한 값 (신뢰하면 안 됨)
 
         QuizAttemptRequest.UserAnswerRequest answer2 = new QuizAttemptRequest.UserAnswerRequest();
         answer2.setQuestionId(2L);
         answer2.setSubmittedAnswer("berlin"); // 실제 오답
-        answer2.setIsCorrect(true); // 클라이언트가 조작한 값 (신뢰하면 안 됨)
 
         QuizAttemptRequest request = new QuizAttemptRequest();
         request.setQuizSetId(50L);
-        request.setScore(999); // 클라이언트가 조작한 점수 (신뢰하면 안 됨)
         request.setUserAnswers(List.of(answer1, answer2));
 
         quizService.saveAttempt(request, owner);
@@ -157,8 +156,8 @@ class QuizServiceTest {
         ArgumentCaptor<UserAnswer> userAnswerCaptor = ArgumentCaptor.forClass(UserAnswer.class);
         verify(userAnswerRepository, times(2)).save(userAnswerCaptor.capture());
         List<UserAnswer> saved = userAnswerCaptor.getAllValues();
-        assertThat(saved.get(0).getIsCorrect()).isTrue();  // 클라이언트는 false로 보냈지만 실제로는 정답
-        assertThat(saved.get(1).getIsCorrect()).isFalse(); // 클라이언트는 true로 보냈지만 실제로는 오답
+        assertThat(saved.get(0).getIsCorrect()).isTrue();
+        assertThat(saved.get(1).getIsCorrect()).isFalse();
     }
 
     @Test
@@ -177,7 +176,6 @@ class QuizServiceTest {
         QuizAttemptRequest.UserAnswerRequest answer = new QuizAttemptRequest.UserAnswerRequest();
         answer.setQuestionId(3L);
         answer.setSubmittedAnswer("X");
-        answer.setIsCorrect(true);
 
         QuizAttemptRequest request = new QuizAttemptRequest();
         request.setQuizSetId(50L);

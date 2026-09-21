@@ -18,38 +18,12 @@ function App() {
           <Route path="/" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} />} />
           <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <LoginPage />} />
 
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/course/:courseId"
-            element={
-              <ProtectedRoute>
-                <CourseDetailPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/course/:courseId/note/:noteId"
-            element={
-              <ProtectedRoute>
-                <CourseDetailPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/quizzes"
-            element={
-              <ProtectedRoute>
-                <QuizLibraryPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/course/:courseId" element={<CourseDetailPage />} />
+            <Route path="/course/:courseId/note/:noteId" element={<CourseDetailPage />} />
+            <Route path="/quizzes" element={<QuizLibraryPage />} />
+          </Route>
 
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

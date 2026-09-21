@@ -47,23 +47,22 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
 
   const handleSubmit = async () => {
     if (isSaving) return;
-    
-    const score = calculateScore();
+
     setIsSaving(true);
-    
+
     try {
+      // 서버가 실제 정답과 대조해 score/isCorrect를 직접 계산하므로(QuizService.saveAttempt),
+      // 신뢰할 수 없는 클라이언트 계산값은 요청에 담지 않는다.
       const userAnswers = questions.map((q, idx) => ({
         questionId: q.questionId,
-        submittedAnswer: String(answers[idx] || ''),
-        isCorrect: String(answers[idx] || '').trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase()
+        submittedAnswer: String(answers[idx] || '')
       }));
 
       await client.post('/quiz/attempts', {
         quizSetId: quizData.quizSetId,
-        score: score,
         userAnswers: userAnswers
       });
-      
+
       setSubmitted(true);
     } catch (error) {
       console.error("결과 저장 실패:", error);

@@ -57,7 +57,7 @@ const CourseDetailPage = () => {
   const handleNoteSaved = useCallback(() => fetchTree(), [fetchTree]);
 
   // --- Sidebar Content ---
-  const sidebarContent = useMemo(() => (
+  const sidebarContent = (
     <div className="flex flex-col h-full">
       <div className="px-2 mb-4 flex items-center justify-between">
         <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">Notes</span>
@@ -81,11 +81,10 @@ const CourseDetailPage = () => {
         ))}
       </div>
     </div>
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [noteTree, courseId, noteId]);
+  );
 
   // --- Unified Header Content ---
-  const headerContent = useMemo(() => (
+  const headerContent = (
     <div className="flex items-center justify-between w-full pr-4 h-full">
       <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
         <Link to="/dashboard" className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition-colors">
@@ -158,8 +157,7 @@ const CourseDetailPage = () => {
         </button>
       </div>
     </div>
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [courseId, courseName, noteData, isBoardOpen, noteId, saveState]);
+  );
 
   return (
     <NoteTreeProvider noteTree={noteTree}>

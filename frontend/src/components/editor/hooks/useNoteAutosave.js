@@ -43,7 +43,6 @@ const useNoteAutosave = ({ noteId, initialData, onSaved }) => {
     const parsedLocalEntry = safeParseJson(localStorage.getItem(`note-temp-${noteId}`));
     const localData = isValidLocalEntry(parsedLocalEntry) ? parsedLocalEntry : null;
 
-    // 로컬 스토리지 데이터가 서버 데이터보다 최신인 경우 우선 사용
     if (localData && (!serverData || localData.timestamp > (initialData?.updatedAt || 0))) {
       return localData.content;
     }

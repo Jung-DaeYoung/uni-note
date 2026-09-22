@@ -1,43 +1,27 @@
 import React, { useState } from 'react';
 import AppLayout from '../components/layout/AppLayout';
-import { BookOpen, History, Bookmark } from 'lucide-react';
+import { BookOpen, History } from 'lucide-react';
 import CBTPlayer from '../components/editor/components/CBTPlayer';
 import QuizAttemptsModal from '../components/editor/components/QuizAttemptsModal';
 import QuizListPanel from '../components/quiz/QuizListPanel';
 import QuizHistoryPanel from '../components/quiz/QuizHistoryPanel';
-import IncorrectGroupsPanel from '../components/quiz/IncorrectGroupsPanel';
-import IncorrectSummaryCards from '../components/quiz/IncorrectSummaryCards';
-import TodayReviewList from '../components/quiz/TodayReviewList';
-import WeakAreaBreakdown from '../components/quiz/WeakAreaBreakdown';
 import useQuizLibrary from '../hooks/useQuizLibrary';
 
 const QuizLibraryPage = () => {
-  const [activeTab, setActiveTab] = useState('quizzes'); // 'quizzes' | 'history' | 'incorrect'
+  const [activeTab, setActiveTab] = useState('quizzes'); // 'quizzes' | 'history'
 
   const {
     quizzes,
     attempts,
-    incorrectGroups,
     selectedQuiz, setSelectedQuiz,
     selectedAttempt, setSelectedAttempt,
     isLoading,
     isAttemptsModalOpen, setIsAttemptsModalOpen,
     targetQuiz,
     handleRetake,
-    handlePracticeIncorrect,
-    handleDeleteGroup,
     handleViewAttempt,
     handleOpenAttempts,
     handleDelete,
-    incorrectSummary,
-    courseStats,
-    typeStats,
-    todayReview,
-    reviewCourseFilter,
-    isOverviewLoading,
-    handleReviewCourseFilterChange,
-    handleViewReviewSource,
-    handlePracticeReviewQuestion,
   } = useQuizLibrary(activeTab);
 
   return (
@@ -90,13 +74,6 @@ const QuizLibraryPage = () => {
               <History size={14} />
               풀이 기록
             </button>
-            <button
-              onClick={() => setActiveTab('incorrect')}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'incorrect' ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
-            >
-              <Bookmark size={14} />
-              오답노트
-            </button>
           </div>
         </header>
 
@@ -107,41 +84,12 @@ const QuizLibraryPage = () => {
             onOpenAttempts={handleOpenAttempts}
             onDelete={handleDelete}
           />
-        ) : activeTab === 'history' ? (
+        ) : (
           <QuizHistoryPanel
             attempts={attempts}
             isLoading={isLoading}
             onViewAttempt={handleViewAttempt}
           />
-        ) : (
-          <div className="space-y-8">
-            <IncorrectSummaryCards
-              summary={incorrectSummary}
-              todayReviewCount={todayReview.length}
-              savedCount={incorrectGroups.reduce((sum, g) => sum + g.itemCount, 0)}
-              isLoading={isOverviewLoading}
-            />
-            <TodayReviewList
-              items={todayReview}
-              isLoading={isOverviewLoading}
-              courseOptions={courseStats}
-              courseFilter={reviewCourseFilter}
-              onCourseFilterChange={handleReviewCourseFilterChange}
-              onViewSource={handleViewReviewSource}
-              onPracticeOne={handlePracticeReviewQuestion}
-            />
-            <WeakAreaBreakdown
-              courseStats={courseStats}
-              typeStats={typeStats}
-              isLoading={isOverviewLoading}
-            />
-            <IncorrectGroupsPanel
-              incorrectGroups={incorrectGroups}
-              isLoading={isLoading}
-              onPracticeIncorrect={handlePracticeIncorrect}
-              onDeleteGroup={handleDeleteGroup}
-            />
-          </div>
         )}
       </div>
     </AppLayout>

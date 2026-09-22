@@ -8,6 +8,7 @@ vi.mock('./pages/LoginPage', () => ({ default: () => <div>LOGIN_PAGE</div> }));
 vi.mock('./pages/DashboardPage', () => ({ default: () => <div>DASHBOARD_PAGE</div> }));
 vi.mock('./pages/CourseDetailPage', () => ({ default: () => <div>COURSE_DETAIL_PAGE</div> }));
 vi.mock('./pages/QuizLibraryPage', () => ({ default: () => <div>QUIZ_LIBRARY_PAGE</div> }));
+vi.mock('./pages/IncorrectNotesPage', () => ({ default: () => <div>INCORRECT_NOTES_PAGE</div> }));
 
 // AuthContext.test.jsx와 동일한 패턴을 중복 사용한다 (공유 test-util 모듈은 아직 없음).
 const makeToken = (expSecondsFromNow) => {
@@ -72,6 +73,27 @@ describe('App routing', () => {
     renderAppAt('/quizzes');
 
     expect(await screen.findByText('QUIZ_LIBRARY_PAGE')).toBeInTheDocument();
+  });
+
+  it('비로그인 사용자의 /incorrect-notes 접근은 /login으로 이동한다', async () => {
+    renderAppAt('/incorrect-notes');
+
+    expect(await screen.findByText('LOGIN_PAGE')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/login');
+  });
+
+  it('인증 상태에서 /incorrect-notes에 직접 접근할 수 있다', async () => {
+    localStorage.setItem('token', makeToken(3600));
+    renderAppAt('/incorrect-notes');
+
+    expect(await screen.findByText('INCORRECT_NOTES_PAGE')).toBeInTheDocument();
+  });
+
+  it('인증 상태에서 /incorrect-notes/groups에 직접 접근할 수 있다', async () => {
+    localStorage.setItem('token', makeToken(3600));
+    renderAppAt('/incorrect-notes/groups');
+
+    expect(await screen.findByText('INCORRECT_NOTES_PAGE')).toBeInTheDocument();
   });
 
   it('인증 상태에서 /login 접근은 /dashboard로 이동한다', async () => {

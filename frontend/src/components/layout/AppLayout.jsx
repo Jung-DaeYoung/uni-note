@@ -5,6 +5,7 @@ import {
   LogOut,
   Menu,
   BrainCircuit,
+  BarChart3,
   ChevronDown,
   ChevronRight,
   BookOpen,
@@ -114,6 +115,16 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
           >
             <BrainCircuit size={18} />
             <span className="text-sm font-bold">생성 문제 모음</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/incorrect-notes')}
+            className={`w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all whitespace-nowrap mb-2 ${
+              location.pathname.startsWith('/incorrect-notes') ? 'text-white bg-white/5' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <BarChart3 size={18} />
+            <span className="text-sm font-bold">오답노트</span>
           </button>
 
           <div className="h-[1px] bg-slate-800 my-4 mx-2" />

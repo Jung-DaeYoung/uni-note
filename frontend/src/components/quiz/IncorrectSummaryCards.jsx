@@ -29,7 +29,7 @@ const IncorrectSummaryCards = ({ summary, todayReviewCount, savedCount, isLoadin
       label: '저장된 오답',
       value: savedCount,
       icon: Bookmark,
-      color: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10',
+      color: 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800',
     },
   ];
 
@@ -40,16 +40,16 @@ const IncorrectSummaryCards = ({ summary, todayReviewCount, savedCount, isLoadin
         return (
           <div
             key={card.key}
-            className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-3"
+            className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-3"
           >
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${card.color}`}>
-              <CardIcon size={20} />
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${card.color}`}>
+              <CardIcon size={18} />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-tight truncate">
+              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 truncate">
                 {card.label}
               </p>
-              <p className="text-xl font-black text-slate-900 dark:text-slate-100">
+              <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
                 {isLoading ? '...' : card.value}
               </p>
             </div>

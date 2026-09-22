@@ -11,10 +11,10 @@ const NoteTreeItem = ({ item, courseId, depth = 0, currentNoteId, onDelete }) =>
   return (
     <div className="select-none">
       <div
-        className={`group flex items-center gap-1.5 py-1.5 px-2 rounded-lg cursor-pointer transition-all duration-200 ${
+        className={`group flex items-center gap-1.5 py-1.5 pl-2 pr-2 border-l-2 rounded-r-md cursor-pointer transition-colors duration-200 ${
           isActive
-          ? 'bg-blue-600 shadow-lg shadow-blue-500/20 text-white'
-          : 'hover:bg-slate-800 text-slate-400 hover:text-slate-100'
+          ? 'border-blue-500 bg-blue-500/10 text-white'
+          : 'border-transparent hover:bg-slate-800 text-slate-400 hover:text-slate-100'
         }`}
         style={{ marginLeft: `${depth * 12}px` }}
         onClick={() => navigate(`/course/${courseId}/note/${item.noteId}`)}
@@ -29,11 +29,11 @@ const NoteTreeItem = ({ item, courseId, depth = 0, currentNoteId, onDelete }) =>
           <ChevronRight size={14} />
         </button>
         {hasChildren ? (
-          <FolderOpen size={14} className={isActive ? 'text-blue-100' : 'text-slate-500 group-hover:text-blue-400'} />
+          <FolderOpen size={14} className={isActive ? 'text-blue-300' : 'text-slate-500 group-hover:text-blue-400'} />
         ) : (
-          <FileText size={14} className={isActive ? 'text-blue-100' : 'text-slate-500 group-hover:text-slate-300'} />
+          <FileText size={14} className={isActive ? 'text-blue-300' : 'text-slate-500 group-hover:text-slate-300'} />
         )}
-        <span className={`text-[11px] font-bold truncate flex-1 ${isActive ? 'text-white' : ''}`}>
+        <span className={`text-[11px] font-medium truncate flex-1 ${isActive ? 'text-white' : ''}`}>
           {item.title || '제목 없음'}
         </span>
 

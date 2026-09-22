@@ -49,7 +49,7 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
         {/* Sidebar Header */}
         <div className="h-12 flex items-center px-6 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
+            <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center shrink-0">
               <span className="font-black text-sm text-white">U</span>
             </div>
             <span className="font-bold text-base tracking-tight text-white whitespace-nowrap">UniNote</span>
@@ -60,9 +60,9 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto custom-scrollbar">
           {/* Dashboard Menu (Collapsible) */}
           <div className="mb-2">
-            <div 
-              className={`w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 transition-all whitespace-nowrap cursor-pointer ${
-                location.pathname === '/dashboard' ? 'text-white bg-white/5' : 'text-slate-400 hover:text-white'
+            <div
+              className={`w-full flex items-center justify-between py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap cursor-pointer ${
+                location.pathname === '/dashboard' ? 'border-blue-500 bg-blue-500/5 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
               }`}
               onClick={handleDashboardClick}
             >
@@ -88,9 +88,9 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
                     const isCourseActive = location.pathname.includes(`/course/${course.courseId}`);
                     return (
                       <div key={course.courseId} className="space-y-0.5">
-                        <button 
+                        <button
                           onClick={() => navigate(`/course/${course.courseId}`)}
-                          className={`w-[calc(100%-0.5rem)] ml-2 flex items-center gap-3 p-2.5 rounded-xl transition-all text-xs font-bold ${
+                          className={`w-[calc(100%-0.5rem)] ml-2 flex items-center gap-3 p-2.5 rounded-lg transition-colors text-xs font-bold ${
                             isCourseActive 
                             ? 'bg-blue-600/10 text-blue-400' 
                             : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'
@@ -107,10 +107,10 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
             )}
           </div>
 
-          <button 
-            onClick={() => navigate('/quizzes')} 
-            className={`w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all whitespace-nowrap mb-2 ${
-              location.pathname === '/quizzes' ? 'text-white bg-white/5' : 'text-slate-400 hover:text-white'
+          <button
+            onClick={() => navigate('/quizzes')}
+            className={`w-full flex items-center gap-3 py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap mb-2 ${
+              location.pathname === '/quizzes' ? 'border-blue-500 bg-blue-500/5 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <BrainCircuit size={18} />
@@ -119,8 +119,8 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
 
           <button
             onClick={() => navigate('/incorrect-notes')}
-            className={`w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all whitespace-nowrap mb-2 ${
-              location.pathname.startsWith('/incorrect-notes') ? 'text-white bg-white/5' : 'text-slate-400 hover:text-white'
+            className={`w-full flex items-center gap-3 py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap mb-2 ${
+              location.pathname.startsWith('/incorrect-notes') ? 'border-blue-500 bg-blue-500/5 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <BarChart3 size={18} />
@@ -134,9 +134,9 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
 
         {/* Bottom Actions */}
         <div className="p-4 border-t border-slate-800 shrink-0">
-          <button 
-            onClick={logout} 
-            className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-all whitespace-nowrap"
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors whitespace-nowrap"
           >
             <LogOut size={18} />
             <span className="text-sm font-medium">로그아웃</span>
@@ -146,7 +146,7 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto relative flex flex-col">
-        <header className="h-12 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 flex items-center px-4 sticky top-0 z-50 shrink-0">
+        <header className="h-12 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 flex items-center px-4 sticky top-0 z-50 shrink-0">
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 active:scale-95"

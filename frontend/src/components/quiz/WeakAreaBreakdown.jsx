@@ -19,22 +19,22 @@ const AccuracyBar = ({ accuracyRate }) => (
 const WeakAreaBreakdown = ({ courseStats, typeStats, isLoading }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-6">
-        <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
-          <BookOpen size={16} className="text-blue-600 dark:text-blue-400" />
+      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-5">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
+          <BookOpen size={16} className="text-slate-500 dark:text-slate-400" />
           취약 강의
         </h3>
         {isLoading ? (
-          <p className="text-xs font-bold text-slate-400 dark:text-slate-500 py-6 text-center">불러오는 중...</p>
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 py-6 text-center">불러오는 중...</p>
         ) : courseStats.length === 0 ? (
-          <p className="text-xs font-bold text-slate-400 dark:text-slate-500 py-6 text-center">아직 풀이 기록이 없습니다.</p>
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 py-6 text-center">아직 풀이 기록이 없습니다.</p>
         ) : (
           <div className="space-y-3">
             {courseStats.map((c) => (
               <div key={c.courseId}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{c.courseName}</span>
-                  <span className="text-xs font-black text-slate-500 dark:text-slate-400 shrink-0 ml-2">
+                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{c.courseName}</span>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 shrink-0 ml-2">
                     {Math.round(c.accuracyRate * 100)}%
                   </span>
                 </div>
@@ -45,24 +45,24 @@ const WeakAreaBreakdown = ({ courseStats, typeStats, isLoading }) => {
         )}
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-6">
-        <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
-          <ListChecks size={16} className="text-purple-600 dark:text-purple-400" />
+      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-5">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
+          <ListChecks size={16} className="text-slate-500 dark:text-slate-400" />
           취약 유형
         </h3>
         {isLoading ? (
-          <p className="text-xs font-bold text-slate-400 dark:text-slate-500 py-6 text-center">불러오는 중...</p>
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 py-6 text-center">불러오는 중...</p>
         ) : typeStats.length === 0 ? (
-          <p className="text-xs font-bold text-slate-400 dark:text-slate-500 py-6 text-center">아직 풀이 기록이 없습니다.</p>
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 py-6 text-center">아직 풀이 기록이 없습니다.</p>
         ) : (
           <div className="space-y-3">
             {typeStats.map((t) => (
               <div key={t.type}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
                     {TYPE_LABELS[t.type] || t.type}
                   </span>
-                  <span className="text-xs font-black text-slate-500 dark:text-slate-400 shrink-0 ml-2">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 shrink-0 ml-2">
                     {Math.round(t.accuracyRate * 100)}%
                   </span>
                 </div>

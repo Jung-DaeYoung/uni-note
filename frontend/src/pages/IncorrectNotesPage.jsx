@@ -45,11 +45,11 @@ const IncorrectNotesPage = () => {
       <div className="p-8 max-w-5xl mx-auto">
         <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">오답노트</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">오답노트</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">틀린 문제를 분석하고 복습하세요.</p>
           </div>
 
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
+          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
             <button
               onClick={() => navigate('/incorrect-notes')}
               className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${view === 'overview' ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}

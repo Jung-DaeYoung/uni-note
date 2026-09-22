@@ -60,7 +60,7 @@ const CourseDetailPage = () => {
   const sidebarContent = (
     <div className="flex flex-col h-full">
       <div className="px-2 mb-4 flex items-center justify-between">
-        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">Notes</span>
+        <span className="text-xs font-semibold text-slate-500 px-2">노트</span>
         <button
           onClick={handleCreateRootNote}
           className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors"
@@ -123,22 +123,22 @@ const CourseDetailPage = () => {
           <>
             <button
               onClick={() => setIsQuizModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-all"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
             >
               <BrainCircuit size={12} />
               AI 문제 생성
             </button>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
               <div className={`w-1.5 h-1.5 rounded-full ${saveState.status === 'saving' ? 'bg-blue-500 animate-pulse' : saveState.status === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
-              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {saveState.status === 'saving' ? 'Saving...' : saveState.status === 'error' ? 'Error' : 'Synced'}
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                {saveState.status === 'saving' ? '저장 중...' : saveState.status === 'error' ? '오류' : '저장됨'}
               </span>
               {saveState.status === 'error' && (
                 <button
                   onClick={saveState.retry}
-                  className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider underline hover:text-red-700 dark:hover:text-red-300"
+                  className="text-xs font-medium text-red-600 dark:text-red-400 underline hover:text-red-700 dark:hover:text-red-300"
                 >
-                  Retry
+                  재시도
                 </button>
               )}
             </div>
@@ -146,9 +146,9 @@ const CourseDetailPage = () => {
         )}
         <button
           onClick={() => setIsBoardOpen(!isBoardOpen)}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
             isBoardOpen
-            ? 'bg-slate-900 dark:bg-slate-700 text-white shadow-inner'
+            ? 'bg-slate-900 dark:bg-slate-700 text-white'
             : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
           }`}
         >
@@ -182,7 +182,7 @@ const CourseDetailPage = () => {
                 ) : (
                   <div className="flex flex-col items-center justify-center py-40 opacity-20 text-slate-900 dark:text-slate-100">
                     <FileText size={64} className="mb-4" />
-                    <p className="font-black uppercase tracking-widest">노트를 불러오는 중...</p>
+                    <p className="font-medium">노트를 불러오는 중...</p>
                   </div>
                 )}
               </div>

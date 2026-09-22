@@ -1,279 +1,298 @@
-# UniNote 프론트엔드 UI 스타일 개선 계획
+# AI 문제 생성 설정 화면 UI 고급화 계획
 
 ## 목표
 
-frontend 전반의 반복적인 카드·강한 색상·과도한 둥근 모서리·굵은 글꼴·장식성 애니메이션을 줄이고, 노트와 학습 관리 서비스에 어울리는 차분하고 세련된 UI로 개선한다.
+`QuizConfigModal`을 단순한 옵션 입력창이 아니라, 노트 내용을 바탕으로 문제 생성 범위와 학습 목적을 명확하게 설정하는 **고급 학습 설정 패널**로 개선한다.
 
-전체 방향은 **Notion·Linear 스타일을 기본으로 하되, 오답 통계 화면에는 데이터 중심 학습 관리 SaaS 스타일을 결합**한다.
+기능과 API 계약은 유지하고, 정보 구조·시각적 계층·입력 피드백·생성 진행 상태를 개선한다.
 
-```text
-전체 서비스: Notion·Linear 스타일
-대시보드: 카드 수를 줄인 문서형 레이아웃
-생성 문제 모음: 얇은 border 중심의 리스트/카드
-오답 통계: 수치와 progress bar 중심
-오답노트 모음: 단순한 폴더 목록
-강의·노트 화면: 기존 구조 유지 + 메뉴와 버튼 절제
-```
+대상 파일:
 
-## 현재 스타일의 주요 문제
+- `frontend/src/components/editor/components/QuizConfigModal.jsx`
+- 필요 시 `frontend/src/index.css`
+- 필요 시 `frontend/src/components/editor/components/QuizConfigModal.test.jsx`
 
-현재 frontend는 Tailwind 유틸리티를 조합하는 방식으로 구현되어 있으나 다음 패턴이 여러 화면에 반복된다.
+## 현재 화면의 문제점
 
-- `rounded-2xl`, `rounded-3xl`이 카드·버튼·빈 상태 영역에 과도하게 사용됨
-- `font-black`, `uppercase`, `tracking-widest`가 제목과 보조 라벨에 반복됨
-- 파랑·하늘색·보라색·초록색이 화면별로 분산되어 시각적 체계가 약함
-- 기본 카드에 `shadow-sm`, hover 시 `shadow-md`·`shadow-xl`이 반복됨
-- `hover:scale`, `translate` 등 장식성 애니메이션이 여러 컴포넌트에 적용됨
-- 모든 콘텐츠가 흰색 카드로 분리되어 정보 계층보다 카드 모음처럼 보임
-- 대시보드·퀴즈·오답 화면의 카드와 섹션 패턴이 지나치게 유사함
+현재 모달은 다음 입력 요소를 한 세로 흐름에 나열한다.
 
-## 디자인 원칙
+1. 범위 선택
+2. 문제 유형 및 문항 수
+3. 난이도
+4. 취소·생성 버튼
 
-### 1. 정보 계층 우선
+현재 UI에서 개선이 필요한 부분:
 
-그림자와 색상보다 제목 크기, 글꼴 두께, 여백, 구분선으로 중요도를 표현한다.
+- 헤더와 본문이 모두 작은 글씨와 굵은 글꼴 중심이라 화면의 중요도가 분명하지 않다.
+- `rounded-2xl`, `rounded-xl`, `shadow-2xl`, `font-black`, uppercase 라벨이 함께 사용되어 장식적인 인상이 강하다.
+- 선택한 노트 범위, 문제 유형별 문항 수, 예상 총 문항 수가 한눈에 요약되지 않는다.
+- 문제 유형 입력 행이 단순한 checkbox와 number input으로 구성되어 설정 가능 여부와 현재 값의 관계가 약하다.
+- 난이도 select가 일반 HTML 입력처럼 보여 학습 설정의 핵심 옵션이라는 인상이 부족하다.
+- 선택된 노트가 없거나 유형을 모두 해제했을 때 생성 버튼의 비활성 이유가 명확하지 않다.
+- 생성 중에는 버튼 텍스트만 바뀌며 현재 작업이 진행 중이라는 시각적 피드백이 부족하다.
+- 긴 노트 트리에서 현재 선택 범위와 선택된 하위 노트 수를 파악하기 어렵다.
 
-- 페이지 제목: `font-bold`
-- 섹션 제목: `font-semibold`
-- 카드 제목: `font-semibold`
-- 본문: `font-normal` 또는 `font-medium`
-- 보조 정보: `font-normal`, muted text
+## 디자인 방향
 
-`font-black`은 로고나 매우 제한적인 숫자 강조에만 사용한다.
+### 콘셉트: AI 학습 설계 패널
 
-### 2. 모서리 반경 단순화
+화려한 그라디언트나 과도한 glassmorphism 대신, 다음 요소로 고급스러움을 표현한다.
 
-```text
-페이지·큰 영역: rounded-xl
-카드: rounded-lg
-버튼: rounded-md 또는 rounded-lg
-상태 배지: rounded-md
-아이콘·아바타: rounded-full
-```
-
-`rounded-3xl`은 특별한 빈 상태나 대형 모달이 아니면 사용하지 않는다.
-
-### 3. 그림자 최소화
+- 차분한 slate 계열 surface
+- 하나의 primary blue와 제한된 상태 색상
+- 얇은 border와 명확한 section 구분
+- 충분한 여백과 정돈된 행 높이
+- 선택 상태에 대한 명확한 배경·border·체크 표시
+- 설정 결과를 보여주는 요약 영역
+- 생성 버튼의 명확한 primary hierarchy
 
 ```text
-일반 카드: shadow-none + border
-강조 카드: shadow-sm
-모달·팝오버: shadow-xl
-hover: shadow보다 border/background 변화 우선
+상단: 제목·설명·닫기
+본문: 설정 요약 → 범위 선택 → 문제 유형 → 난이도
+하단: 선택 상태 요약 + 취소 + 문제 생성
 ```
 
-카드 hover는 `hover:shadow-md`보다 `hover:border-slate-300` 또는 배경색 변화로 처리한다.
+## 정보 구조 설계
 
-### 4. 색상 역할 통일
+### 1. 모달 헤더
 
-페이지마다 다른 강조색을 배정하지 않고 의미별 색상만 사용한다.
+현재의 단순한 `AI 문제 생성 설정` 제목을 다음 구조로 개선한다.
 
 ```text
-파랑: 주요 액션·링크
-초록: 성공·복습 가능 상태
-주황: 반복 오답·주의
-빨강: 삭제·오류
-회색: 일반 정보·보조 텍스트
+[아이콘] AI 문제 생성
+        노트에서 학습 문제를 구성합니다
+                              [닫기]
 ```
 
-`purple`과 `sky`는 별도의 의미가 명확할 때만 사용한다. 단순히 화면을 화려하게 만들기 위한 색상 분산은 제거한다.
+원칙:
 
-### 5. 장식용 타이포그래피 제거
+- 제목은 `text-base font-semibold` 수준으로 사용한다.
+- 보조 설명은 `text-xs text-slate-500`으로 표현한다.
+- 아이콘은 작은 색상 배경 안에 넣되 강한 그림자는 사용하지 않는다.
+- 헤더 배경은 별도 강한 색상보다 surface와 border로 구분한다.
+- 닫기 버튼은 충분한 클릭 영역을 확보하고 focus 상태를 제공한다.
 
-다음 조합은 필요한 경우에만 제한적으로 사용한다.
+### 2. 설정 요약 영역
 
-```jsx
-uppercase tracking-widest
-font-black
-text-[10px]
-```
+본문 상단에 현재 설정을 요약하는 compact summary strip을 둔다.
 
-일반 보조 라벨은 다음 기준을 우선한다.
+표시 내용:
 
-```jsx
-text-xs font-medium text-slate-500
-```
+- 선택된 노트 수
+- 활성화된 문제 유형 수
+- 총 생성 문항 수
+- 선택 난이도
 
-`Learning Hub Overview`와 같은 장식용 영문 문구는 제거하거나 의미 있는 한글 설명으로 대체한다.
-
-### 6. 애니메이션 절제
+예시:
 
 ```text
-버튼: transition-colors
-리스트 행: background 색상 변화
-카드: border 색상 변화
-아이콘: 확대하지 않음
-모달·페이지 전환: 실제 상태 변화가 있는 곳만 transition
+3개 노트 · 3개 유형 · 총 5문항 · 보통 난이도
 ```
 
-`hover:scale-105`, `group-hover:translate-x-*`, 반복적인 `active:scale-*`, `hover:shadow-xl`은 우선 제거 대상이다.
+이 영역은 장식용 카드가 아니라 사용자의 설정 결과를 검토하는 정보 영역으로 설계한다. 배경은 `bg-slate-50` 정도로 제한하고 아이콘과 숫자만 primary 색상으로 강조한다.
 
-## 화면별 개선 방향
+### 3. 범위 선택 섹션
 
-### 공통 레이아웃
+섹션 헤더:
 
-대상:
-
-- `frontend/src/components/layout/AppLayout.jsx`
-- `frontend/src/index.css`
-
-변경 방향:
-
-- 사이드바의 강한 `bg-slate-900` 대비를 완화하고 메뉴 간 간격과 활성 상태를 정돈한다.
-- 메뉴의 `rounded-xl`을 `rounded-lg` 또는 `rounded-md`로 줄인다.
-- 활성 메뉴는 밝은 배경과 강한 대비 대신 얇은 왼쪽 border 또는 낮은 채도의 배경으로 표현한다.
-- 로고의 강한 blue shadow를 제거하거나 약화한다.
-- 헤더의 반투명 backdrop blur를 줄이고 명확한 border 중심으로 정리한다.
-- 공통 CSS 변수와 Tailwind 색상 사용 기준을 일치시킨다.
-
-### 대시보드
-
-대상:
-
-- `frontend/src/pages/DashboardPage.jsx`
-
-변경 방향:
-
-- 최근 노트는 3열 카드 중심 구조에서 리스트 또는 낮은 높이의 2열 구조로 완화한다.
-- 커뮤니티 게시글은 카드 그리드보다 행 기반 목록에 가깝게 구성한다.
-- 섹션 제목의 `uppercase tracking-widest`를 제거한다.
-- 강의 카드의 아이콘 박스와 hover scale을 축소한다.
-- `rounded-2xl`, `rounded-3xl`, `shadow-xl` 사용을 줄인다.
-- 섹션 간 여백은 유지하되 카드 내부 장식보다 텍스트 정렬과 구분선을 강조한다.
-
-### 생성 문제 모음
-
-대상:
-
-- `frontend/src/pages/QuizLibraryPage.jsx`
-- `frontend/src/components/quiz/QuizListPanel.jsx`
-- `frontend/src/components/quiz/QuizHistoryPanel.jsx`
-
-변경 방향:
-
-- 카드의 그림자를 제거하고 얇은 border를 기본으로 사용한다.
-- 강의명·난이도 배지를 작고 차분하게 만든다.
-- `font-black`을 `font-semibold` 또는 `font-medium`으로 완화한다.
-- `다시 풀기`, `결과 확인` 버튼의 pill 느낌을 줄이고 명확한 primary/secondary 버튼으로 구분한다.
-- 풀이 기록은 카드보다 날짜·점수·퀴즈명 정렬이 잘 보이는 리스트형 UI를 우선 검토한다.
-
-### 오답 통계
-
-대상:
-
-- `frontend/src/components/quiz/IncorrectSummaryCards.jsx`
-- `frontend/src/components/quiz/TodayReviewList.jsx`
-- `frontend/src/components/quiz/WeakAreaBreakdown.jsx`
-- 오답 통계 페이지 조합 컴포넌트
-
-변경 방향:
-
-- 4개의 통계 카드를 과도한 아이콘 배경 없이 수치와 라벨 중심으로 정리한다.
-- 통계 카드의 아이콘 박스 크기와 색상 대비를 줄인다.
-- 취약 강의·유형은 progress bar 색상보다 수치·항목 정렬을 우선한다.
-- 오늘의 복습은 목록 행을 중심으로 구성하고 원문 보기·다시 풀기 액션을 보조 버튼으로 배치한다.
-- 통계 데이터가 많아질 경우 카드 추가보다 표·행·구분선으로 확장한다.
-
-### 오답노트 모음
-
-대상:
-
-- `frontend/src/components/quiz/IncorrectGroupsPanel.jsx`
-
-변경 방향:
-
-- 폴더 카드의 큰 아이콘 영역을 축소한다.
-- 그룹명·문항 수·마지막 액션의 계층을 명확히 한다.
-- 삭제와 다시 풀기 버튼을 과도한 색상이나 그림자로 강조하지 않는다.
-- 그룹이 많을 때를 고려해 카드 그리드와 리스트 중 적합한 형태를 검토한다.
-
-### 강의·노트 화면
-
-대상:
-
-- `frontend/src/pages/CourseDetailPage.jsx`
-- `frontend/src/components/course/NoteTreeItem.jsx`
-- `frontend/src/components/course/CourseBoardPanel.jsx`
-
-변경 방향:
-
-- 노트 편집 영역과 사이드바의 기존 기능 구조는 유지한다.
-- 메뉴·버튼의 radius와 강조색만 공통 기준에 맞춘다.
-- 노트 트리의 선택 상태는 강한 배경색보다 텍스트 색상·왼쪽 표시선으로 표현한다.
-- 커뮤니티 패널의 카드와 버튼을 전체 디자인 토큰에 맞춰 정리한다.
-
-## 공통 스타일 토큰 계획
-
-`frontend/src/index.css`의 기존 변수와 실제 Tailwind 사용 패턴을 정리한다.
-
-권장 기본 토큰:
-
-```css
-:root {
-  --primary-color: #2563eb;
-  --primary-muted: #eff6ff;
-  --bg-color: #f8fafc;
-  --surface-color: #ffffff;
-  --text-main: #1e293b;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
-  --success-color: #15803d;
-  --warning-color: #b45309;
-  --danger-color: #b91c1c;
-}
+```text
+학습 범위
+문제를 생성할 노트를 선택하세요
 ```
 
-새로운 UI를 추가할 때 임의의 색상·반경·그림자를 추가하지 않고 이 역할 체계를 따른다.
+노트 트리:
+
+- 트리 영역은 고정 높이와 내부 스크롤을 유지한다.
+- 각 행의 높이를 일정하게 유지해 계층 구조를 읽기 쉽게 한다.
+- 펼치기 버튼과 선택 checkbox의 클릭 영역을 분리한다.
+- 선택된 행은 강한 파란색 배경보다 `border-l` 또는 낮은 채도의 blue surface로 표시한다.
+- 선택된 노트 제목은 `font-medium`으로만 강조한다.
+- 하위 노트가 함께 선택되는 현재 동작은 유지하되, 부모 선택 시 하위 항목도 선택된다는 설명을 보조 문구로 제공하는 방안을 검토한다.
+- 선택된 노트가 없을 때 섹션 아래에 명확한 안내를 표시한다.
+
+선택 상태 요약:
+
+```text
+선택된 노트 3개
+```
+
+노트가 많은 경우 전체 선택·선택 해제 기능을 추가할 수 있으나, 기존 선택 동작과 충돌하지 않는지 확인한 뒤 적용한다. 1차 구현에서는 현재 기능을 유지하고 시각적 개선을 우선한다.
+
+### 4. 문제 유형 및 문항 수 섹션
+
+기존 checkbox·label·number input의 단순 행을 **문제 유형 설정 카드**로 개선한다.
+
+각 유형 행 구조:
+
+```text
+[checkbox] 객관식             [−] 2 [+]
+           선택지 기반 문제
+```
+
+유형 설명:
+
+- 객관식: 선택지 중 정답을 고르는 문제
+- OX 퀴즈: 참·거짓을 판단하는 문제
+- 주관식: 직접 답을 입력하는 문제
+
+설계 원칙:
+
+- 활성화된 유형은 subtle blue border와 surface로 표현한다.
+- 비활성화된 유형은 opacity를 과도하게 낮추지 않고 입력만 disabled 처리한다.
+- number input은 최소·최대 범위를 명확히 한다.
+- 가능하면 `−`·`+` 버튼을 제공하되, 기존 직접 입력도 유지한다.
+- 잘못된 값, 빈 값, 음수 값은 생성 전에 방지한다.
+- 유형별 문항 수 변경 시 설정 요약의 총 문항 수를 즉시 갱신한다.
+
+권장 초기 값과 제한:
+
+```text
+객관식: 2
+OX 퀴즈: 2
+주관식: 1
+최소: 0 또는 비활성화 상태에서는 무시
+최대: 기존 백엔드 허용 범위를 먼저 확인한 뒤 적용
+```
+
+백엔드 계약에 명시되지 않은 임의의 상한을 도입하지 않는다. 상한이 필요하면 프론트엔드 제한과 서버 validation을 함께 확인한다.
+
+### 5. 난이도 섹션
+
+일반 select 대신 세 가지 선택 옵션을 가로형 segmented control 또는 radio card로 표현한다.
+
+```text
+[하 · 기초] [중 · 보통] [상 · 심화]
+```
+
+각 옵션:
+
+- 난이도명
+- 짧은 설명
+- 선택 상태
+
+선택 상태는 primary border와 낮은 채도의 배경으로 표시한다. 과도한 gradient, 큰 그림자, 확대 애니메이션은 사용하지 않는다.
+
+현재 API에 전달되는 값(`EASY`, `NORMAL`, `HARD`)은 유지한다.
+
+### 6. 하단 액션 영역
+
+하단은 본문과 분리된 고정 footer로 구성한다.
+
+```text
+선택 3개 · 총 5문항             취소  문제 생성 시작
+```
+
+원칙:
+
+- 취소는 secondary button
+- 문제 생성 시작은 primary button
+- 선택된 노트가 없으면 primary button disabled
+- 활성 유형이 없거나 총 문항 수가 0이면 disabled
+- disabled 이유를 버튼 아래 또는 summary 영역에서 안내
+- `active:scale`보다 색상·border 변화 중심으로 처리
+- 생성 중에는 spinner, `문제 생성 중...`, 버튼 disabled를 함께 표시
+- 생성 중 모달 닫기 허용 여부는 기존 동작을 검토한다. 중복 요청을 막기 위해 기본적으로 설정 입력과 생성 버튼을 비활성화한다.
+
+## 반응형 설계
+
+### 데스크톱
+
+- 모달 최대 너비는 현재 `max-w-lg`보다 약간 넓은 `max-w-xl`을 검토한다.
+- 범위 선택 트리와 설정 영역을 2열로 배치하는 안은 노트 트리 가독성을 검토한 후 선택한다.
+- 1차 구현은 세로 흐름을 유지해 변경 범위를 제한한다.
+
+### 모바일
+
+- 모달은 화면 가장자리 여백을 유지하고 최대 높이를 viewport 기준으로 제한한다.
+- 헤더와 footer는 고정, 본문만 스크롤한다.
+- 문제 유형 설정 행은 좁은 화면에서 label과 수량 조절부가 겹치지 않도록 2행 구조를 허용한다.
+- 난이도 선택은 3개 옵션이 좁아지면 세로 또는 동일 너비 grid로 변경한다.
+- 하단 버튼은 두 버튼 모두 최소 터치 영역을 확보한다.
+
+## 접근성 설계
+
+- `label`과 checkbox/number input의 연결을 명확히 한다.
+- 트리 펼치기 버튼에 `aria-label`과 `aria-expanded`를 추가한다.
+- 닫기 버튼에 `aria-label="문제 생성 설정 닫기"`를 추가한다.
+- 선택된 난이도와 문제 유형은 시각적 스타일 외에 `aria-checked` 또는 native radio 상태로 전달한다.
+- disabled 입력과 disabled 생성 버튼의 상태를 명확히 한다.
+- focus-visible outline을 제거하지 않는다.
+- 모달 진입 시 제목 또는 첫 번째 주요 입력에 focus를 이동하는 방안을 검토한다.
+- Escape로 닫는 동작은 생성 중 예외를 포함해 기존 모달 정책과 맞춘다.
+
+## 컴포넌트 구조 계획
+
+현재 단일 `QuizConfigModal.jsx`에 포함된 렌더링을 다음 수준으로 분리한다.
+
+권장 구조:
+
+```text
+QuizConfigModal
+├─ QuizConfigHeader
+├─ QuizConfigSummary
+├─ NoteScopeSelector
+├─ QuestionTypeSelector
+├─ DifficultySelector
+└─ QuizConfigFooter
+```
+
+단, 단순 JSX 분리만으로 파일 수가 과도하게 늘어나는 것은 피한다. 다음 조건을 충족할 때만 별도 컴포넌트로 추출한다.
+
+- 내부 상태 또는 접근성 로직이 독립적인 경우
+- 반복되는 스타일 구조가 있는 경우
+- 테스트 대상이 명확히 분리되는 경우
+
+초기 구현에서는 `QuizConfigModal.jsx` 내의 작은 함수 컴포넌트로 시작하고, 테스트나 재사용 필요가 확인되면 파일을 분리한다.
+
+## 상태 및 동작 원칙
+
+- `selectedIds`, `expandedIds`, `typeCounts`, `activeTypes`, `difficulty`, `loading`의 기존 상태 모델은 유지한다.
+- 생성 요청 API(`/quiz/generate`)의 경로와 payload 구조는 변경하지 않는다.
+- `noteIds`, `typeCounts`, `difficulty` 값의 의미와 형식을 유지한다.
+- `onGenerated(response.data)`와 `onClose()` 호출 순서는 기존 사용자 흐름을 유지한다.
+- 생성 실패는 현재 프로젝트의 오류 표시 방식과 일치시킨다.
+- 선택된 유형이 없거나 총 문항 수가 0인 상태는 서버 요청 전에 프론트에서 차단한다.
+- 숫자 입력에서 `parseInt` 결과가 `NaN`이 되지 않도록 입력값 정규화 또는 validation을 추가한다.
+
+## 시각 스타일 기준
+
+### 권장
+
+```text
+카드: rounded-lg, border, shadow-none 또는 shadow-sm
+모달: rounded-xl, shadow-xl
+제목: font-semibold
+보조 설명: text-xs font-normal
+주요 액션: blue-600 계열
+선택 상태: blue border + blue-50 계열 surface
+```
+
+### 지양
+
+```text
+모든 영역의 rounded-2xl/3xl
+font-black + uppercase + tracking-widest 조합
+강한 gradient와 glassmorphism
+모든 hover 상태의 scale·shadow 확대
+의미 없는 보라색·하늘색 강조
+작은 text-[10px]의 과도한 사용
+```
 
 ## 구현 순서
 
-1. `index.css`와 공통 레이아웃의 색상·border·radius 기준을 정리한다.
-2. `AppLayout.jsx`의 사이드바·헤더 활성 상태와 장식 효과를 개선한다.
-3. `DashboardPage.jsx`에서 카드 반복과 장식용 타이포그래피를 줄인다.
-4. 생성 문제 모음과 풀이 기록의 카드·버튼 스타일을 통일한다.
-5. 오답 통계 카드·복습 목록·취약 영역의 정보 밀도를 개선한다.
-6. 오답노트 모음의 폴더 카드 스타일을 공통 기준에 맞춘다.
-7. 강의·노트 화면은 기능을 유지하면서 메뉴·버튼 스타일만 정리한다.
-8. 공통 스타일이 새 화면에도 적용되는지 확인하고 중복 클래스를 제거한다.
-
-## 변경 우선순위
-
-### 1순위: 시각적 효과가 큰 저위험 변경
-
-- `font-black` 완화
-- `uppercase tracking-widest` 제거
-- `rounded-2xl`, `rounded-3xl` 축소
-- 반복 shadow 제거
-- 색상 역할 통일
-
-### 2순위: 화면 구조 개선
-
-- 대시보드 최근 노트의 카드 그리드 완화
-- 커뮤니티 게시글의 행 기반 표현 검토
-- 풀이 기록과 오늘의 복습 목록 정렬 개선
-- 오답 통계 수치 중심 레이아웃 적용
-
-### 3순위: 공통 컴포넌트화
-
-- 반복되는 카드 클래스 추출 여부 검토
-- primary/secondary 버튼 스타일 통일
-- 상태 배지와 progress bar 스타일 통일
-- 공통 빈 상태·로딩 상태 스타일 통일
-
-불필요한 디자인 시스템 추상화는 피하고, 반복이 실제로 확인되는 경우에만 공통 컴포넌트나 CSS 클래스를 추가한다.
-
-## 호환성 원칙
-
-- React 컴포넌트 구조와 기존 사용자 흐름은 유지한다.
-- 라우팅, API 계약, 인증, 저장 동작은 변경하지 않는다.
-- 다크 모드에서도 동일한 정보 계층과 대비를 유지한다.
-- CSS 개선으로 기능 버튼의 위치·접근성·클릭 영역을 축소하지 않는다.
-- 반응형 레이아웃과 모바일 화면의 가독성을 유지한다.
-- 기존 사용자 변경 사항이 있는 파일은 내용을 확인한 뒤 통합하며 무단으로 되돌리지 않는다.
+1. 현재 modal의 입력 validation과 상태 파생값을 정리한다.
+2. 헤더·summary·footer의 정보 계층을 재구성한다.
+3. 노트 트리 선택 UI를 정돈하고 선택 상태 요약을 추가한다.
+4. 문제 유형 입력을 유형별 설정 행 또는 카드로 변경한다.
+5. 난이도 select를 segmented control/radio card로 변경한다.
+6. 생성 중·비활성·오류 상태의 피드백을 보완한다.
+7. 다크 모드와 모바일 레이아웃을 조정한다.
+8. 접근성 속성과 keyboard/focus 동작을 검토한다.
+9. 필요 시 작은 하위 컴포넌트와 테스트를 추가한다.
 
 ## 검증 계획
 
-코드 변경 후 frontend 기준으로 다음을 실행한다.
+변경 후 frontend 기준으로 다음을 실행한다.
 
 ```powershell
 cd frontend
@@ -282,21 +301,28 @@ npm run build
 npm run test -- --run
 ```
 
-브라우저 확인 항목:
+수동 확인 항목:
 
-1. 대시보드의 카드·리스트 계층과 반응형 배치
-2. 생성 문제 모음의 버튼·배지·빈 상태
-3. 오답 통계의 수치·progress bar·오늘의 복습 목록
-4. 오답노트 모음의 그룹 목록·삭제·재풀이
-5. 강의 상세의 노트 트리·에디터·커뮤니티 패널
-6. 라이트/다크 모드 대비와 hover/focus 상태
-7. 모바일 폭에서 텍스트 잘림과 버튼 클릭 영역
+1. 노트 범위 선택·해제와 하위 노트 일괄 선택 동작
+2. 노트 트리 펼치기·접기와 내부 스크롤
+3. 문제 유형별 활성화·비활성화·문항 수 변경
+4. 선택 유형과 문항 수에 따른 총 문항 수 요약 갱신
+5. 난이도 선택 값의 정확한 API 전달
+6. 선택 범위가 없을 때 생성 버튼 비활성화
+7. 모든 유형을 해제했을 때 생성 버튼 비활성화
+8. 생성 중 중복 요청 방지와 spinner 표시
+9. 성공 시 CBTPlayer 진입 및 모달 닫힘
+10. 실패 시 기존 오류 표시와 상태 복구
+11. 라이트/다크 모드 대비
+12. 모바일 폭에서 footer 버튼과 입력 영역의 가독성
+13. 키보드 focus, Escape, checkbox·radio 접근성
 
 ## 완료 기준
 
-- 공통 화면에서 `font-black`, `uppercase`, `tracking-widest`, 과도한 `rounded-2xl/3xl`, 반복 `shadow` 사용이 의미 있는 수준으로 감소한다.
-- primary·success·warning·danger 색상의 역할이 일관된다.
-- 대시보드가 단순 카드 모음이 아니라 노트·학습 정보 중심으로 보인다.
-- 퀴즈·오답 화면에서 데이터 정렬과 텍스트 계층이 시각적 장식보다 우선한다.
-- 라이트/다크 모드와 반응형 동작이 유지된다.
-- `npm run lint`, `npm run build`, `npm run test -- --run`이 통과한다.
+- AI 문제 생성 설정 화면이 단순 입력 폼이 아니라 학습 범위·문제 구성·난이도를 검토할 수 있는 설정 패널로 보인다.
+- 사용자는 현재 선택된 노트 수와 총 문항 수를 생성 전에 즉시 확인할 수 있다.
+- 문제 유형과 난이도의 선택 상태가 명확하고 입력 오류가 서버 요청 전에 차단된다.
+- 생성 중 상태와 비활성 사유가 사용자에게 명확하다.
+- 기존 API 계약과 생성 결과 흐름이 유지된다.
+- 라이트/다크 모드와 반응형 레이아웃이 유지된다.
+- lint, build, test가 통과한다.

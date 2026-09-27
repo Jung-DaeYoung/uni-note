@@ -1,298 +1,126 @@
-# AI 문제 생성 설정 화면 UI 고급화 계획
+# 오답노트 원문 블록 표시 기능 설계 (2026-09-27)
 
 ## 목표
 
-`QuizConfigModal`을 단순한 옵션 입력창이 아니라, 노트 내용을 바탕으로 문제 생성 범위와 학습 목적을 명확하게 설정하는 **고급 학습 설정 패널**로 개선한다.
+오답노트의 **원문 보기**를 눌렀을 때 출처 노트로 이동하는 것에서 끝나지 않고, 문제 생성에 사용된 `sourceBlockId`에 해당하는 블록을 화면 중앙으로 이동시키고 일정 시간 명확하게 표시한다. 사용자가 긴 노트에서 출처를 다시 찾지 않아도 되도록 하며, 기존 노트 편집·자동 저장·블록 ID 계약은 변경하지 않는다.
 
-기능과 API 계약은 유지하고, 정보 구조·시각적 계층·입력 피드백·생성 진행 상태를 개선한다.
+## 현재 코드 상태
 
-대상 파일:
-
-- `frontend/src/components/editor/components/QuizConfigModal.jsx`
-- 필요 시 `frontend/src/index.css`
-- 필요 시 `frontend/src/components/editor/components/QuizConfigModal.test.jsx`
-
-## 현재 화면의 문제점
-
-현재 모달은 다음 입력 요소를 한 세로 흐름에 나열한다.
-
-1. 범위 선택
-2. 문제 유형 및 문항 수
-3. 난이도
-4. 취소·생성 버튼
-
-현재 UI에서 개선이 필요한 부분:
-
-- 헤더와 본문이 모두 작은 글씨와 굵은 글꼴 중심이라 화면의 중요도가 분명하지 않다.
-- `rounded-2xl`, `rounded-xl`, `shadow-2xl`, `font-black`, uppercase 라벨이 함께 사용되어 장식적인 인상이 강하다.
-- 선택한 노트 범위, 문제 유형별 문항 수, 예상 총 문항 수가 한눈에 요약되지 않는다.
-- 문제 유형 입력 행이 단순한 checkbox와 number input으로 구성되어 설정 가능 여부와 현재 값의 관계가 약하다.
-- 난이도 select가 일반 HTML 입력처럼 보여 학습 설정의 핵심 옵션이라는 인상이 부족하다.
-- 선택된 노트가 없거나 유형을 모두 해제했을 때 생성 버튼의 비활성 이유가 명확하지 않다.
-- 생성 중에는 버튼 텍스트만 바뀌며 현재 작업이 진행 중이라는 시각적 피드백이 부족하다.
-- 긴 노트 트리에서 현재 선택 범위와 선택된 하위 노트 수를 파악하기 어렵다.
-
-## 디자인 방향
-
-### 콘셉트: AI 학습 설계 패널
-
-화려한 그라디언트나 과도한 glassmorphism 대신, 다음 요소로 고급스러움을 표현한다.
-
-- 차분한 slate 계열 surface
-- 하나의 primary blue와 제한된 상태 색상
-- 얇은 border와 명확한 section 구분
-- 충분한 여백과 정돈된 행 높이
-- 선택 상태에 대한 명확한 배경·border·체크 표시
-- 설정 결과를 보여주는 요약 영역
-- 생성 버튼의 명확한 primary hierarchy
+현재 기능의 기본 연결은 이미 구현되어 있다.
 
 ```text
-상단: 제목·설명·닫기
-본문: 설정 요약 → 범위 선택 → 문제 유형 → 난이도
-하단: 선택 상태 요약 + 취소 + 문제 생성
+Question.sourceNoteId/sourceBlockId
+  → QuestionResponse
+  → TodayReviewList 또는 CBTPlayer의 원문 보기
+  → navigate(/course/{courseId}/note/{sourceNoteId},
+             { state: { scrollToBlockId: sourceBlockId } })
+  → CourseDetailPage
+  → NotionEditor
+  → useSourceBlockScroll
 ```
 
-## 정보 구조 설계
+- `BlockId` 확장이 블록에 `data-id`를 출력한다.
+- `NotionEditor`가 `useSourceBlockScroll(editor)`를 호출한다.
+- 현재 훅은 `data-id` 요소를 찾아 `scrollIntoView`하고 `origin-highlight` 클래스를 3초 적용한다.
+- CBT 결과 화면과 오늘의 복습 목록 모두 동일한 라우팅 state 계약을 사용한다.
 
-### 1. 모달 헤더
+따라서 이번 요구사항은 새 출처 데이터 구조를 추가하는 작업이 아니라, **기존 이동 계약을 안정적인 블록 탐색·강조 UX로 보강하는 작업**으로 정의한다.
 
-현재의 단순한 `AI 문제 생성 설정` 제목을 다음 구조로 개선한다.
+## 권장 동작 흐름
 
-```text
-[아이콘] AI 문제 생성
-        노트에서 학습 문제를 구성합니다
-                              [닫기]
-```
+1. 사용자가 오답 문제의 `원문 보기`를 누른다.
+2. `sourceNoteId`와 `sourceBlockId`의 존재 여부를 확인한다.
+3. 두 값이 모두 있으면 다음 경로로 이동한다.
 
-원칙:
+   ```text
+   /course/{courseId}/note/{sourceNoteId}
+   state: {
+     sourceBlockId: "<block-id>",
+     sourceNavigationId: "<unique-request-id>"
+   }
+   ```
 
-- 제목은 `text-base font-semibold` 수준으로 사용한다.
-- 보조 설명은 `text-xs text-slate-500`으로 표현한다.
-- 아이콘은 작은 색상 배경 안에 넣되 강한 그림자는 사용하지 않는다.
-- 헤더 배경은 별도 강한 색상보다 surface와 border로 구분한다.
-- 닫기 버튼은 충분한 클릭 영역을 확보하고 focus 상태를 제공한다.
+4. `CourseDetailPage`가 대상 노트를 조회하고 `NotionEditor`를 마운트한다.
+5. 에디터가 실제 DOM을 렌더링할 때까지 기다린 뒤, 해당 에디터 컨테이너 내부에서 `[data-id="..."]`를 찾는다.
+6. 블록을 찾으면:
+   - `scrollIntoView({ behavior: 'smooth', block: 'center' })` 실행
+   - `origin-highlight` 클래스를 추가
+   - 짧은 안내 문구 또는 접근성용 상태(`출처 블록으로 이동했습니다`)를 표시
+   - 약 3초 후 하이라이트 제거
+7. 성공·실패와 관계없이 해당 navigation state를 `replace`로 소비하여 새로고침이나 다른 노트 이동 때 같은 강조가 반복되지 않게 한다.
 
-### 2. 설정 요약 영역
+## 구현 설계
 
-본문 상단에 현재 설정을 요약하는 compact summary strip을 둔다.
+### 1. 라우팅 state 계약 유지 및 명확화
 
-표시 내용:
+- 확인 결과 현재 `sourceBlockId`는 라우터 state 키로는 전혀 쓰이지 않는다(백엔드 DTO 필드명으로만 존재). 실제 state 키는 `useIncorrectNotes.js`, `CBTPlayer.jsx`, `useSourceBlockScroll.js` 세 곳 모두에서 `scrollToBlockId`로 일치한다. 따라서 이 리네이밍은 이 세 파일을 함께 고쳐야 하는 실제 리팩터다.
+- 기존 `scrollToBlockId`를 즉시 폐기하지 않고 하위 호환을 위해 읽을 수 있게 둔다.
+- 신규 내부 이름은 `sourceBlockId`로 통일하는 것을 권장한다. 원문 보기 호출부는 `sourceBlockId`를 전달하고, 훅은 기존 `scrollToBlockId`도 fallback으로 처리한다.
+- `sourceNavigationId`는 동일한 블록으로 연속 이동할 때 React Router state 변경을 구분하기 위한 선택적 식별자다.
+- `sourceNoteId` 또는 `sourceBlockId`가 없으면 기존처럼 안내하고 이동하지 않는다.
+- `courseId`가 없는 문제는 `/course/null/...`로 이동하지 않는다. 이 경우 원문 보기 버튼을 비활성화하거나 `출처 강의 정보를 찾을 수 없습니다`를 표시한다.
 
-- 선택된 노트 수
-- 활성화된 문제 유형 수
-- 총 생성 문항 수
-- 선택 난이도
+### 2. 블록 탐색 시점 개선
 
-예시:
+현재의 고정 800ms 대기는 네트워크 지연, React 렌더링, 에디터 초기화 시간에 따라 너무 짧거나 불필요하게 길 수 있다. 다음 순서로 안정화한다.
 
-```text
-3개 노트 · 3개 유형 · 총 5문항 · 보통 난이도
-```
+1. `editor`와 navigation state가 준비될 때 effect를 시작한다.
+2. 에디터 DOM을 기준으로 탐색한다. 전역 `document.querySelector` 대신 `EditorContent`를 감싸는 ref 또는 가장 가까운 `.uninote-editor` 컨테이너를 사용해 다른 화면의 같은 `data-id`와 충돌하지 않게 한다.
+3. `requestAnimationFrame`을 우선 사용하고, 대상이 아직 없으면 제한된 횟수 또는 최대 약 2초의 polling으로 재시도한다.
+4. 대상 발견 즉시 스크롤·강조하고 polling을 종료한다.
+5. 최대 시간 내 찾지 못하면 오류를 조용히 무시하지 말고 사용자에게 `원문 블록을 찾을 수 없습니다. 노트가 수정되었거나 삭제되었을 수 있습니다.`를 표시한 뒤 state를 소비한다.
 
-이 영역은 장식용 카드가 아니라 사용자의 설정 결과를 검토하는 정보 영역으로 설계한다. 배경은 `bg-slate-50` 정도로 제한하고 아이콘과 숫자만 primary 색상으로 강조한다.
+에디터가 초기 데이터를 다시 동기화하는 현재 구조를 고려해, `editor` 생성 직후뿐 아니라 `initialData`가 적용된 뒤에도 훅이 재평가되도록 한다. 단, 동일한 navigation state에 대해 여러 번 강조하지 않도록 처리한 요청 ID를 ref로 기억한다.
 
-### 3. 범위 선택 섹션
+### 3. 하이라이트 스타일
 
-섹션 헤더:
+- 확인 결과 왼쪽 accent bar(`NotionEditor.jsx`의 `.origin-highlight::before`, 4px, `#2563eb`)는 이미 배경 페이드와 함께 적용되어 있다. 신규로 필요한 것은 `prefers-reduced-motion` 처리(현재 전혀 없음)뿐이며, 얇은 outline 추가는 선택 사항으로 둔다.
+- 기존 `origin-highlight` 애니메이션(배경 페이드 + accent bar)을 유지한다.
+- 라이트·다크 테마 모두 충분한 대비를 확보한다.
+- 편집 중인 블록의 콘텐츠나 ProseMirror 문서 자체를 변경하지 않는다. DOM class만 적용해 자동 저장에 영향을 주지 않게 한다.
+- 키보드 사용자도 위치를 인지할 수 있도록 대상 요소에 일시적으로 `data-source-focused`를 부여하거나 `tabIndex=-1`을 검토한다. 기존 입력 포커스를 불필요하게 빼앗지 않는 것을 우선한다.
+- `prefers-reduced-motion: reduce` 환경에서는 smooth scroll과 긴 애니메이션을 줄인다.
 
-```text
-학습 범위
-문제를 생성할 노트를 선택하세요
-```
+### 4. 상태 소비와 cleanup
 
-노트 트리:
+확인 결과 대상을 찾은 성공 경로에서는 `useSourceBlockScroll.js:23`이 하이라이트 3초 후 이미 `navigate(location.pathname, { replace: true, state: {} })`로 state를 정리하고 있다. 다만 다음 세 가지는 실제로 빠져 있어 이번에 고친다.
 
-- 트리 영역은 고정 높이와 내부 스크롤을 유지한다.
-- 각 행의 높이를 일정하게 유지해 계층 구조를 읽기 쉽게 한다.
-- 펼치기 버튼과 선택 checkbox의 클릭 영역을 분리한다.
-- 선택된 행은 강한 파란색 배경보다 `border-l` 또는 낮은 채도의 blue surface로 표시한다.
-- 선택된 노트 제목은 `font-medium`으로만 강조한다.
-- 하위 노트가 함께 선택되는 현재 동작은 유지하되, 부모 선택 시 하위 항목도 선택된다는 설명을 보조 문구로 제공하는 방안을 검토한다.
-- 선택된 노트가 없을 때 섹션 아래에 명확한 안내를 표시한다.
+- **실패 경로 정리 누락**: 현재 정리 호출은 블록을 "찾은" 분기 안에서만 실행된다. `document.querySelector`가 대상을 못 찾으면 하이라이트도, state 정리도 전혀 일어나지 않는다 → 못 찾았을 때도 안내 후 state를 제거하도록 추가한다.
+- **쿼리스트링 미보존**: `location.pathname`만 사용해 정리하므로 기존 쿼리스트링이 있었다면 사라진다 → 필요한 쿼리스트링/위치 정보를 보존하도록 고친다.
+- **안쪽 타이머 미취소(실제 버그)**: effect cleanup은 바깥쪽 800ms 타이머(`timer` 변수)만 `clearTimeout`하고, 하이라이트 제거용 안쪽 3000ms 타이머는 참조가 캡처되지 않아 취소되지 않는다. 빠른 노트 전환 시 이전 노트의 타이머가 현재 노트 DOM을 잘못 강조할 수 있으므로, 안쪽 타이머도 ref로 캡처해 cleanup에서 함께 취소한다.
 
-선택 상태 요약:
+### 5. 호출 화면 일관성
 
-```text
-선택된 노트 3개
-```
+다음 두 진입점을 동일한 helper 또는 동일한 state 생성 규칙으로 맞춘다.
 
-노트가 많은 경우 전체 선택·선택 해제 기능을 추가할 수 있으나, 기존 선택 동작과 충돌하지 않는지 확인한 뒤 적용한다. 1차 구현에서는 현재 기능을 유지하고 시각적 개선을 우선한다.
+- `TodayReviewList` → `useIncorrectNotes.handleViewReviewSource`
+- `CBTPlayer` → 결과 리포트의 `handleViewSource`
 
-### 4. 문제 유형 및 문항 수 섹션
+확인 결과 `TodayReviewList.jsx` 자체는 `sourceNoteId`/`sourceBlockId`를 전혀 참조하지 않는다. 실제 이동 로직은 `useIncorrectNotes.js`의 `handleViewReviewSource`에 있고, `TodayReviewList`는 이 핸들러를 prop으로 받아 클릭 시 호출할 뿐이다. 이 구조는 변경할 필요 없이 그대로 재사용한다.
 
-기존 checkbox·label·number input의 단순 행을 **문제 유형 설정 카드**로 개선한다.
+현재처럼 원문 보기 이후 CBTPlayer를 닫는 동작은 유지한다. 원문 이동 후 뒤로 가기를 누르면 오답노트 화면으로 돌아올 수 있어야 하므로 history를 replace하지 않고 일반 navigate를 유지한다.
 
-각 유형 행 구조:
+## 예외 및 데이터 정합성
 
-```text
-[checkbox] 객관식             [−] 2 [+]
-           선택지 기반 문제
-```
+| 상황 | 동작 |
+|---|---|
+| `sourceNoteId` 없음 | 원문 보기 버튼 비활성화 또는 출처 없음 안내 |
+| `sourceBlockId` 없음 | 블록 이동 없이 출처 노트만 이동하지 않고 안내 |
+| `courseId` 없음 | 잘못된 경로를 만들지 않고 강의 출처 없음 안내 |
+| 대상 노트 로딩 실패 | 기존 노트 로딩 오류 흐름 유지 |
+| 대상 블록 삭제·ID 변경 | 최대 탐색 시간 후 실패 안내, state 제거 |
+| 같은 블록을 연속 클릭 | 새 navigation ID로 다시 스크롤·강조 |
+| 빠른 노트 전환 | 이전 요청 timer 취소, 현재 요청만 처리 |
+| 다른 화면에 동일 `data-id` 존재 | 에디터 컨테이너 범위 내에서만 탐색 |
+| 사용자가 강조 중 직접 스크롤 | 강조는 유지하되 강제 재스크롤을 반복하지 않음 |
 
-유형 설명:
+블록 ID 자체를 새로 생성하거나 서버에서 재계산하지 않는다. 원문과 문제의 `sourceBlockId`가 다르면 표시할 수 없으므로, 문제 생성·노트 저장 과정에서 ID 보존이 깨지는 경우는 별도 데이터 정합성 문제로 분리해 로그와 테스트로 확인한다.
 
-- 객관식: 선택지 중 정답을 고르는 문제
-- OX 퀴즈: 참·거짓을 판단하는 문제
-- 주관식: 직접 답을 입력하는 문제
-
-설계 원칙:
-
-- 활성화된 유형은 subtle blue border와 surface로 표현한다.
-- 비활성화된 유형은 opacity를 과도하게 낮추지 않고 입력만 disabled 처리한다.
-- number input은 최소·최대 범위를 명확히 한다.
-- 가능하면 `−`·`+` 버튼을 제공하되, 기존 직접 입력도 유지한다.
-- 잘못된 값, 빈 값, 음수 값은 생성 전에 방지한다.
-- 유형별 문항 수 변경 시 설정 요약의 총 문항 수를 즉시 갱신한다.
-
-권장 초기 값과 제한:
-
-```text
-객관식: 2
-OX 퀴즈: 2
-주관식: 1
-최소: 0 또는 비활성화 상태에서는 무시
-최대: 기존 백엔드 허용 범위를 먼저 확인한 뒤 적용
-```
-
-백엔드 계약에 명시되지 않은 임의의 상한을 도입하지 않는다. 상한이 필요하면 프론트엔드 제한과 서버 validation을 함께 확인한다.
-
-### 5. 난이도 섹션
-
-일반 select 대신 세 가지 선택 옵션을 가로형 segmented control 또는 radio card로 표현한다.
-
-```text
-[하 · 기초] [중 · 보통] [상 · 심화]
-```
-
-각 옵션:
-
-- 난이도명
-- 짧은 설명
-- 선택 상태
-
-선택 상태는 primary border와 낮은 채도의 배경으로 표시한다. 과도한 gradient, 큰 그림자, 확대 애니메이션은 사용하지 않는다.
-
-현재 API에 전달되는 값(`EASY`, `NORMAL`, `HARD`)은 유지한다.
-
-### 6. 하단 액션 영역
-
-하단은 본문과 분리된 고정 footer로 구성한다.
-
-```text
-선택 3개 · 총 5문항             취소  문제 생성 시작
-```
-
-원칙:
-
-- 취소는 secondary button
-- 문제 생성 시작은 primary button
-- 선택된 노트가 없으면 primary button disabled
-- 활성 유형이 없거나 총 문항 수가 0이면 disabled
-- disabled 이유를 버튼 아래 또는 summary 영역에서 안내
-- `active:scale`보다 색상·border 변화 중심으로 처리
-- 생성 중에는 spinner, `문제 생성 중...`, 버튼 disabled를 함께 표시
-- 생성 중 모달 닫기 허용 여부는 기존 동작을 검토한다. 중복 요청을 막기 위해 기본적으로 설정 입력과 생성 버튼을 비활성화한다.
-
-## 반응형 설계
-
-### 데스크톱
-
-- 모달 최대 너비는 현재 `max-w-lg`보다 약간 넓은 `max-w-xl`을 검토한다.
-- 범위 선택 트리와 설정 영역을 2열로 배치하는 안은 노트 트리 가독성을 검토한 후 선택한다.
-- 1차 구현은 세로 흐름을 유지해 변경 범위를 제한한다.
-
-### 모바일
-
-- 모달은 화면 가장자리 여백을 유지하고 최대 높이를 viewport 기준으로 제한한다.
-- 헤더와 footer는 고정, 본문만 스크롤한다.
-- 문제 유형 설정 행은 좁은 화면에서 label과 수량 조절부가 겹치지 않도록 2행 구조를 허용한다.
-- 난이도 선택은 3개 옵션이 좁아지면 세로 또는 동일 너비 grid로 변경한다.
-- 하단 버튼은 두 버튼 모두 최소 터치 영역을 확보한다.
-
-## 접근성 설계
-
-- `label`과 checkbox/number input의 연결을 명확히 한다.
-- 트리 펼치기 버튼에 `aria-label`과 `aria-expanded`를 추가한다.
-- 닫기 버튼에 `aria-label="문제 생성 설정 닫기"`를 추가한다.
-- 선택된 난이도와 문제 유형은 시각적 스타일 외에 `aria-checked` 또는 native radio 상태로 전달한다.
-- disabled 입력과 disabled 생성 버튼의 상태를 명확히 한다.
-- focus-visible outline을 제거하지 않는다.
-- 모달 진입 시 제목 또는 첫 번째 주요 입력에 focus를 이동하는 방안을 검토한다.
-- Escape로 닫는 동작은 생성 중 예외를 포함해 기존 모달 정책과 맞춘다.
-
-## 컴포넌트 구조 계획
-
-현재 단일 `QuizConfigModal.jsx`에 포함된 렌더링을 다음 수준으로 분리한다.
-
-권장 구조:
-
-```text
-QuizConfigModal
-├─ QuizConfigHeader
-├─ QuizConfigSummary
-├─ NoteScopeSelector
-├─ QuestionTypeSelector
-├─ DifficultySelector
-└─ QuizConfigFooter
-```
-
-단, 단순 JSX 분리만으로 파일 수가 과도하게 늘어나는 것은 피한다. 다음 조건을 충족할 때만 별도 컴포넌트로 추출한다.
-
-- 내부 상태 또는 접근성 로직이 독립적인 경우
-- 반복되는 스타일 구조가 있는 경우
-- 테스트 대상이 명확히 분리되는 경우
-
-초기 구현에서는 `QuizConfigModal.jsx` 내의 작은 함수 컴포넌트로 시작하고, 테스트나 재사용 필요가 확인되면 파일을 분리한다.
-
-## 상태 및 동작 원칙
-
-- `selectedIds`, `expandedIds`, `typeCounts`, `activeTypes`, `difficulty`, `loading`의 기존 상태 모델은 유지한다.
-- 생성 요청 API(`/quiz/generate`)의 경로와 payload 구조는 변경하지 않는다.
-- `noteIds`, `typeCounts`, `difficulty` 값의 의미와 형식을 유지한다.
-- `onGenerated(response.data)`와 `onClose()` 호출 순서는 기존 사용자 흐름을 유지한다.
-- 생성 실패는 현재 프로젝트의 오류 표시 방식과 일치시킨다.
-- 선택된 유형이 없거나 총 문항 수가 0인 상태는 서버 요청 전에 프론트에서 차단한다.
-- 숫자 입력에서 `parseInt` 결과가 `NaN`이 되지 않도록 입력값 정규화 또는 validation을 추가한다.
-
-## 시각 스타일 기준
-
-### 권장
-
-```text
-카드: rounded-lg, border, shadow-none 또는 shadow-sm
-모달: rounded-xl, shadow-xl
-제목: font-semibold
-보조 설명: text-xs font-normal
-주요 액션: blue-600 계열
-선택 상태: blue border + blue-50 계열 surface
-```
-
-### 지양
-
-```text
-모든 영역의 rounded-2xl/3xl
-font-black + uppercase + tracking-widest 조합
-강한 gradient와 glassmorphism
-모든 hover 상태의 scale·shadow 확대
-의미 없는 보라색·하늘색 강조
-작은 text-[10px]의 과도한 사용
-```
-
-## 구현 순서
-
-1. 현재 modal의 입력 validation과 상태 파생값을 정리한다.
-2. 헤더·summary·footer의 정보 계층을 재구성한다.
-3. 노트 트리 선택 UI를 정돈하고 선택 상태 요약을 추가한다.
-4. 문제 유형 입력을 유형별 설정 행 또는 카드로 변경한다.
-5. 난이도 select를 segmented control/radio card로 변경한다.
-6. 생성 중·비활성·오류 상태의 피드백을 보완한다.
-7. 다크 모드와 모바일 레이아웃을 조정한다.
-8. 접근성 속성과 keyboard/focus 동작을 검토한다.
-9. 필요 시 작은 하위 컴포넌트와 테스트를 추가한다.
+확인 결과 `sourceBlockId` 누락은 삭제된 블록 같은 희귀 케이스만이 아니다. `QuizAiGenerationService`가 Gemini에 요청하는 JSON 스키마의 `required` 목록은 `type`/`questionText`/`correctAnswer`뿐이고, `sourceNoteId`/`sourceBlockId`는 선택 필드로만 요청된다. AI가 이를 빠뜨리면 그대로 `null`로 저장되므로 위 표의 "`sourceBlockId` 없음" 케이스는 실제로 꽤 자주 마주칠 수 있다. 프론트 두 진입점(`useIncorrectNotes.js`, `CBTPlayer.jsx`)이 이미 두 필드를 null-guard하고 있는 것도 이 빈도를 방증한다. 따라서 이번 계획의 "출처 없음" 안내 UX는 예외 처리가 아니라 자주 보일 정상 경로로 간주해 설계한다.
 
 ## 검증 계획
 
-변경 후 frontend 기준으로 다음을 실행한다.
+프론트엔드 변경 시 다음을 실행한다.
 
 ```powershell
 cd frontend
@@ -301,28 +129,23 @@ npm run build
 npm run test -- --run
 ```
 
-수동 확인 항목:
+수동 검증 항목:
 
-1. 노트 범위 선택·해제와 하위 노트 일괄 선택 동작
-2. 노트 트리 펼치기·접기와 내부 스크롤
-3. 문제 유형별 활성화·비활성화·문항 수 변경
-4. 선택 유형과 문항 수에 따른 총 문항 수 요약 갱신
-5. 난이도 선택 값의 정확한 API 전달
-6. 선택 범위가 없을 때 생성 버튼 비활성화
-7. 모든 유형을 해제했을 때 생성 버튼 비활성화
-8. 생성 중 중복 요청 방지와 spinner 표시
-9. 성공 시 CBTPlayer 진입 및 모달 닫힘
-10. 실패 시 기존 오류 표시와 상태 복구
-11. 라이트/다크 모드 대비
-12. 모바일 폭에서 footer 버튼과 입력 영역의 가독성
-13. 키보드 focus, Escape, checkbox·radio 접근성
+1. 오늘의 복습에서 원문 보기 클릭 시 정확한 노트로 이동한다.
+2. CBT 결과 리포트에서 원문 보기 클릭 시 동일하게 동작한다.
+3. 긴 노트에서 대상 블록이 화면 중앙 부근에 위치한다.
+4. 대상 블록이 배경·accent bar·outline으로 명확히 표시된다.
+5. 약 3초 후 하이라이트가 제거된다.
+6. 새로고침하거나 다른 노트로 이동했을 때 이전 강조가 반복되지 않는다.
+7. 존재하지 않는 블록은 무한 재시도하지 않고 안내 후 state가 제거된다.
+8. 같은 `data-id`가 다른 화면에 있어도 대상 에디터의 블록만 선택된다.
+9. 라이트·다크 모드와 `prefers-reduced-motion`에서 가독성이 유지된다.
+10. 원문 보기 후 브라우저 뒤로 가기로 오답노트 화면에 복귀한다.
 
 ## 완료 기준
 
-- AI 문제 생성 설정 화면이 단순 입력 폼이 아니라 학습 범위·문제 구성·난이도를 검토할 수 있는 설정 패널로 보인다.
-- 사용자는 현재 선택된 노트 수와 총 문항 수를 생성 전에 즉시 확인할 수 있다.
-- 문제 유형과 난이도의 선택 상태가 명확하고 입력 오류가 서버 요청 전에 차단된다.
-- 생성 중 상태와 비활성 사유가 사용자에게 명확하다.
-- 기존 API 계약과 생성 결과 흐름이 유지된다.
-- 라이트/다크 모드와 반응형 레이아웃이 유지된다.
-- lint, build, test가 통과한다.
+- 원문 보기 클릭 후 올바른 노트와 출처 블록으로 자동 이동한다.
+- 해당 블록이 최소 3초 동안 시각적으로 명확하게 표시된다.
+- 블록 탐색 실패가 무한 대기·무한 반복·조용한 성공처럼 보이지 않는다.
+- CBT 결과와 오늘의 복습 목록의 동작이 일관된다.
+- 기존 `sourceNoteId/sourceBlockId`, 노트 콘텐츠, 자동 저장, API 응답 계약을 변경하지 않는다.

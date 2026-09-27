@@ -73,12 +73,19 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
   };
 
   const handleViewSource = (q) => {
+    if (!courseId) {
+      alert('출처 강의 정보를 찾을 수 없습니다.');
+      return;
+    }
     if (!q.sourceNoteId || !q.sourceBlockId) {
       alert('출처 정보를 찾을 수 없습니다.');
       return;
     }
-    navigate(`/course/${courseId}/note/${q.sourceNoteId}`, { 
-      state: { scrollToBlockId: q.sourceBlockId } 
+    navigate(`/course/${courseId}/note/${q.sourceNoteId}`, {
+      state: {
+        sourceBlockId: q.sourceBlockId,
+        sourceNavigationId: String(q.questionId),
+      },
     });
     onClose();
   };

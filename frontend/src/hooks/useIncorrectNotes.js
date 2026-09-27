@@ -93,12 +93,19 @@ const useIncorrectNotes = (view) => {
 
   const handleViewReviewSource = (item) => {
     const q = item.question;
+    if (!item.courseId) {
+      alert('출처 강의 정보를 찾을 수 없습니다.');
+      return;
+    }
     if (!q.sourceNoteId || !q.sourceBlockId) {
       alert('출처 정보를 찾을 수 없습니다.');
       return;
     }
     navigate(`/course/${item.courseId}/note/${q.sourceNoteId}`, {
-      state: { scrollToBlockId: q.sourceBlockId },
+      state: {
+        sourceBlockId: q.sourceBlockId,
+        sourceNavigationId: String(q.questionId),
+      },
     });
   };
 

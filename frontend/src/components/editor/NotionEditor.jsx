@@ -482,6 +482,15 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
             border-radius: 2px;
             animation: fade-in 0.5s ease-out;
           }
+          @media (prefers-reduced-motion: reduce) {
+            .origin-highlight {
+              animation: none;
+              background-color: rgba(59, 130, 246, 0.15);
+            }
+            .origin-highlight::before {
+              animation: none;
+            }
+          }
           /* 페이지 링크 블록 스타일 고도화 */
           .page-link-wrapper {
             margin: 0.5rem 0;

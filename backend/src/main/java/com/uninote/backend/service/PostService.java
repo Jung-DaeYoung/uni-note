@@ -149,7 +149,7 @@ public class PostService {
                         .commentId(c.getCommentId())
                         .content(c.getContent())
                         .authorName(commentAuthorName)
-                        .isAuthor(isCommentAuthor)
+                        .author(isCommentAuthor)
                         .createdAt(c.getCreatedAt())
                         .build();
                 })
@@ -162,7 +162,7 @@ public class PostService {
                 .title(post.getTitle())
                 .content(post.getContent())
                 .authorName(authorName)
-                .isAuthor(isPostAuthor)
+                .author(isPostAuthor)
                 .createdAt(post.getCreatedAt())
                 .comments(comments)
                 .build();

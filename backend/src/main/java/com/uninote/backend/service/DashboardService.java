@@ -77,7 +77,7 @@ public class DashboardService {
                         .title(post.getTitle())
                         .content(post.getContent())
                         .authorName(authorName)
-                        .isAuthor(isAuthor)
+                        .author(isAuthor)
                         .createdAt(post.getCreatedAt())
                         .build();
                 })

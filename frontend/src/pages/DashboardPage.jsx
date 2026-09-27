@@ -7,7 +7,7 @@ import { useCourses } from '../context/CourseContext';
 const DashboardPage = () => {
   // 사이드바(AppLayout)가 이미 같은 /dashboard/courses 응답을 CourseContext로 불러오므로,
   // 대시보드 페이지에서 동일한 요청을 다시 보내지 않고 그대로 재사용한다.
-  const { courses, recentPosts, recentNotes, studentName } = useCourses();
+  const { courses, recentPosts, recentNotes } = useCourses();
   const navigate = useNavigate();
 
   const formatTime = (dateStr) => {
@@ -24,12 +24,6 @@ const DashboardPage = () => {
   return (
     <AppLayout>
       <div className="p-6 max-w-6xl mx-auto space-y-8 font-sans">
-        {/* Header Section */}
-        <div className="mb-2">
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">반갑습니다, {studentName || '사용자'}님! 👋</h2>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">오늘의 학습 현황을 확인해보세요.</p>
-        </div>
-
         {/* Main Row: Courses (1/3) & Recent Notes (2/3) - Compact Courses Layout */}
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Courses List - Left 1/3 (Narrow List) */}

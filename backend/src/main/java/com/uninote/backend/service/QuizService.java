@@ -36,6 +36,7 @@ public class QuizService {
     private final ObjectMapper objectMapper;
     private final QuizAiGenerationService quizAiGenerationService;
     private final QuestionResponseMapper questionResponseMapper;
+    private final IncorrectNoteItemRepository incorrectNoteItemRepository;
 
     @Transactional
     public QuizResponse generateQuiz(QuizRequest request, Student student) {
@@ -119,6 +120,12 @@ public class QuizService {
 
         validateOwnership(quizSet.getStudent(), student, "본인 퀴즈만 삭제할 수 있습니다.");
 
+        // 오답노트 항목과 (오답노트/오늘의 복습 등) 가상 세션의 답안은 QuizSet cascade 밖에
+        // 있어 Question 삭제 전에 먼저 지워야 FK 제약 위반(DataIntegrityViolationException)을
+        // 피할 수 있다. 가상 세션 QuizAttempt는 quizSet이 null이라 QuizSet.attempts cascade로는
+        // 정리되지 않는다.
+        incorrectNoteItemRepository.deleteByQuestion_QuizSet_QuizSetId(quizSetId);
+        userAnswerRepository.deleteByQuestion_QuizSet_QuizSetId(quizSetId);
         quizSetRepository.delete(quizSet);
     }
 

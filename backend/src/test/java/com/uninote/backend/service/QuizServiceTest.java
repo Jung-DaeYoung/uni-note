@@ -42,10 +42,12 @@ class QuizServiceTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final QuizAiGenerationService quizAiGenerationService = mock(QuizAiGenerationService.class);
     private final QuestionResponseMapper questionResponseMapper = mock(QuestionResponseMapper.class);
+    private final IncorrectNoteItemRepository incorrectNoteItemRepository = mock(IncorrectNoteItemRepository.class);
 
     private final QuizService quizService = new QuizService(
             noteRepository, quizSetRepository, quizAttemptRepository, userAnswerRepository,
-            questionRepository, objectMapper, quizAiGenerationService, questionResponseMapper);
+            questionRepository, objectMapper, quizAiGenerationService, questionResponseMapper,
+            incorrectNoteItemRepository);
 
     private Student owner;
     private Student other;
@@ -485,6 +487,8 @@ class QuizServiceTest {
 
         quizService.deleteQuiz(50L, owner);
 
+        verify(incorrectNoteItemRepository).deleteByQuestion_QuizSet_QuizSetId(50L);
+        verify(userAnswerRepository).deleteByQuestion_QuizSet_QuizSetId(50L);
         verify(quizSetRepository).delete(quizSet);
     }
 
@@ -495,6 +499,8 @@ class QuizServiceTest {
         assertThatThrownBy(() -> quizService.deleteQuiz(50L, other))
                 .isInstanceOf(CourseAccessException.class);
 
+        verify(incorrectNoteItemRepository, never()).deleteByQuestion_QuizSet_QuizSetId(any());
+        verify(userAnswerRepository, never()).deleteByQuestion_QuizSet_QuizSetId(any());
         verify(quizSetRepository, never()).delete(any());
     }
 

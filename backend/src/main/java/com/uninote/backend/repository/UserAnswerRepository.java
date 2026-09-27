@@ -12,6 +12,11 @@ import java.util.List;
 public interface UserAnswerRepository extends JpaRepository<UserAnswer, Long> {
     List<UserAnswer> findByQuizAttempt_AttemptId(Long attemptId);
 
+    // 퀴즈 삭제 시 해당 퀴즈의 문제를 참조하는 답안을 먼저 지워 FK 제약 위반을 막는다.
+    // 오답노트/오늘의 복습 등 가상 세션(quizAttempt.quizSet == null)의 답안도 question_id로
+    // 원본 문제를 참조하므로 QuizSet.attempts cascade만으로는 정리되지 않는다.
+    void deleteByQuestion_QuizSet_QuizSetId(Long quizSetId);
+
     // 학생 한 명의 모든 풀이 답안을 문제 단위로 집계한다. quizAttempt.student로 스코핑하므로
     // 가상 세션(quizSet=null, 오답노트 재풀이/오늘의 복습) 기록도 항상 포함된다.
     // qs.course는 없을 수 있으므로 LEFT JOIN으로 명시한다(암묵적 경로 접근은 inner join이 되어

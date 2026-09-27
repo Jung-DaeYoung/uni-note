@@ -121,6 +121,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
     }
 
+    // DB 제약(FK 등) 위반으로 요청을 처리할 수 없을 때. 원인 불명의 500 대신 명확한 4xx로
+    // 응답하되, SQL 원문 등 내부 정보는 노출하지 않는다.
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex) {
+        log.error("DB 제약 위반으로 요청을 처리하지 못했습니다.", ex);
+        ErrorResponse error = new ErrorResponse(
+            LocalDateTime.now(),
+            HttpStatus.CONFLICT.value(),
+            "DATA_INTEGRITY_VIOLATION",
+            "다른 데이터와 연결되어 있어 처리할 수 없습니다."
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
     // 예기치 않은 예외는 내부 메시지를 노출하지 않고 일반화된 500으로 응답한다.
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex) {

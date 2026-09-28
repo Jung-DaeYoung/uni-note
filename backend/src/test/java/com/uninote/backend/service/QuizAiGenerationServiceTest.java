@@ -7,6 +7,7 @@ import com.uninote.backend.domain.Student;
 import com.uninote.backend.dto.QuizRequest;
 import com.uninote.backend.dto.QuizResponse;
 import com.uninote.backend.exception.ExternalServiceException;
+import com.uninote.backend.exception.InvalidRequestException;
 import com.uninote.backend.security.FileAccessSigner;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -69,7 +70,7 @@ class QuizAiGenerationServiceTest {
     private QuizRequest simpleRequest(List<Long> noteIds) {
         QuizRequest request = new QuizRequest();
         request.setNoteIds(noteIds);
-        // generateQuizContent()는 QuizService에서 이미 유효성 검증을 마친 typeCounts가
+        // requestQuiz()는 QuizService에서 이미 유효성 검증을 마친 typeCounts가
         // 전달된다고 가정한다. 여기서는 그 전제를 재현하기 위한 최소값만 채운다.
         request.setTypeCounts(Map.of(QuestionType.MULTIPLE_CHOICE, 5));
         return request;
@@ -89,64 +90,88 @@ class QuizAiGenerationServiceTest {
         service.validateConfig();
     }
 
+    private static final String TEXT_NOTE_JSON =
+            "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"attrs\":{\"id\":\"b1\"},"
+            + "\"content\":[{\"type\":\"text\",\"text\":\"페이지 교체\"}]}]}";
+
+    private QuizGenerationInput textInput() {
+        return service.prepareInput(List.of(noteWithContent(1L, TEXT_NOTE_JSON)), student);
+    }
+
     @Test
-    void generateQuizContentThrowsExternalServiceExceptionWhenApiCallFails() {
+    void requestQuizThrowsExternalServiceErrorWhenApiCallFails() {
         when(restTemplate.postForObject(anyString(), any(), eq(String.class)))
                 .thenThrow(new RestClientException("connection refused"));
 
-        Note note = noteWithContent(1L, "{\"type\":\"doc\",\"content\":[]}");
-        QuizRequest request = simpleRequest(List.of(1L));
-
-        assertThatThrownBy(() -> service.generateQuizContent(request, List.of(note), student))
-                .isInstanceOf(ExternalServiceException.class);
+        assertThatThrownBy(() -> service.requestQuiz(simpleRequest(List.of(1L)), textInput()))
+                .isInstanceOf(ExternalServiceException.class)
+                .extracting("errorCode").isEqualTo(ExternalServiceException.EXTERNAL_SERVICE_ERROR);
     }
 
     @Test
-    void generateQuizContentThrowsExternalServiceExceptionWhenResponseIsNotJson() {
+    void requestQuizThrowsAiResponseInvalidWhenResponseIsNotJson() {
         when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn("not json");
 
-        Note note = noteWithContent(1L, "{\"type\":\"doc\",\"content\":[]}");
-        QuizRequest request = simpleRequest(List.of(1L));
-
-        assertThatThrownBy(() -> service.generateQuizContent(request, List.of(note), student))
-                .isInstanceOf(ExternalServiceException.class);
+        assertThatThrownBy(() -> service.requestQuiz(simpleRequest(List.of(1L)), textInput()))
+                .isInstanceOf(ExternalServiceException.class)
+                .extracting("errorCode").isEqualTo(ExternalServiceException.AI_RESPONSE_INVALID);
     }
 
     @Test
-    void generateQuizContentThrowsExternalServiceExceptionWhenCandidatesAreEmpty() {
+    void requestQuizThrowsAiResponseInvalidWhenCandidatesAreEmpty() {
         when(restTemplate.postForObject(anyString(), any(), eq(String.class)))
                 .thenReturn("{\"candidates\":[]}");
 
-        Note note = noteWithContent(1L, "{\"type\":\"doc\",\"content\":[]}");
-        QuizRequest request = simpleRequest(List.of(1L));
-
-        assertThatThrownBy(() -> service.generateQuizContent(request, List.of(note), student))
-                .isInstanceOf(ExternalServiceException.class);
+        assertThatThrownBy(() -> service.requestQuiz(simpleRequest(List.of(1L)), textInput()))
+                .isInstanceOf(ExternalServiceException.class)
+                .extracting("errorCode").isEqualTo(ExternalServiceException.AI_RESPONSE_INVALID);
     }
 
     @Test
-    void generateQuizContentSucceedsWithWellFormedResponse() throws Exception {
-        String innerJson = objectMapper.writeValueAsString(Map.of(
-                "title", "제목",
-                "difficulty", "NORMAL",
-                "questions", List.of()
-        ));
-        String geminiResponse = objectMapper.writeValueAsString(Map.of(
-                "candidates", List.of(Map.of(
-                        "content", Map.of(
-                                "parts", List.of(Map.of("text", innerJson))
-                        )
-                ))
-        ));
-        when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(geminiResponse);
+    void requestQuizSucceedsWithWellFormedResponse() throws Exception {
+        when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
 
-        Note note = noteWithContent(1L, "{\"type\":\"doc\",\"content\":[]}");
-        QuizRequest request = simpleRequest(List.of(1L));
-
-        QuizResponse response = service.generateQuizContent(request, List.of(note), student);
+        QuizResponse response = service.requestQuiz(simpleRequest(List.of(1L)), textInput());
 
         assertThat(response.getTitle()).isEqualTo("제목");
         assertThat(response.getQuestions()).isEmpty();
+    }
+
+    @Test
+    void prepareInputCollectsOnlyReferencedSources() throws Exception {
+        String contentJson = objectMapper.writeValueAsString(Map.of(
+                "type", "doc",
+                "content", List.of(
+                        Map.of("type", "paragraph", "attrs", Map.of("id", "b1"),
+                                "content", List.of(Map.of("type", "text", "text", "LRU"))),
+                        // 텍스트가 없는 블록은 REF 태그가 붙지 않으므로 출처 허용 집합에도 없다.
+                        Map.of("type", "paragraph", "attrs", Map.of("id", "empty")),
+                        // id가 없는 블록의 텍스트는 REF 없이 들어간다.
+                        Map.of("type", "paragraph",
+                                "content", List.of(Map.of("type", "text", "text", "FIFO")))
+                )
+        ));
+
+        QuizGenerationInput input = service.prepareInput(List.of(noteWithContent(7L, contentJson)), student);
+
+        assertThat(input.allowedSources()).isEqualTo(Map.of(7L, java.util.Set.of("b1")));
+        assertThat(input.text()).contains("[[REF:7/b1]] LRU").contains("FIFO");
+        assertThat(input.isEmpty()).isFalse();
+    }
+
+    @Test
+    void prepareInputIsEmptyForEmptyDocument() {
+        QuizGenerationInput input = service.prepareInput(
+                List.of(noteWithContent(1L, "{\"type\":\"doc\",\"content\":[]}")), student);
+
+        assertThat(input.isEmpty()).isTrue();
+    }
+
+    @Test
+    void prepareInputRejectsBrokenNoteJson() {
+        assertThatThrownBy(() -> service.prepareInput(List.of(noteWithContent(3L, "{broken")), student))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessageContaining("noteId=3");
     }
 
     private String successfulGeminiResponse() throws Exception {
@@ -186,7 +211,7 @@ class QuizAiGenerationServiceTest {
     }
 
     @Test
-    void generateQuizContentSkipsMediaOwnedByAnotherStudent() throws Exception {
+    void prepareInputSkipsMediaOwnedByAnotherStudent() throws Exception {
         String fileName = writeTestFile("image-bytes");
         // 다른 학생("someone-else")에게 발급된 서명 -> 현재 학생(owner-num) 기준으로는 무효
         String sig = fileAccessSigner.sign(fileName, "someone-else");
@@ -199,18 +224,13 @@ class QuizAiGenerationServiceTest {
                         "attrs", Map.of("src", src)
                 ))
         ));
-        when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
+        QuizGenerationInput input = service.prepareInput(List.of(noteWithContent(1L, contentJson)), student);
 
-        Note note = noteWithContent(1L, contentJson);
-        QuizRequest request = simpleRequest(List.of(1L));
-
-        service.generateQuizContent(request, List.of(note), student);
-
-        assertThat(countInlineMediaPartsInLastRequest()).isZero();
+        assertThat(input.mediaParts()).isEmpty();
     }
 
     @Test
-    void generateQuizContentIncludesMediaOwnedByCurrentStudent() throws Exception {
+    void requestQuizIncludesMediaOwnedByCurrentStudent() throws Exception {
         String fileName = writeTestFile("image-bytes");
         String sig = fileAccessSigner.sign(fileName, "owner-num");
         String src = "http://localhost:8080/api/upload/view/" + fileName + "?owner=owner-num&sig=" + sig;
@@ -222,12 +242,10 @@ class QuizAiGenerationServiceTest {
                         "attrs", Map.of("src", src)
                 ))
         ));
+        QuizGenerationInput input = service.prepareInput(List.of(noteWithContent(1L, contentJson)), student);
         when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
 
-        Note note = noteWithContent(1L, contentJson);
-        QuizRequest request = simpleRequest(List.of(1L));
-
-        service.generateQuizContent(request, List.of(note), student);
+        service.requestQuiz(simpleRequest(List.of(1L)), input);
 
         assertThat(countInlineMediaPartsInLastRequest()).isEqualTo(1);
     }

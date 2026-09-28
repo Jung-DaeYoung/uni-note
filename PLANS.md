@@ -1,913 +1,535 @@
-# UniNote 전체 프로젝트 리팩터링 계획
+# UniNote AI 문제 생성 고도화 계획
 
-## 작업 원칙
+## 1. 목표
 
-- 실제 코드와 참조 관계를 확인한 문제만 수정한다.
-- 정상 동작하는 기능과 기존 API 계약은 유지한다.
-- 최근 Slash Command 리팩터링은 현재 정상 상태를 기준으로 보호한다.
-- 새로운 추상화, 공통 레이어, 라이브러리는 필요한 근거가 있을 때만 추가한다.
-- 한 번에 하나의 문제만 수정한다.
-- `수정 → 테스트 → 회귀 확인 → 다음 수정` 순서로 진행한다.
-- 관련 없는 사용자 변경은 덮어쓰거나 되돌리지 않는다.
-
-## 이번 개정 사항 (코드 대조 검토 반영)
-
-실제 코드와 대조 검토한 결과를 반영해 우선순위와 실행 순서를 다음과 같이 조정했다. 문제 자체의 존재 여부는 이전 버전과 대부분 동일하게 확인되었다.
-
-- **P0로 상향**: 오답노트 그룹 소유권 누락(구 P1-3) → `P0-5`. 다른 사용자 데이터에 쓰기가 가능한 IDOR로 P0-2/P0-3과 동일한 위험군이며, 같은 서비스 클래스에 이미 동일한 검증 패턴이 있어 수정 비용도 낮다.
-- **P1로 상향**: 대시보드 게시글 범위(구 P2-2) → `P1-8`. 공격자의 별도 행동 없이 로그인한 모든 사용자에게 상시 노출되는 구조라 사용자 행동이 필요한 다른 P1 항목보다 시급하다.
-- **P3로 하향/축소**: JWT httpOnly 쿠키 전환(구 P1-6)은 CSRF 대응까지 포함하는 별도 아키텍처 변경이므로 `P3-7`로 분리하고, P1에는 단기 완화책만 남긴다(`P1-5`). 프론트 lint 정리(구 P2-9)는 런타임 영향이 없는 DX 이슈이므로 `P3-8`로 내린다.
-- **의존성 추가**: P0-2/P0-3/P0-5의 검증 기준(403 응답)은 현재 `IllegalArgumentException`이 전부 401로 매핑되는 구조에서는 만족될 수 없다. 예외 상태 코드 분리(구 P1-8, 이번 `P1-7`) 중 소유권 위반 관련 부분을 P0와 동시에 처리하도록 실행 순서를 조정했다.
-- **회귀 위험 추가 발견**: 파일 업로드 인증(`P1-1`)을 그대로 적용하면 에디터가 이미지를 `<img src>`로, PDF를 `window.location.href`로 직접 요청하는데 이 두 경로는 Authorization 헤더가 붙지 않는다. 인증 도입 전에 서빙 방식을 함께 설계하지 않으면 "보호할 기능"의 이미지/PDF 업로드 command가 깨진다.
-- **원인 정정**: 업로드 파일이 Git에 추적된 원인(`P3-5`)은 관리 소홀이 아니라 루트 `.gitignore`가 `.gitignore content placeholderbackend/uploads/` 한 줄로 손상되어 있기 때문으로 확인됨. 같은 원인으로 `.idea/workspace.xml`도 함께 추적되고 있다. `application-local.yaml`(DB 비밀번호·JWT secret 포함)은 `backend/.gitignore`가 별도로 막고 있어 git에는 커밋되지 않았음을 확인했다.
-- **범위 제한 명시**: AI 연동 안정성(`P2-2`), 프론트 요청 정리(`P2-7`) 항목에 "새 라이브러리·프레임워크를 추가하지 않는다"는 제약을 명시해 과설계를 방지한다.
-
-## 보호할 기능
-
-### Slash Command
-
-- `/` 입력 시 메뉴 표시
-- 검색어 필터링
-- ArrowUp/ArrowDown 선택
-- Enter 명령 실행
-- 마우스 클릭 실행
-- Escape로 메뉴 닫기
-- 메뉴 종료 후 일반 Enter
-- 이미지/PDF 업로드 command
-- 하위 노트 생성 command
-- `SuggestionList`의 포커스 보호와 직접 스크롤 처리
-- `SlashCommand.js`의 `priority: 1000` 설정과 `NotionEditor.jsx` extensions 배열 내 `SlashCommand` 위치를 변경하지 않는다 (Enter가 `CustomHeading`/`CustomParagraph`보다 먼저 처리되게 하는 근거이며, 이걸 건드리면 Enter로 메뉴 선택이 안 되는 버그가 재발한다)
-
-대상 파일:
-
-- `frontend/src/components/editor/extensions/SlashCommand.js`
-- `frontend/src/components/editor/NotionEditor.jsx`
-- `frontend/src/components/editor/components/SuggestionList.jsx`
-
-> `P2-4`(자동 저장), `P2-6`(업로드 신뢰 경계)는 `NotionEditor.jsx` 안의 `SlashCommand.configure({...})` 블록과 같은 파일을 수정한다. 업로드 command·자동 저장 effect 내부만 고치고 `extensions` 배열 순서와 `priority`는 건드리지 않는다.
-
-### 기존 핵심 기능
-
-- 노트 Tiptap JSON 저장과 복구
-- 자동 저장 및 localStorage 임시 저장
-- 강의·수강 권한
-- 익명 게시판과 댓글
-- AI 퀴즈 생성·풀이·오답노트
-- 이미지/PDF 업로드
-- JWT 인증 및 기존 API 경로·응답 필드
-
-## 확인된 정상 동작
-
-- `JwtUtil`의 JWT secret 길이·빈 값·만료 검증
-- Stateless JWT filter 구조
-- 노트 생성(`createNote`)의 수강 검증
-- 게시글·댓글 수정/삭제의 작성자 검증
-- 오답노트 삭제·문제 제거·복습 세션의 그룹 소유자 검증 (`addToGroup`만 예외적으로 누락 — `P0-5`)
-- Tiptap Slash Command의 현재 Enter·마우스 선택 흐름
-- 자동 저장의 localStorage 저장 및 debounce 서버 저장 기본 흐름
-
-# P0 — 즉시 수정해야 하는 보안·데이터 경계
-
-## P0-1. 평문 비밀번호 및 secret 제거
-
-**위치**
-
-- `backend/src/main/java/com/uninote/backend/security/SecurityConfig.java:27-29`
-- `backend/src/main/java/com/uninote/backend/service/AuthService.java:29-38`
-- `backend/src/main/resources/application-local.yaml:3-7`
-
-**문제**
-
-- `NoOpPasswordEncoder`를 사용한다.
-- 로그인에서 비밀번호를 평문 비교한다.
-- DB 비밀번호와 JWT secret이 local 설정에 직접 기록되어 있다.
-- 로그인 로그에 학번과 비밀번호 길이가 기록된다.
-
-**수정 방법**
-
-- BCrypt 또는 Argon2로 교체한다.
-- 기존 평문 비밀번호를 일회성 마이그레이션으로 해시화한다.
-- `passwordEncoder.matches()`를 사용한다.
-- DB 비밀번호와 JWT secret을 환경 변수 또는 secret 저장소로 이동한다.
-- 기존 노출 자격 증명은 교체한다.
-- 로그인 실패 응답과 로그에서 계정 존재 여부 및 민감 정보를 제거한다.
-
-**검증**
-
-- 해시 비밀번호 로그인 성공
-- 잘못된 학번과 비밀번호의 응답 통일
-- 평문 비밀번호 로그인 제거
-- 로그와 저장소에 secret·비밀번호가 남지 않는지 확인
-
-## P0-2. 노트 소유권 검증 누락
-
-**위치**
-
-- `backend/src/main/java/com/uninote/backend/controller/NoteController.java:22-52`
-- `backend/src/main/java/com/uninote/backend/service/NoteService.java:35-52, 88-99, 101-112`
-
-**문제**
-
-- `PUT /api/notes/{noteId}`가 인증 주체를 서비스에 전달하지 않는다(컨트롤러 메서드에 `@AuthenticationPrincipal`이 아예 없음).
-- `getNote()`는 `studentNum`을 받지만 사용하지 않는다. 대신 `note.getStudent()`(노트 소유자)가 자기 강의를 수강 중인지 검사하는데, 이는 항상 참이라 사실상 아무 것도 검증하지 않는다.
-- `getNoteTree()`는 강의 존재 여부만 확인하고, 해당 강의의 **모든 학생의 루트 노트**를 그대로 반환한다(수강 여부·소유자 필터링 없음).
-- `deleteNote()`는 요청자의 강의 수강 여부만 확인하고, 노트가 그 학생의 것인지는 확인하지 않는다. 같은 강의를 듣는 다른 학생의 노트도 삭제될 수 있다.
-- 다른 사용자의 노트 조회·수정·삭제 가능성이 있다.
-
-**의존성**
-
-- 아래 검증 기준(403)을 실제로 만족하려면 예외 처리를 함께 손봐야 한다. 기존 `CourseAccessException`(이미 403으로 매핑되어 있음)을 재사용하거나, `P1-7`(예외 응답 상태 불일치) 중 소유권 위반 관련 부분을 이 항목과 동시에 처리한다. 그렇지 않으면 새로 추가한 검증도 `IllegalArgumentException` 경로를 타 401로만 응답한다.
-
-**수정 방법**
-
-- 조회·트리·저장·삭제에 인증된 학생을 전달한다.
-- 노트 소유자와 현재 학생을 비교한다.
-- 해당 강의 수강 여부를 함께 확인한다.
-- 삭제도 강의 수강 여부뿐 아니라 노트 소유자 일치를 함께 확인한다.
-- 트리 조회를 `courseId + student` 범위로 제한한다.
-
-**검증**
-
-- 사용자 A가 사용자 B 노트를 조회·수정·삭제하면 `403`
-- 같은 강의를 듣는 다른 학생의 노트를 삭제하면 `403`
-- 미수강 강의 트리 조회 차단
-- 정상 소유자의 자동 저장 성공
-
-## P0-3. 퀴즈·풀이 기록 소유권 검증 누락
-
-**위치**
-
-- `backend/src/main/java/com/uninote/backend/controller/QuizController.java:28-30, 64-67`
-- `backend/src/main/java/com/uninote/backend/service/QuizService.java:99-114, 160-196`
-
-**문제**
-
-- 퀴즈 상세와 풀이 상세가 ID만으로 조회된다.
-- 다른 사용자의 문제·정답·해설·풀이 기록을 조회할 수 있다.
-- 같은 클래스의 `deleteQuiz`, `getAttemptsByQuizSet`/`getMyAttempts`는 이미 학생 범위로 조회하고 있어, 이 두 상세 조회만 예외적으로 누락된 것으로 보인다.
-
-**의존성**
-
-- `P0-2`와 동일하게, 403 응답을 위해 예외 매핑을 함께 처리한다(`P1-7` 참고).
-
-**수정 방법**
-
-- 상세 조회에 현재 학생을 전달한다.
-- `quizSet.student`, `attempt.student` 소유권을 확인한다.
-- 가능하면 소유자 조건을 Repository 쿼리에 포함한다.
-
-**검증**
-
-- 사용자 간 퀴즈 상세 교차 조회 차단(`403`)
-- 사용자 간 풀이 상세 교차 조회 차단(`403`)
-- 정상 사용자의 자기 퀴즈·풀이 조회 성공
-
-## P0-4. 클라이언트 점수와 정답 여부 신뢰
-
-**위치**
-
-- `backend/src/main/java/com/uninote/backend/service/QuizService.java:116-142`
-- `backend/src/main/java/com/uninote/backend/dto/QuizAttemptRequest.java`
-
-**문제**
-
-- 요청의 `score`, `isCorrect`를 서버가 그대로 저장한다.
-- 다른 퀴즈에 속한 문제를 제출할 수 있다.
-
-**수정 방법**
-
-- 서버에서 제출 답안과 정답을 비교한다.
-- 서버가 점수와 정답 여부를 계산한다.
-- 문제의 퀴즈 세트가 요청 퀴즈와 일치하는지 검증한다.
-- 클라이언트 점수 필드는 무시하거나 제거한다.
-
-**검증**
-
-- 조작한 점수·정답 여부가 반영되지 않음
-- 다른 퀴즈 문제 제출 차단
-- 정상 답안 점수 계산
-
-## P0-5. 오답노트 그룹 소유권 누락 (P1에서 상향)
-
-**위치**
-
-- `backend/src/main/java/com/uninote/backend/service/IncorrectNoteService.java:34-51`
-
-**문제**
-
-- 기존 `groupId`로 문제를 추가할 때(`addToGroup`) 그룹 소유자를 확인하지 않는다.
-- 다른 사용자의 그룹에 문제를 추가할 수 있다.
-- 같은 클래스의 `deleteGroup`, `removeItemFromGroup`, `getPracticeSession`은 이미 소유자 검증을 하고 있어, `addToGroup`만 예외적으로 누락된 것으로 보인다. 수정 비용이 낮고 다른 P0 항목과 동일한 IDOR(쓰기 가능) 위험이라 P0로 처리한다.
-
-**수정 방법**
-
-- 그룹 소유자를 검증한다.
-- `findByIdAndStudent_StudId()` 형태의 조회를 사용한다(같은 클래스의 다른 메서드와 동일한 패턴).
-
-**검증**
-
-- 타 사용자 그룹 추가 차단(`403`)
-- 자기 그룹 정상 추가
-- 동일 문제 중복 추가 방지
-
-# P1 — 배포 전 수정해야 하는 보안·운영 문제
-
-## P1-1. 파일 업로드·다운로드 공개
-
-**위치**
-
-- `backend/src/main/java/com/uninote/backend/security/SecurityConfig.java:41`
-- `backend/src/main/java/com/uninote/backend/controller/ImageUploadController.java:26-108`
-- `backend/src/main/java/com/uninote/backend/config/WebConfig.java:14-20`
-
-**문제**
-
-- `/api/upload/**`, `/uploads/**`가 `permitAll()`이다.
-- `WebConfig`가 `/uploads/**`를 물리 디렉터리에 직접 매핑해, 컨트롤러의 다운로드 엔드포인트와 별개로 업로드 파일이 이미 전부 공개되어 있다.
-- 누구나 업로드할 수 있고 URL을 아는 파일을 다운로드할 수 있다.
-- MIME, 실제 파일 형식, 용량, 저장 총량 검증이 없다.
-
-**회귀 위험 (설계 선행 필요)**
-
-- 에디터는 이미지를 `<img src>`로, PDF를 `window.location.href` 이동으로 직접 요청한다. 이 두 경로는 axios interceptor를 거치지 않으므로 Authorization 헤더가 붙지 않는다.
-- 다운로드·정적 리소스에 그대로 인증을 강제하면 "보호할 기능"의 이미지/PDF 업로드 command가 깨진다(이미지 미표시, PDF 다운로드 실패).
-- 인증을 적용하기 전에 다음 중 하나로 서빙 방식을 먼저 설계한다: 서명된 단기 유효 URL, 세션 쿠키 기반 인증, 또는 axios로 blob을 받아 object URL로 렌더링. 업로드 POST 자체는 공용 `client`(Authorization 자동 첨부)를 이미 쓰고 있어 문제없다.
-
-**수정 방법**
-
-- 업로드·다운로드에 인증을 적용한다(위 서빙 방식 설계를 반영).
-- 파일 소유자와 연결된 노트·강의 정보를 저장한다.
-- 다운로드 시 리소스 접근 권한을 검증한다.
-- MIME, signature, 확장자, 파일 크기를 서버에서 검증한다.
-- 운영에서는 외부 파일 저장소 또는 별도 정적 파일 서버를 검토한다.
-
-**검증**
-
-- 비인증 업로드·다운로드 거부
-- 타 사용자 파일 다운로드 거부
-- 허용되지 않은 MIME·위조 확장자·초과 파일 거부
-- 인증 적용 후에도 에디터에서 기존 이미지·PDF가 정상적으로 보이고 다운로드되는지 확인 (Slash Command 이미지/PDF 업로드 command 회귀 없음)
-
-## P1-2. 파일 경로 조작 가능성
-
-**위치**
-
-- `ImageUploadController.java:30-53`(다운로드), `66-108`(업로드)
-
-**문제**
-
-- 다운로드 엔드포인트가 입력 파일명을 `Paths.resolve()`로 직접 결합하며, 정규화 및 기준 디렉터리 하위 여부 검증이 없다.
-- 업로드는 저장 파일명 자체를 `UUID + 확장자`로 만들어 경로 조작에는 안전하지만, 확장자를 사용자 입력에서 그대로 가져와 화이트리스트 없이 신뢰한다(`.jsp`, `.php`, 이중 확장자 등도 그대로 저장됨).
-
-**수정 방법**
-
-- `normalize()` 후 기준 디렉터리 하위인지 확인한다.
-- 다운로드에는 파일명 대신 서버 파일 ID를 사용한다.
-- 확장자 화이트리스트를 서버에서 강제한다.
-- `Content-Disposition` 파일명에서 CR/LF 및 경로 문자를 제거한다.
-
-**검증**
-
-- `../`, 절대 경로, 인코딩된 경로 차단
-- 정상 UUID 파일만 다운로드
-- 허용되지 않은 확장자 업로드 차단
-
-## P1-3. AI 퀴즈 생성 입력 권한 누락
-
-**위치**
-
-- `backend/src/main/java/com/uninote/backend/service/QuizService.java:29-34`
-
-**문제**
-
-- 요청된 note ID의 소유자·수강 여부를 확인하지 않는다.
-- 다른 사용자의 노트가 외부 AI API로 전송될 수 있다.
-- `findAllById`로 조회하기 때문에, 존재하지 않거나 타인 소유인 note ID가 조용히 누락되어도 개수 불일치가 감지되지 않는다.
-
-**수정 방법**
-
-- 요청한 모든 노트가 현재 학생 소유인지 확인한다.
-- 강의 수강 여부를 확인한다.
-- 요청 ID 개수와 조회 결과 개수가 일치하는지 검증한다.
-- 여러 강의 노트가 섞이지 않도록 제한한다.
-
-**검증**
-
-- 타 사용자·미수강·미존재 노트 요청 차단
-- 정상 노트만 AI 입력에 포함
-
-## P1-4. 환경별 URL과 CORS 하드코딩
-
-**위치**
-
-- `frontend/src/api/client.js:4`
-- `frontend/src/components/editor/hooks/useNoteUploads.js:3`
-- `frontend/src/components/editor/extensions/PdfBlock.jsx:14`
-- `backend/src/main/java/com/uninote/backend/security/SecurityConfig.java:52-53`
-
-**문제**
-
-- API와 파일 URL이 `localhost`로 하드코딩되어 있다(3곳에서 중복).
-- CORS 허용 origin이 `http://localhost:5173` 하나로 고정되어 있다.
-- PDF 다운로드/새 탭 열기는 raw URL 이동이라 Axios Authorization interceptor를 거치지 않는다(`P1-1`의 서빙 방식 설계와 함께 처리).
-
-**수정 방법**
-
-- `VITE_API_BASE_URL` 등 환경 설정으로 API origin을 통일한다.
-- 중복된 `SERVER_URL`을 제거한다.
-- CORS origin을 프로파일별 제한된 환경 설정으로 관리한다.
-
-**검증**
-
-- 로컬·스테이징·운영 origin별 로그인·업로드·이미지·PDF 확인
-- 운영 빌드에 localhost가 남지 않는지 확인
-- 허용되지 않은 origin 차단
-
-## P1-5. JWT localStorage 저장 (단기 완화)
-
-**위치**
-
-- `frontend/src/context/AuthContext.jsx:6-17`
-- `frontend/src/api/client.js:7-12`
-
-**문제**
-
-- XSS 발생 시 localStorage JWT가 탈취될 수 있다.
-- 인증 상태는 토큰 존재 여부만 확인한다(만료 여부를 클라이언트에서 별도 검사하지 않음).
-- 여러 401 응답에서 상태와 redirect가 중복 처리될 수 있다.
-
-**수정 방법**
-
-- CSP를 적용하고, 토큰 만료(`exp`)를 클라이언트에서도 디코드해 검사한다.
-- 만료를 짧게 유지한다.
-- AuthContext와 Axios interceptor의 로그아웃 경로를 단일화한다.
-- HttpOnly·Secure·SameSite 쿠키로의 전면 전환은 CSRF 대응까지 포함하는 별도 아키텍처 변경이므로 지금 범위에 넣지 않는다 (`P3-7` 참고).
-
-**검증**
-
-- 만료·잘못된 토큰 처리
-- 동시 401에서 중복 redirect 방지
-- 탭 간 login/logout 상태 확인
-
-## P1-6. 운영 DB 설정 위험
-
-**위치**
-
-- `backend/src/main/resources/application.yaml:1-24`
-- `backend/src/main/resources/application-local.yaml`
-
-**문제**
-
-- 기본 설정에 `ddl-auto: update`, `show-sql: true`가 있고, 프로파일로 분리되어 있지 않다(`application-prod.yaml` 없음).
-- 운영에서 자동 스키마 변경과 SQL 로그 노출 위험이 있다.
-- `useSSL=false`는 운영 DB 연결에 부적절하다.
-
-**수정 방법**
-
-- 개발 프로파일에서만 `update`와 SQL 출력을 사용한다.
-- 운영은 `validate` 또는 migration 도구를 사용한다.
-- 운영 DB TLS와 외부 secret을 사용한다.
-
-**검증**
-
-- 운영 프로파일 기동
-- 스키마 자동 변경이 발생하지 않는지 확인
-- secret 미주입 시 안전하게 실패하는지 확인
-
-## P1-7. 예외 응답 상태 불일치
-
-**위치**
-
-- `backend/src/main/java/com/uninote/backend/exception/GlobalExceptionHandler.java:13-35`
-- `backend/src/main/java/com/uninote/backend/service/QuizService.java`
-- `backend/src/main/java/com/uninote/backend/service/IncorrectNoteService.java`
-- `backend/src/main/java/com/uninote/backend/service/NoteService.java`
-
-**문제**
-
-- 모든 `IllegalArgumentException`을 401로 변환한다(단, `CourseAccessException`은 이미 403으로 별도 매핑되어 있음).
-- 없는 리소스, 잘못된 요청, 권한 부족이 인증 실패로 표현된다.
-- 프론트 Axios interceptor가 단순 입력 오류도 로그인 만료로 처리할 수 있다.
-
-**선행 처리 항목**
-
-- 소유권 위반(403) 관련 부분은 2단계(P0)에서 노트·퀴즈·오답노트 소유권 검증과 **동시에** 처리한다(기존 `CourseAccessException` 재사용 또는 동등한 전용 예외 추가). 이 항목에서는 나머지 400/404 구분을 마무리한다.
-
-**수정 방법**
-
-- `400`, `401`, `403`, `404`용 명시적 예외 타입과 응답 코드를 정의한다.
-- 예기치 않은 예외의 내부 메시지는 외부에 노출하지 않는다.
-- 프론트는 인증 만료 코드에만 로그아웃 처리한다.
-
-**검증**
-
-- 없는 리소스 `404`
-- 권한 없음 `403`
-- 잘못된 요청 `400`
-- 인증 실패 `401`
-
-## P1-8. 대시보드 데이터 범위 (P2에서 상향)
-
-**위치**
-
-- `backend/src/main/java/com/uninote/backend/service/DashboardService.java:34-65`
-
-**문제**
-
-- 최근 게시글을 `findTop5ByOrderByCreatedAtDesc()`로 전체 게시글에서 가져와 미수강 강의 게시글이 노출될 수 있다.
-- 위에서 계산해 두는 수강 강의 목록을 이 조회에 사용하지 않는다.
-- 공격자의 별도 행동 없이 로그인한 모든 사용자에게 상시 노출되는 구조라, 사용자 행동이 필요한 다른 P1 항목보다 먼저 처리한다.
-
-**수정 방법**
-
-- 현재 학생의 수강 강의에 한정한 조회를 사용한다.
-
-**검증**
-
-- 미수강 강의 게시글이 대시보드에 노출되지 않는지 확인
-- 정상 수강 강의 게시글은 그대로 노출되는지 확인
-
-# P2 — 기능 일관성·성능·구조 문제
-
-## P2-1. 부모 노트와 게시판 수강 권한
-
-**위치**
-
-- `NoteService.java:75-80`
-- `PostService.java:23-48` (EnrollmentRepository 자체가 주입되어 있지 않음)
-
-**문제**
-
-- 부모 노트의 강의·소유자 일치 검증이 없다(다른 강의·다른 학생의 노트를 부모로 지정 가능).
-- 게시판 조회·작성·댓글 작성에 수강 권한 검증이 전혀 없다.
-
-**수정 방법**
-
-- 부모 노트의 course/student를 현재 요청과 비교한다.
-- 게시글 조회·작성·댓글 작성에 enrollment 검증을 적용한다.
-
-**검증**
-
-- 다른 강의·다른 학생의 노트를 부모로 지정하면 차단
-- 미수강 강의 게시판 조회·작성·댓글 차단
-
-## P2-2. AI 외부 연동 안정성
-
-**위치**
-
-- `backend/src/main/java/com/uninote/backend/service/QuizAiGenerationService.java`
-- `backend/src/main/java/com/uninote/backend/service/QuizService.java:67-70`
-- `backend/src/main/java/com/uninote/backend/config/RestClientConfig.java`
-
-**문제**
-
-- API key, `typeCounts`, AI 응답 구조, timeout 검증이 부족하다.
-- `RestTemplate` 빈에 connect/read timeout이 전혀 설정되어 있지 않다.
-- 비정상 응답과 외부 장애가 일반 `RuntimeException`으로 처리된다.
-- 파일을 메모리와 Base64로 읽으며 총 요청 크기 제한이 없다.
-
-**범위 제한**
-
-- 범용 재시도·검증 프레임워크를 새로 만들지 않는다. 설정값 필수 검증 + timeout 설정 + AI 응답 필드 존재 확인 수준의 최소 구현으로 제한한다.
-
-**수정 방법**
-
-- 설정 필수값을 시작 시 검증한다.
-- DTO 입력과 문제 수·노트 수·미디어 크기를 제한한다.
-- AI 응답을 단계별로(존재 여부만) 검증한다.
-- `RestTemplate`에 connect/read timeout과 명시적 외부 연동 예외를 추가한다.
-- 파일 소유권과 총 미디어 크기를 확인한다.
-
-## P2-3. JPA N+1 및 대량 응답
-
-**위치**
-
-- `PostService.java:23-30, 121-158`
-- `NoteService.java:44-52, 140-148`
-- `QuizService.java:99-114, 160-196`
-
-**문제**
-
-- 댓글, 자식 노트, 퀴즈 문제, 풀이 답안 컬렉션을 응답 변환 중 lazy loading한다.
-- 데이터 증가 시 SQL 수와 응답 시간이 급증할 수 있다.
-- 노트 트리에 깊이 제한이 없다.
-
-**수정 방법**
-
-- API별 fetch join, entity graph 또는 projection을 사용한다.
-- 필요한 컬렉션을 배치 조회한다.
-- 페이지네이션과 트리 깊이·응답 크기 제한을 적용한다.
-- 실제 성능 측정 후 개선 범위를 정한다(측정 없이 구조부터 바꾸지 않는다).
-
-## P2-4. 자동 저장 JSON 파싱 및 경쟁 상태
-
-**위치**
-
-- `frontend/src/components/editor/hooks/useNoteAutosave.js:16-19, 47-72, 95-98`
-- `frontend/src/components/editor/NotionEditor.jsx`
-- `frontend/src/pages/CourseDetailPage.jsx`
-
-**문제**
-
-- 서버 콘텐츠 또는 localStorage가 손상되면 `JSON.parse()` 예외로 에디터가 실패할 수 있다.
-- 이전 노트의 저장 요청이 노트 전환 후에도 진행될 수 있다(`key={noteId}` 리마운트는 에디터 상태 오염은 막지만, 이미 진행 중인 PUT 요청 자체는 취소하지 않는다).
-- 늦게 도착한 응답이 현재 화면의 `onSaved`를 호출할 수 있다.
-- 저장 실패 시 재시도 경로가 없다.
-
-**수정 방법**
-
-- 서버 데이터와 localStorage 파싱을 명시적으로 보호하고 schema를 검증한다.
-- AbortController 또는 noteId별 요청 세대 번호를 사용한다.
-- 저장 실패 시 재시도·즉시 저장 UI를 제공한다.
-- 필요하면 서버 version/updatedAt 기반 optimistic locking을 적용한다.
-
-**진행 순서**
+현재의 노트 기반 AI 문제 생성 기능을 다음 단계의 학습 시스템으로 발전시킨다.
 
 ```text
-JSON 파싱 보호
-→ noteId 경쟁 상태 보호
-→ 저장 실패 재시도
-→ 대형 문서 성능 개선
+현재: 노트 → AI 문제 생성 → 풀이 → 오답노트
+목표: 근거 검증 문제 생성 → 개인화 복습 → 취약 개념 기반 적응형 출제
 ```
 
-**주의**
+기존 노트 편집·자동 저장·JWT 인증·퀴즈 API·풀이·오답노트·원문 블록 이동 계약은 유지한다. 실제 코드와 문서가 충돌하면 실제 코드를 기준으로 판단한다.
 
-- `NotionEditor.jsx` 안의 `SlashCommand.configure({...})` 블록과 `priority: 1000`은 이 항목의 수정 범위가 아니다. 자동 저장 관련 effect/훅만 수정한다.
+## 2. 현재 구현 요약
 
-## P2-5. 노트 조회·생성 race
+### Backend
 
-**위치**
+- `QuizController`가 `POST /api/quiz/generate`를 제공한다.
+- `QuizService`가 노트 존재 여부, 소유권, 동일 강의 여부, 노트 수·문항 수 제한을 검증한다.
+- `QuizAiGenerationService`가 Tiptap JSON을 텍스트·이미지·PDF 입력으로 변환한다.
+- 텍스트에는 `[[REF:noteId/blockId]]` 출처 태그가 삽입된다.
+- Gemini `gemini-2.5-flash`와 JSON response schema를 사용한다.
+- 생성된 `QuizSet`과 `Question`을 저장한다.
+- 문제별 `sourceNoteId`, `sourceBlockId`를 저장한다.
+- 첨부 파일은 서명 검증 및 총 20MB 용량 제한을 적용한다.
+- 서버가 답안을 직접 채점한다.
 
-- `frontend/src/hooks/useCourseNotes.js:21-53`
+### Frontend
 
-**문제**
+- `QuizConfigModal`에서 노트, 유형별 문항 수, 난이도를 선택한다.
+- `POST /api/quiz/generate` 호출 후 `CBTPlayer`를 실행한다.
+- 문제 풀이 결과에서 오답노트 등록이 가능하다.
+- `sourceNoteId`, `sourceBlockId`를 이용해 원문 블록으로 이동한다.
 
-- 빠른 노트 전환에서 이전 GET 응답이 현재 상태를 덮을 수 있다.
-- StrictMode와 effect 재실행으로 최초 노트 생성 POST가 중복될 수 있다.
+## 3. 현재 핵심 문제
 
-**수정 방법**
+### P0. AI 응답의 의미적 검증 부족
 
-- 요청 취소 또는 request ID 검증을 추가한다.
-- noteId 변경 시 이전 데이터를 초기화한다.
-- 최초 노트 생성에 실행 세대·중복 방지 플래그를 사용한다.
-- 서버에도 idempotent 생성 계약을 검토한다.
+JSON 파싱에 성공해도 다음을 검증하지 않는다.
 
-## P2-6. 업로드·Tiptap 콘텐츠 신뢰 경계
+- 요청 문항 수와 실제 문항 수 일치 여부
+- 유형별 문항 수 일치 여부
+- `sourceNoteId`가 요청 노트에 포함되는지 여부
+- `sourceBlockId`가 실제 노트 블록인지 여부
+- 객관식 보기 수와 정답 포함 여부
+- OX 정답 형식
+- 주관식 정답·해설 누락 여부
+- 문제 중복 여부
 
-**위치**
+현재 Gemini schema의 문제별 필수 필드는 `type`, `questionText`, `correctAnswer`뿐이다. 따라서 출처가 누락된 문제가 `null` 상태로 저장될 수 있다.
 
-- `frontend/src/components/editor/hooks/useNoteUploads.js`
-- `frontend/src/components/editor/NotionEditor.jsx`
-- `frontend/src/components/editor/extensions/PdfBlock.jsx`
-- `frontend/src/components/editor/extensions/PageLink.jsx`
+실패가 성공처럼 보이는 경로도 있다.
 
-**문제**
+- AI가 문항을 0개 반환하면 저장 없이 `quizSetId = null`인 200 응답이 나가고, 프론트는 이를 정상 결과로 처리한다 (`QuizService.generateQuiz`).
+- 노트 Tiptap JSON 파싱에 실패하면 `log.warn`만 남기고 해당 노트를 제외한 채 생성을 계속한다 (`QuizAiGenerationService.processNoteContent`).
 
-- 파일 크기·실제 MIME·확장자 검증과 업로드 진행 상태가 부족하다(`accept` 속성은 UI 힌트일 뿐 강제력이 없음).
-- 서버의 이미지·PDF URL을 별도 정책 없이 문서에 저장·렌더링한다(스킴/오리진 검증 없음).
-- 업로드 실패가 `null`과 console 출력으로 끝난다(사용자에게 보이는 오류 없음).
+출처 연결의 구조적 한계:
 
-**수정 방법**
+- `BlockId` 확장의 적용 대상에 `pdfBlock`이 없다. 최상위 PDF 블록은 blockId가 없어 REF 태그가 붙지 않는다. (리스트 항목 안의 텍스트는 내부 `paragraph`의 id로 태그된다.)
+- 이미지·PDF 데이터는 프롬프트 끝에 한꺼번에 첨부되어, 어떤 블록의 미디어인지 모델이 알 수 없다.
+- blockId는 `BlockId.js`의 `renderHTML`에서 랜덤 생성되어 `data-id`로 출력된다. 복사·붙여넣기로 같은 id가 중복될 수 있다. 출처 존재 검증에는 영향이 없지만, 원문 이동은 첫 번째 일치 블록으로 간다.
+- 서버는 DB에 저장된 노트 내용을 기준으로 추출한다. 에디터는 debounce 자동 저장을 쓰고 즉시 저장(flush) API가 없으므로(`useNoteAutosave`), 방금 입력한 블록은 서버에 아직 없을 수 있다.
 
-- 서버 검증(`P1-2`)을 기준으로 클라이언트 검증을 맞춘다.
-- 허용 scheme과 origin을 제한한다.
-- 업로드 상태와 실패 메시지를 UI에 표시한다.
-- 파일 URL은 가능하면 서버 파일 식별자 기반으로 처리한다.
+### P1. 대형 입력과 비용 제어 부족
 
-**주의**
+여러 노트의 내용을 하나의 `combinedText`로 합쳐 전달한다. 노트가 커지면 토큰 초과, 비용 증가, 응답 지연, 중요 내용 누락이 발생할 수 있다.
 
-- 이미지/PDF 업로드 command의 실행 결과(성공 시 삽입되는 내용)는 바뀌지 않아야 한다. command 내부 로직만 보강하고 `SlashCommand`의 메뉴 항목 구성·`items()` 필터링은 건드리지 않는다.
+### P1. 동기식 생성 API의 운영 한계
 
-## P2-7. 프론트 요청·상태 중복과 오류 처리
+현재 HTTP 요청이 Gemini 응답까지 유지된다. 생성 시간이 길어지면 중복 요청, 새로고침에 따른 결과 손실, 서버 스레드 점유, 진행 상태 부재가 발생한다.
 
-**위치**
+### P1. 문제 품질 지표 부족
 
-- `frontend/src/context/CourseContext.jsx`
-- `frontend/src/pages/DashboardPage.jsx`
-- `frontend/src/api/client.js`
-- `frontend/src/hooks/useCourseNotes.js`
-- `frontend/src/hooks/useCourseBoard.js`
+유형별·강의별 오답 통계(`/api/incorrect-notes/statistics/types`, `/statistics/courses`), 오늘의 복습(`/review-today`), 문제별 답안 집계(`QuestionAnswerStat`)는 이미 있다. 이를 재사용하되, 문제별 정답률, 출처 블록별 취약도, 실제 난이도, 중복률, 사용자 삭제율 기반의 문제 품질 측정은 아직 없다.
 
-**문제**
+### P2. 개인화 출제와 학습 목표 미지원
 
-- `/dashboard/courses`를 Context와 Dashboard가 중복 호출한다.
-- 노트·게시글 요청에서 빠른 전환과 stale response를 일관되게 처리하지 않는다.
-- Axios interceptor가 직접 redirect와 alert를 수행해 화면 상태와 결합된다.
+현재 생성 입력은 노트, 문항 유형, 문항 수, 난이도 중심이다. 사용자의 오답·취약 개념·시험 범위·학습 목표를 문제 생성에 반영하지 않는다.
 
-**범위 제한**
+## 4. 실행 우선순위
 
-- react-query/SWR 등 새 데이터 fetching 라이브러리를 추가하지 않는다. 기존 Context/hook 구조 안에서 중복 호출 제거와 요청 취소만 처리한다.
+## P0 — 생성 결과 신뢰성 강화
 
-**수정 방법**
+### P0-1. `QuizQualityValidator` 추가
 
-- 대시보드와 사이드바의 데이터 책임을 분리하되 중복 요청을 제거한다.
-- 요청 취소 또는 request ID 검증을 적용한다.
-- 인증 이벤트와 화면별 오류 표시를 분리한다.
+`QuizAiGenerationService`가 파싱한 `QuizResponse`를 `QuizService` 저장 전에 검증한다.
 
-# P3 — 품질·유지보수·저장소 위생
+전제: 현재 `generateQuiz`는 `@Transactional` 안에서 Gemini를 호출한다. 재생성을 넣으면 DB 커넥션 점유 시간이 호출 횟수만큼 늘어나므로, AI 호출·검증은 트랜잭션 밖에서 수행하고 저장만 트랜잭션으로 묶는다.
 
-## P3-1. DTO 입력 검증 부족
+검증 항목:
 
-**위치**
+1. 요청 문항 수와 응답 문항 수
+2. 유형별 요청 수와 응답 수
+3. 문제 유형별 필수 필드
+4. 객관식 보기 개수·중복·정답 포함 여부. 채점과 같은 규칙(trim·소문자)으로 일치하는 보기를 찾고, `correctAnswer`를 그 보기 원문으로 덮어쓴다. 결과 화면의 정답 표시는 `opt === q.correctAnswer` 정확 일치를 요구하기 때문이다 (`CBTPlayer.jsx`).
+5. OX 정답을 `O` 또는 `X`로 제한하고 대문자로 정규화한다. 프론트는 `'O'`/`'X'`만 제출한다.
+6. 주관식 정답 공백 여부
+7. 빈 문제·빈 해설 처리 기준
+8. 같은 세트 안의 동일 문항(정규화 후 정확 일치). 이력 대비 유사 문항 검사는 P1-4에서 다룬다.
+9. 출처 노트 ID 허용 목록
+10. 출처 블록 ID 실제 존재 여부
+11. 컬럼 길이: `Question.correctAnswer`, `QuizSet.title`은 기본 VARCHAR(255)다. 초과하면 DB 오류가 409 CONFLICT로 응답되므로 저장 전에 검증한다.
 
-- `backend/src/main/java/com/uninote/backend/dto`
-- 각 Controller의 `@RequestBody`
+실패 처리:
 
-**문제**
+- 구조 오류·문항 수(유형별 포함) 불일치: 전체 재생성 1회
+- 출처 오류: 재생성하지 않는다. `sourceNoteId`, `sourceBlockId`를 모두 null로 저장한다(= 미검증).
+- 미검증 비율 상한: 미검증 문항이 전체의 절반을 넘으면 검증 실패로 보고 전체 재생성 대상에 포함한다. 기준값은 상수로 둔다.
+- 요청당 AI 호출은 최대 2회(최초 1회 + 재생성 1회), 총 시간 예산은 90초로 둔다. 현재 Gemini read timeout이 60초(`RestClientConfig`)이므로 재생성 1회에 최대 60초가 더 걸린다. 따라서 첫 호출이 30초(= 90초 − 60초)를 넘었으면 재생성하지 않고 바로 실패 처리한다. 프론트 axios에는 timeout이 없어 이 예산이 곧 사용자 대기 상한이다.
+- 검증 실패 지속: 문제를 저장하지 않는다(부분 저장 없음). `ExternalServiceException`(503)으로 반환하며, 오류 코드는 P0-5를 따른다. 사용자 입력 오류가 아니므로 400을 쓰지 않는다.
+- 문항 0개 응답, 노트 콘텐츠 파싱 실패: 200 성공이 아닌 명시적 오류로 반환
 
-- `@Valid`, `@NotBlank`, `@Size`, `@NotNull`, `@Positive`가 부족하다.
-- 긴 제목·댓글·그룹명·퀴즈 요청과 음수 ID를 허용할 수 있다.
+회귀 방어: 트랜잭션 분리와 재생성 도입 시 기존 `QuizServiceTest`의 `generateQuiz*` 테스트 8개가 모두 통과해야 한다.
 
-**수정 방법**
+### P0-2. 출처 정합성 검증
 
-- DTO에 Bean Validation을 적용하고 Controller에서 `@Valid`를 사용한다.
-- validation 오류도 공통 ErrorResponse로 반환한다.
-
-## P3-2. 핵심 API 테스트 부족
-
-**위치**
-
-- `backend/src/test`
-- `frontend/src`
-
-**문제**
-
-- 현재 백엔드 테스트는 JWT, mapper, AI 일부, context load 중심이다(`controller` 테스트 패키지 자체가 없음).
-- Controller 권한, API 계약, 파일 업로드, 자동 저장, Axios 401/403, Slash Command 회귀 테스트가 부족하다.
-
-**주의**
-
-- P0/P1의 소유권·권한 관련 테스트는 이 단계까지 미루지 않고 해당 항목(2~3단계)을 수정하는 시점에 즉시 작성한다. 이 항목에서는 나머지 API 계약·회귀 테스트를 확장한다.
-
-**수정 방법**
-
-- `@WebMvcTest`로 인증·권한·상태 코드·DTO 검증을 테스트한다.
-- `@DataJpaTest`로 소유자 조건 Repository를 테스트한다.
-- 서비스 권한과 AI 실패를 단위 테스트한다.
-- 프론트 API client, AuthContext, 자동 저장, Slash Command의 `/`, 필터링, Enter, 마우스 선택을 회귀 테스트로 고정한다.
-
-## P3-3. 미사용 Repository와 중복 조회
-
-**위치**
-
-- `NoteRepository.java` (`findByCourseAndStudent`)
-- `QuestionRepository.java` (`findByQuizSet_QuizSetId`)
-- `QuizSetRepository.java` (`findByCourse_CourseIdAndStudent_StudId`)
-- 각 Controller/Service의 `studentRepository.findByStudentNum(...)` 반복 호출
-
-**문제**
-
-- 위 세 Repository 메서드는 선언만 있고 실제 호출부가 없다.
-- `studentRepository.findByStudentNum(...).orElseThrow(...)` 패턴이 여러 Controller와 Service에 중복된다.
-
-**수정 방법**
-
-- 실제 참조를 다시 확인한 뒤 미사용 메서드를 제거하거나 권한 조회에 활용한다.
-- API 계약을 바꾸지 않는 범위에서 인증 사용자 조회 중복을 정리한다(작은 헬퍼/전용 argument resolver 등 최소 추상화만 도입).
-
-## P3-4. Context 및 자동 저장 성능
-
-**위치**
-
-- `frontend/src/context`
-- `frontend/src/components/editor/hooks/useNoteAutosave.js`
-
-**문제**
-
-- Context value와 함수가 매 렌더마다 새로 생성될 수 있다.
-- 자동 저장마다 JSON/text 직렬화와 localStorage 기록이 실행된다.
-- 대형 문서에서 입력 지연과 localStorage quota 오류 가능성이 있다.
-
-**수정 방법**
-
-- 실제 성능 측정 후 필요한 Context에만 `useMemo/useCallback`을 적용한다.
-- dirty flag 또는 transaction 기반 변경 감지를 검토한다.
-- localStorage 저장도 별도 debounce를 적용하고 quota 오류를 표시한다.
-
-## P3-5. 생성 산출물과 업로드 파일 관리
-
-**위치**
-
-- `backend/uploads/*.png`, `backend/uploads/*.pdf`
-- 저장소 루트 `.gitignore`
-- `backend/build`, `backend/.gradle`, `frontend/dist` (참고용 — 이미 정상적으로 ignore되고 있음)
-
-**문제**
-
-- 업로드 파일 14개가 Git에 추적되어 있다.
-- **원인**: 루트 `.gitignore`가 `.gitignore content placeholderbackend/uploads/` 한 줄로 손상되어 있어(줄바꿈 없이 플레이스홀더 텍스트와 패턴이 붙어버림) `backend/uploads/` 패턴이 실제로 적용되지 않는다.
-- 같은 원인으로 `.idea/workspace.xml`, `backend/.idea/workspace.xml`(IDE 개인 상태 파일)도 함께 추적되고 있다.
-- `backend/.gitignore`, `frontend/.gitignore`는 정상 동작하며 `build`/`.gradle`/`dist`는 실제로 추적되지 않고 있음을 1단계 감사에서 확인했다(이 부분은 문제 없음).
-- `application-local.yaml`(DB 비밀번호·JWT secret 포함)은 `backend/.gitignore`가 별도로 막고 있어 git에 커밋되지 않았음을 1단계 감사에서 확인했다.
-
-**수정 방법**
-
-- 루트 `.gitignore`를 올바른 멀티라인 형식으로 재작성한다(`uploads`, `.idea`, 로컬 secret 등 명시).
-- 업로드 샘플과 `.idea/workspace.xml`을 Git index에서 제거한다.
-- 운영 업로드 저장소를 배포 볼륨 또는 외부 저장소로 분리한다.
-
-## P3-6. API 문서와 실제 구현 대조
-
-**위치**
-
-- `docs/api.md`
-- `docs/architecture.md`
-- `docs/세부기능 명세서.md`
-- 각 Controller와 frontend API 호출부
-
-**문제**
-
-- 인증 헤더, 업로드 공개 여부, 응답 형식이 실제 구현과 다를 가능성이 있다.
-
-**수정 방법**
-
-- 실제 Controller와 프론트 호출을 기준으로 문서를 갱신한다.
-- 오류 코드와 인증 요구사항을 명시한다.
-- API 계약 변경 없이 문서만 정합화한다.
-
-## P3-7. JWT httpOnly 쿠키 전환 (장기, P1에서 분리)
-
-**위치**
-
-- `frontend/src/context/AuthContext.jsx`
-- `frontend/src/api/client.js`
-- `backend/src/main/java/com/uninote/backend/security`
-
-**문제**
-
-- localStorage 기반 토큰 저장은 XSS에 취약한 근본 구조다. `P1-5`의 단기 완화책(CSP, 만료 검증, 로그아웃 경로 단일화)만으로는 근본적으로 해소되지 않는다.
-
-**수정 방법**
-
-- HttpOnly·Secure·SameSite 쿠키와 CSRF 대응(예: double-submit 쿠키)을 포함한 인증 아키텍처 전환을 별도 작업으로 설계·검토한다.
-- 현재 API 계약과 인증 흐름에 미치는 영향을 먼저 문서화한 뒤 착수한다.
-- 실제 필요성(위협 모델, 운영 환경)을 재확인한 뒤 착수한다 — 근거 없이 아키텍처를 바꾸지 않는다.
-
-**검증**
-
-- 전환 후에도 기존 로그인/로그아웃/보호된 API 호출 흐름이 그대로 동작
-
-## P3-8. 프론트 lint 및 번들 (P2에서 하향)
-
-**위치**
-
-- `frontend/src/components/editor/NotionEditor.jsx`
-- `frontend/src/components/editor/components/BlockHandle.jsx`
-- `frontend/src/components/editor/components/IncorrectNoteModal.jsx`
-- `frontend/src/components/editor/components/QuizAttemptsModal.jsx`
-- `frontend/src/components/editor/components/QuizConfigModal.jsx`
-- `frontend/src/context/AuthContext.jsx`
-- `frontend/src/context/CourseContext.jsx`
-- `frontend/vite.config.js`
-
-**문제**
-
-- 현재 lint에 22 errors, 2 warnings가 보고되었다.
-- 미사용 import, effect dependency, Fast Refresh 규칙, Vite ESM 환경에서의 `__dirname` 사용 문제가 있다.
-- 빌드는 성공하지만 큰 JavaScript chunk 경고가 있다.
-- 런타임에는 영향이 없는 DX/빌드 경고 성격이라 P3로 내린다.
-
-**수정 방법**
-
-- lint 오류를 파일별로 하나씩 정리한다.
-- 기존 동작 변경 없이 lazy loading은 실제 성능 측정 후 검토한다.
-
-## P3-9. Spring Boot 기본 생성 보안 비밀번호 로그 (확인 완료, 정보성)
-
-**위치**
-
-- 앱 부팅 시 콘솔 (`UserDetailsServiceAutoConfiguration`), 코드 변경 없음
-
-**문제**
-
-- 부팅 로그에 "Using generated security password: ..."가 출력된다.
-
-**확인 결과 (2026-09-15)**
-
-- `JwtFilter`(`backend/src/main/java/com/uninote/backend/security/JwtFilter.java`)가 `Authorization: Bearer` 토큰을 직접 검증해 `SecurityContextHolder`에 `Authentication`을 주입한다. `AuthenticationManager`/`UserDetailsService`/`AuthenticationProvider`를 전혀 거치지 않는다.
-- `SecurityConfig`는 `.httpBasic()`/`.formLogin()`을 호출하지 않는다. `SecurityFilterChain`을 빈으로 직접 정의하는 방식(Spring Security 6)에서는 명시적으로 호출한 설정만 필터 체인에 추가되므로, 기본 로그인 폼이나 HTTP Basic 인증 엔드포인트 자체가 존재하지 않는다.
-- 즉 Spring Boot가 자동 생성하는 `InMemoryUserDetailsManager`와 그 비밀번호는 이 앱의 어떤 HTTP 요청 경로에서도 실제로 참조되지 않는다 — 로그는 `UserDetailsService` 빈이 없다는 조건에서 자동 설정이 켜졌다는 신호일 뿐, 도달 가능한 인증 경로가 아니다.
-- 실 서버 `bootRun`으로 재현: 로그는 매 기동마다 출력되지만 JWT 기반 API 인증/인가 동작에는 아무 영향이 없음을 확인.
-
-**판단**
-
-- 보안 취약점 아님. 로그 노이즈에 불과하다.
-
-**수정 방법**
-
-- 로그를 숨기기 위한 목적만으로 더미 `UserDetailsService` 빈이나 `spring.autoconfigure.exclude`를 추가하지 않는다(요구사항).
-- 필요해지면(예: 로그 정리 라운드) `NoOpUserDetailsService` 빈을 하나 등록해 자동 설정을 비활성화하는 것으로 충분하며, 그 전까지는 그대로 둔다.
-
-**검증**
-
-- 코드 변경 없음. 위 확인 내용을 근거로 문서화만 진행.
-
-# 단계별 실행 순서
-
-## 1단계: 기준선과 테스트 고정
-
-1. 현재 `git status`와 변경 파일을 확인한다.
-2. 루트 `.gitignore` 손상 여부를 확인하고, `git ls-files`로 `application-local.yaml` 등 다른 민감 파일이 이미 추적되고 있지 않은지 전수 확인한다(5분 내외의 감사 — 발견 시 즉시 별도 보고, 전체 정리는 5단계에서 진행).
-3. Slash Command 정상 시나리오(특히 `/`, 필터링, ArrowUp/Down, **Enter 명령 실행**, 마우스 클릭, Escape)를 회귀 목록으로 고정한다.
-4. 백엔드 `backend\gradlew.bat test`를 실행한다.
-5. 프론트 `npm.cmd run lint`, `npm.cmd run build`를 실행해 기준 결과를 기록한다.
-6. 노트·퀴즈·파일 API의 현재 응답 계약을 확인한다.
-
-## 2단계: P0 권한과 인증 수정
-
-수정 순서:
-
-1. 예외 응답 상태 코드 중 소유권 위반(403) 매핑을 먼저 정리한다 — 기존 `CourseAccessException` 재사용, 또는 `P1-7`의 관련 부분을 여기서 함께 처리한다. 이후 항목들의 403 검증 기준을 만족시키기 위한 선행 작업이다.
-2. 노트 소유권 검증 (`P0-2`)
-3. 퀴즈 상세·풀이 소유권 검증 (`P0-3`)
-4. 오답노트 그룹 소유권 검증 (`P0-5`)
-5. 서버 점수 계산 및 문제 소속 검증 (`P0-4`)
-6. 비밀번호 해시 전환 (`P0-1`)
-
-각 항목마다:
+AI가 반환한 출처를 그대로 저장하지 않는다.
 
 ```text
-한 항목 수정
-→ 관련 단위/통합 테스트 작성 및 실행 (P3-2로 미루지 않음)
-→ 프론트 호출 회귀 확인
-→ 다음 항목
+AI sourceNoteId/sourceBlockId
+  ↓
+요청 노트 목록과 대조
+  ↓
+Tiptap 콘텐츠에서 실제 blockId 확인
+  ↓
+검증 통과 시 Question 저장
 ```
 
-## 3단계: P1 파일·환경·예외 경계 수정
+허용 집합: 추출 시 실제로 `[[REF:noteId/blockId]]`를 붙인 쌍의 집합을 그대로 사용한다. 전체 모드와 블록 범위 모드(P1-5)가 같은 로직을 쓰며, 이미지·PDF에서 나온 문제도 이 집합으로 판정한다.
 
-수정 순서:
+미검증 표현: P0에서는 새 컬럼 없이 "출처 필드 null = 미검증"으로 표현한다. 프론트는 이미 `sourceBlockId`가 없으면 "원문 보기" 버튼을 숨기고(`CBTPlayer.jsx`), 이동 시에도 null을 막는다(`CBTPlayer.handleViewSource`, `useIncorrectNotes`). 따라서 DB·API·프론트 변경이 없다. 문제는 정상 노출된다. `pdfBlock`은 현재 blockId 자체가 없으므로(§3 참고) 블록 단위 출처를 요구하지 않는다.
 
-1. 파일 업로드·다운로드 인증 — 이미지/PDF가 브라우저 네이티브 요청이라 Authorization 헤더가 붙지 않는 문제를 먼저 설계(서명된 단기 URL / 세션 쿠키 / blob 방식 중 선택)한 뒤 인증을 적용한다 (`P1-1`)
-2. 파일 MIME·크기·경로·확장자 검증 (`P1-2`)
-3. 대시보드 게시글 범위 제한 (`P1-8`)
-4. AI 입력 권한 (`P1-3`)
-5. DB secret과 JWT secret 외부화 (`P1-6`, `P0-1`과 연계)
-6. API origin과 파일 URL 환경화 (`P1-4`)
-7. CORS 프로파일화 (`P1-4`)
-8. JWT 저장 단기 완화 — CSP, 만료 검증, 로그아웃 경로 단일화 (`P1-5`)
-9. 운영 DB 설정 분리 (`P1-6`)
-10. 예외 상태 코드 분리 — 나머지 400/404 구분 마무리 (`P1-7`)
+### P0-3. JSON schema 및 DTO 검증 강화
 
-## 4단계: P2 데이터 일관성 및 성능
+- 문제 유형별 필수 필드를 schema에 반영한다.
+- `sourceNoteId`, `sourceBlockId`, `explanation`의 필수 여부를 입력 유형에 따라 결정한다.
+- 서버 검증은 schema를 보완하는 최종 방어선으로 유지한다.
+- AI가 반환한 `difficulty`는 enum으로 파싱되고, 저장에는 이미 요청값(`request.getDifficulty()`)을 쓴다. 별도 검증 대신 응답의 difficulty도 요청값으로 덮어쓴다.
+- 유형당 문항 수 제한을 맞춘다. 현재 서비스(`MAX_QUESTIONS_PER_TYPE = 20`, 하한 1)와 프론트(`QuizConfigModal` 20)는 일치하고, `QuizRequest`만 `@Min(0) @Max(50)`이다. `QuizRequest`를 `@Min(1) @Max(20)`으로 바꾸고 서비스 검증은 방어선으로 유지한다.
+  - 영향: 0 또는 21~50 요청의 errorCode가 `INVALID_REQUEST`에서 `VALIDATION_FAILED`로 바뀐다(둘 다 400). 프론트는 이 범위를 보내지 않는다. `QuizServiceTest`는 서비스를 직접 호출하므로 영향이 없다.
 
-수정 순서:
+### P0-4. 생성 메타데이터 저장
 
-1. 부모 노트와 게시판 수강 권한 (`P2-1`)
-2. 자동 저장 JSON 파싱 보호 (`P2-4`)
-3. 자동 저장 noteId 경쟁 상태 (`P2-4`)
-4. 저장 실패 재시도 (`P2-4`)
-5. 노트 조회 race 및 생성 중복 (`P2-5`)
-6. 업로드 오류 UX (`P2-6`)
-7. AI 요청 크기 제한 — 최소 구현 유지 (`P2-2`)
-8. N+1 및 대량 응답 측정·개선 (`P2-3`)
-9. 프론트 요청 중복 정리 — 새 라이브러리 추가 없이 (`P2-7`)
+향후 문제 품질 분석과 재현을 위해 다음 메타데이터를 저장한다.
 
-## 5단계: P3 정리와 테스트 확장
+- 모델명
+- prompt 버전
+- 생성 시각
+- 원문 content hash
+- 검증 상태
+- 재생성 횟수
+- 생성 실패 사유
 
-수정 순서:
+기존 API 응답 필드는 유지한다. P0 단계에서는 DB 컬럼을 추가하지 않고 구조화 로그로 먼저 기록한다. 운영 DDL 위험을 P0에 끌어들이지 않기 위해서다. DB 저장은 §5 확장 시점에 스키마 변경 절차를 따라 도입한다.
 
-1. DTO validation (`P3-1`)
-2. 권한·API 계약 테스트 확장 — 2~3단계에서 이미 작성한 항목은 제외 (`P3-2`)
-3. 미사용 Repository와 import 정리 (`P3-3`)
-4. 중복 인증 사용자 조회 정리 (`P3-3`)
-5. Context와 자동 저장 성능 개선 (`P3-4`)
-6. 루트 `.gitignore` 재작성 및 tracked 산출물·업로드 파일 정리 (`P3-5`)
-7. API 문서 갱신 (`P3-6`)
-8. 프론트 lint 오류 정리 (`P3-8`)
-9. JWT httpOnly 쿠키 전환 필요성 재검토 — 필요성이 확인될 때만 착수 (`P3-7`)
-10. 필요한 경우에만 코드 분할
+### P0-5. AI 오류와 검증 실패의 오류 코드 구분
 
-# 최종 검증 기준
+현재 `ExternalServiceException`은 모두 `EXTERNAL_SERVICE_ERROR`(503) 하나로 응답한다(`GlobalExceptionHandler`). `ExternalServiceException`에 선택적 `errorCode`를 추가하고(기본값은 기존 코드), 핸들러는 이 값을 사용한다. HTTP 상태는 모두 503으로 유지해 기존 계약과 테스트를 보존한다.
 
-## 보안·권한
+| errorCode | 상황 | 메시지 예 |
+|---|---|---|
+| `EXTERNAL_SERVICE_ERROR` (기존) | Gemini 호출 실패·타임아웃 | 기존 문구 유지 |
+| `AI_RESPONSE_INVALID` | JSON 파싱·응답 구조 오류 | "AI 응답 형식이 올바르지 않습니다." |
+| `QUIZ_VALIDATION_FAILED` | 재생성 후에도 검증 실패 | "요청한 조건에 맞는 문제를 생성하지 못했습니다. 범위나 문항 수를 조정해 주세요." |
 
-- 사용자 간 노트·퀴즈·풀이·파일·오답노트 그룹 ID 교차 접근 차단
-- 비밀번호와 secret 평문 저장·로그 제거
-- 점수·정답 여부 서버 계산
-- 업로드 MIME·경로·용량·확장자 검증
-- 미수강 강의 게시글·노트가 대시보드·트리·게시판에 노출되지 않음
-- 400/401/403/404 응답 의미 구분 (특히 소유권 위반 = 403)
+- 기존 `QuizAiGenerationServiceTest`는 예외 타입만 확인하므로 영향이 없다.
+- 프론트 `QuizConfigModal`의 고정 문구 alert("문제 생성 중 오류가 발생했습니다.")를 서버 응답의 `message` 표시로 바꾼다.
 
-## 기능 회귀
+## P1 — 입력·비용·운영 안정성
 
-- Slash Command 전체 UX (Enter 명령 실행 포함, `priority: 1000` 유지)
-- 이미지/PDF 업로드 command — 표시·다운로드까지 정상 동작 (`P1-1` 이후 특히 확인)
-- 자동 저장 및 localStorage 복구
-- 기존 노트 CRUD
-- 게시판·댓글
-- 퀴즈 생성·풀이·오답노트
-- JWT 로그인과 만료 처리
+### P1-1. 노트 청킹
 
-## 명령
+전체 노트를 하나의 문자열로 합치지 않고 제목·헤딩·문단·블록 기준으로 의미 단위로 분할한다.
 
-- `backend\gradlew.bat test`
-- `frontend\npm.cmd run lint`
-- `frontend\npm.cmd run build`
+각 청크는 다음 정보를 유지한다.
 
-## 완료 조건
+```json
+{
+  "noteId": 10,
+  "blockId": "block-42",
+  "text": "페이지 교체 알고리즘은..."
+}
+```
 
-- P0 보안·권한 문제(오답노트 그룹 소유권 포함)가 해결되고, 소유권 위반이 실제로 403으로 응답하며, 관련 테스트가 존재한다.
-- P1 배포 환경에서 secret·URL·CORS·파일 접근(이미지/PDF 정상 동작 포함)·대시보드 데이터 범위가 안전하게 동작한다.
-- P2 데이터 경쟁 상태와 주요 성능 문제가 측정·개선되었다.
-- P3 문서·테스트·저장소 위생(손상된 `.gitignore` 포함)이 정리되었다.
-- 최근 Slash Command 정상 동작(Enter 포함)이 모든 단계에서 유지된다.
+처리 흐름:
+
+```text
+Tiptap 블록 추출
+  ↓
+청크 분할
+  ↓
+핵심 개념 추출
+  ↓
+중복 제거·중요도 정렬
+  ↓
+문제 생성
+```
+
+### P1-2. 입력 크기·비용 예측
+
+- 텍스트·미디어별 크기를 호출 전에 계산한다.
+- 토큰 또는 문자 수 상한을 명시한다.
+- 초과 시 자동 축약 또는 사용자에게 범위 축소를 안내한다.
+- 동일 원문·동일 설정 요청은 idempotency key 또는 결과 재사용을 검토한다.
+- 사용자별·강의별 AI 호출 rate limit을 추가한다.
+
+### P1-3. 비동기 생성 Job API (선택·후순위)
+
+현재 `@EnableAsync`, 작업 큐, Job 테이블이 모두 없어 도입 규모가 크다. P0 완료 후 실제 생성 지연을 측정하고 필요할 때 착수한다.
+
+현재 동기 API는 유지하되, 대용량 생성을 위한 별도 Job API를 추가한다.
+
+```http
+POST /api/quiz/generation-jobs
+GET  /api/quiz/generation-jobs/{jobId}
+```
+
+상태:
+
+```text
+QUEUED
+EXTRACTING_CONTENT
+RETRIEVING_CONTEXT
+GENERATING
+VALIDATING
+SAVING
+COMPLETED
+FAILED_INPUT
+FAILED_AI
+FAILED_VALIDATION
+FAILED_STORAGE
+CANCELLED
+```
+
+Frontend는 생성 진행률, 재시도, 실패 사유를 표시한다.
+
+### P1-4. 문제 중복 제거
+
+P0-1 8번이 같은 세트 안의 정확 일치만 다루므로, 여기서는 이력 대비 중복을 다룬다.
+
+- 최근 생성 문제와 question text를 비교한다.
+- 동일 개념·동일 정답을 반복하는 문제를 탐지한다.
+- 중복 문항만 교체 생성한다.
+- 시험 대비 모드에서는 단원별 최소 출제 수와 중복 금지 조건을 적용한다.
+
+### P1-5. 블록 단위 문제 범위 선택
+
+노트 전체가 아닌 사용자가 선택한 블록만으로 문제를 생성한다.
+
+API (하위 호환):
+
+- `QuizRequest`에 선택 필드 `blockIds: List<String>`를 추가한다. 이 필드가 없으면 기존과 똑같이 동작한다.
+- `blockIds`는 `noteIds`가 정확히 1개일 때만 허용한다. 여러 노트면 400 `INVALID_REQUEST`를 반환한다.
+- `@Size(max = 500)` 등으로 개수 상한을 둔다.
+
+추출:
+
+- `QuizAiGenerationService.extractDataFromNode` 순회에 "범위 안" 판정을 더한다. 자신의 id가 선택됐거나 조상이 선택된 노드만 범위 안이다.
+- 범위 밖 노드는 텍스트와 미디어를 모두 넣지 않는다. 리스트나 인용 블록을 선택하면 하위 블록이 모두 포함된다.
+
+요청 검증 (AI 호출 전):
+
+- 선택한 blockId 중 저장된 노트 내용에 없는 것이 있으면 400 `INVALID_REQUEST`를 반환한다. 메시지는 "선택한 블록을 찾을 수 없습니다. 노트가 저장된 뒤 다시 시도해 주세요."다.
+- 범위 추출 결과 텍스트와 미디어가 모두 비어 있으면 400을 반환한다.
+
+출처 검증: P0-2의 허용 집합이 곧 선택 범위다. 범위 밖 출처는 미검증(null)으로 저장한다.
+
+ID가 없는 블록:
+
+- `pdfBlock`은 `BlockId` 적용 대상이 아니다. 1단계에서는 범위 선택 대상에서 제외한다. 선택된 블록 안에 들어 있는 경우만 포함되며, UI에 "PDF는 노트 전체 모드에서만 포함" 안내를 둔다.
+- 2단계(선택, 별도 승인): `BlockId` 대상에 `pdfBlock`을 추가한다. 노트 저장 형식에 속성이 추가되는 변경이며, 기존 PDF는 다시 렌더링되어 저장될 때 id를 얻는다. `PdfBlock` NodeView가 `data-id`를 DOM에 출력하는지 먼저 확인해야 원문 이동이 가능하다.
+- `id`가 null로 저장된 옛 블록은 선택할 수 없고 전체 모드에서만 포함된다.
+
+프론트:
+
+- `QuizConfigModal`에 "범위: 노트 전체 / 블록 선택"을 추가한다.
+- 블록 목록은 `GET /api/notes/{noteId}` 저장본에서 id가 있는 최상위 블록으로 구성한다.
+- 헤딩을 선택하면 다음 같은 레벨 헤딩 전까지의 블록 id를 함께 선택한다.
+- 자동 저장이 끝나지 않은 상태(`saveStatus`)에서는 블록 선택을 막거나 저장 대기를 안내한다(§3 자동 저장 지연 참고).
+
+## P2 — 문제 품질·개인화
+
+### P2-1. 학습 목표 기반 생성
+
+생성 요청에 선택적 학습 목표를 추가한다.
+
+```json
+{
+  "learningObjectives": [
+    "가상 메모리의 동작 원리를 설명할 수 있다",
+    "페이지 교체 알고리즘의 차이를 비교할 수 있다"
+  ]
+}
+```
+
+각 문제에 다음 내부 메타데이터를 추가하는 것을 검토한다.
+
+- `conceptTags`
+- `cognitiveLevel`
+- `learningObjectiveId`
+- `sourceBlockId`
+
+### P2-2. 난이도 기준 구체화
+
+| 사용자 난이도 | 생성 기준 |
+|---|---|
+| EASY | 정의·용어 회상 |
+| NORMAL | 개념 설명·비교 |
+| HARD | 사례 적용·오류 분석·추론 |
+
+내부적으로 `REMEMBER`, `UNDERSTAND`, `APPLY`, `ANALYZE` 수준을 저장하는 방식을 검토한다.
+
+### P2-3. 취약 개념 기반 문제 생성
+
+기존 풀이·오답 데이터를 이용해 다음 정보를 계산한다. 기존 데이터(`sourceBlockId`, `UserAnswer`, `QuestionType`)만으로 가능한 지표를 먼저 구현하고, 개념별 정답률은 P2-1의 `conceptTags` 도입 후에 구현한다.
+
+- 지금 가능: 유형별 정답률, 재시도 정답률, 출처 블록별 오답률, 최근 오답 빈도
+- `conceptTags` 필요: 개념별 정답률
+
+예시:
+
+```text
+LRU/FIFO 혼동
+최근 정답률 25%
+주관식 정답률 20%
+→ LRU/FIFO 비교·적용 문제를 주관식 중심으로 생성
+```
+
+### P2-4. 오답 기반 재생성 모드
+
+프론트에 다음 생성 모드를 추가한다.
+
+- 취약 개념 중심 문제 만들기
+- 최근 틀린 문제와 유사한 문제 만들기
+- 이번 주 복습용 문제 만들기
+- 시험 직전 모의고사 만들기
+
+같은 문제를 단순 반복하지 않고, 비교·사례 적용·오개념 판별 등 다른 인지 유형으로 변형한다.
+
+### P2-5. 객관식 선택지 품질 개선
+
+- 오답은 노트의 실제 혼동 개념에서 생성한다.
+- 정답만 길거나 구체적이지 않도록 보기 길이를 균형화한다.
+- 보기의 문법 형태를 통일한다.
+- `항상`, `절대`, `모두 정답`과 같은 단서 남용을 제한한다.
+
+### P2-6. 주관식 채점 개선
+
+다음 순서로 점진적으로 개선한다.
+
+```text
+1차: 공백·대소문자·기호 정규화
+2차: 등록된 동의어·허용 답안 비교
+3차: 핵심 키워드 포함 여부
+4차: 필요한 경우에만 LLM 보조 채점
+```
+
+모든 답안을 LLM으로 채점하지 않고 규칙 기반 채점을 우선한다.
+
+현재 채점 규칙은 서버 `QuizService.isAnswerCorrect` 한 곳과 프론트 `CBTPlayer.jsx`의 두 곳(점수 계산, 결과 화면 판정)이 같은 trim·소문자 비교를 쓴다. 1차 정규화 변경까지는 세 곳을 함께 수정한다.
+
+2차(동의어) 이후는 프론트가 서버 규칙을 복제할 수 없다. 이 시점에는 프론트 로컬 판정을 제거하고 서버 채점 결과(`isCorrect`)를 받아 표시하도록 일원화한다. `POST /api/quiz/attempts` 응답 확장이 필요한 API 변경이므로 프론트와 문서를 함께 갱신한다.
+
+## P3 — 대규모 검색·운영 분석
+
+### P3-1. 임베딩 기반 RAG (선택·후순위)
+
+현재 MySQL만 사용하며 벡터 저장소·임베딩 파이프라인이 없다. P1-1 청킹과 입력 크기 제한으로 해결되지 않을 때만 검토한다.
+
+대규모 노트에서는 전체 내용을 매번 전달하지 않고, 블록 단위 임베딩과 검색을 사용한다.
+
+```text
+노트 저장
+  ↓
+블록 정규화·임베딩
+  ↓
+개념·출처와 함께 저장
+  ↓
+문제 생성 요청
+  ↓
+관련 블록 검색
+  ↓
+검색 근거만 Gemini에 전달
+  ↓
+문제 생성·출처 검증
+```
+
+### P3-2. 생성 당시 원문 Snapshot
+
+노트 수정 후에도 문제의 근거를 확인할 수 있도록 문제 생성 시점의 원문 정보를 보존한다.
+
+```json
+{
+  "noteId": 10,
+  "blockId": "block-42",
+  "contentHash": "sha256...",
+  "noteUpdatedAt": "2026-09-28T10:20:00",
+  "sourceText": "페이지 폴트는..."
+}
+```
+
+초기에는 `contentHash`와 생성 시각을 저장하고, 원문 전문 저장은 저장 용량과 개인정보 정책을 검토한 뒤 결정한다.
+
+### P3-3. 문제 품질 대시보드
+
+운영·프롬프트 개선을 위해 다음 지표를 수집한다.
+
+| 지표 | 목표 예시 |
+|---|---:|
+| 생성 요청 성공률 | 98% 이상 |
+| JSON 파싱 실패율 | 1% 이하 |
+| 출처 누락률 | 2% 이하 |
+| 잘못된 출처 연결률 | 0% 목표 |
+| 요청 문항 수 일치율 | 99% 이상 |
+| 중복 문제 비율 | 3% 이하 |
+| 문제 평균 정답률 | 난이도별 모니터링 |
+| 출처 원문 이동 성공률 | 98% 이상 |
+| 동일 요청 중복 생성 | 0건 목표 |
+
+## 5. 데이터 모델 확장 후보
+
+기존 API 계약을 깨지 않는 것을 전제로 다음 필드를 단계적으로 검토한다.
+
+스키마 변경 절차: 운영 설정은 `ddl-auto: validate`(`application-prod.yaml`), 로컬은 `update`이며 Flyway/Liquibase가 없다. 엔티티에 필드만 추가하면 로컬에서는 동작하지만 운영 서버는 기동에 실패한다. 컬럼을 추가할 때는 운영용 DDL 스크립트를 함께 작성하고 스키마 변경 내용을 문서화한다. (AGENTS.md가 참조하는 `docs/db구조.md`는 현재 저장소에 없다.)
+
+### Question
+
+- `conceptTags`
+- `cognitiveLevel`
+- `learningObjectiveId`
+- `validationStatus`
+- `sourceContentHash`
+- `promptVersion`
+
+### QuizSet
+
+- `generationMode`
+- `modelName`
+- `requestedQuestionCount`
+- `validatedQuestionCount`
+- `regeneratedQuestionCount`
+- `generationStatus`
+
+### UserAnswer
+
+- 풀이 시간
+- 시도 횟수
+- 힌트 사용 여부
+- 복습 후 재정답 여부
+
+풀이 시간은 현재 측정할 수 없다. `QuizAttempt`의 `startTime`, `endTime`이 모두 저장 시점 `now()`로 기록된다. 프론트 계측과 요청 필드 추가가 먼저 필요하다.
+
+새 필드는 기존 응답에 무조건 노출하지 않고, 필요할 때 DTO에 선택적으로 추가한다.
+
+## 6. 구현 순서
+
+1. `QuizQualityValidator` 설계 및 단위 테스트 작성
+2. 문제 유형별 응답 검증 구현 (정답 치환·OX 정규화·길이 검증 포함)
+3. 출처 노트·블록 정합성 검증 구현
+4. AI 호출을 트랜잭션 밖으로 분리하고, 검증 실패·재생성 정책(호출 최대 2회) 구현
+5. 생성 메타데이터와 prompt 버전 로그 기록, 오류 코드 구분(P0-5)과 DTO 제한 통일
+6. 블록 단위 문제 범위 선택(P1-5)
+7. 노트 청킹 및 입력 크기 제한 구현
+8. 이력 대비 중복 문제 제거 및 rate limit/idempotency 검토
+9. 기존 데이터 기반 취약 지표(유형별·출처 블록별) 구현
+10. 개념 태그·학습 목표·난이도 기준 추가
+11. 개념별 지표와 오답·취약 개념 기반 개인화 생성 구현
+12. 문제 품질 지표 및 운영 대시보드 추가
+13. (선택) 생성 Job API와 진행 상태 UI
+14. (선택) 임베딩 기반 RAG와 원문 Snapshot 도입
+
+## 7. 검증 계획
+
+### Backend
+
+```powershell
+cd backend
+.\gradlew.bat test
+```
+
+필수 테스트:
+
+- 요청 문항 수와 응답 문항 수 불일치
+- 유형별 문항 수 불일치
+- 출처 노트 ID 위조
+- 존재하지 않는 출처 블록 ID
+- 객관식 정답이 보기 목록에 없는 경우
+- 객관식 정답이 보기와 대소문자·공백만 다를 때 보기 원문으로 치환
+- OX 이외의 정답, 소문자 `o`/`x` 정규화
+- 정답·제목 255자 초과
+- 재생성 후에도 실패 시 저장 없이 503 반환, AI 호출 2회 초과 없음
+- 첫 호출이 30초를 넘으면 재생성하지 않음
+- 범위 밖·위조 출처는 null로 저장, 미검증 비율 초과 시 재생성
+- errorCode 3종(`EXTERNAL_SERVICE_ERROR`, `AI_RESPONSE_INVALID`, `QUIZ_VALIDATION_FAILED`) 구분 (WebMvc)
+- 유형당 문항 수 21 → 400 `VALIDATION_FAILED`
+- `blockIds` 없음: 기존 동작과 동일
+- 단일 노트 + `blockIds`: 범위 밖 텍스트·미디어 제외
+- 여러 노트 + `blockIds`: 400
+- 저장본에 없는 blockId, 범위 추출 결과 없음: AI 호출 없이 400
+
+회귀 방어: 기존 `QuizServiceTest`의 `generateQuiz*` 8개, `QuizControllerWebMvcTest`의 typeCounts 검증 테스트가 계속 통과해야 한다.
+- 중복 문제
+- AI API 오류
+- AI 응답 파싱 오류
+- 미디어 소유권·용량 검증
+- 정상 생성·저장·원문 이동 데이터 전달
+
+### Frontend
+
+```powershell
+cd frontend
+npm run lint
+npm run build
+npm run test
+```
+
+필수 검증:
+
+- 생성 설정 payload 유지
+- 생성 중 중복 제출 방지
+- 생성 실패 사유 표시 (서버 `message`)
+- 전체 모드 payload는 기존과 동일, 범위 모드 payload에만 `blockIds` 포함 (`QuizConfigModal.test.jsx` 확장)
+- 생성 완료 후 CBTPlayer 연결
+- 출처 블록 이동 및 실패 안내
+- 기존 풀이·오답노트 흐름 회귀 없음
+
+## 8. 완료 기준
+
+- AI 응답이 형식뿐 아니라 의미적으로 검증된다.
+- 요청한 문항 수·유형 수와 저장된 문항이 일치한다.
+- 저장된 모든 문제는 출처가 실제 입력 노트·블록(범위 모드에서는 선택 범위)으로 검증되었거나, 출처 필드가 null(미검증)이다. 미검증 문항은 전체의 절반을 넘지 않는다. (PDF처럼 blockId가 없는 입력 포함)
+- 긴 노트와 미디어 입력에 대해 비용·용량·시간 제한이 작동한다.
+- 생성 실패가 조용한 성공처럼 보이지 않는다. (문항 0개 응답, 노트 파싱 실패 포함. 범위는 생성 흐름이며, 풀이 저장 실패 시에도 제출 완료로 처리되는 `CBTPlayer.handleSubmit` 동작은 별도 과제로 다룬다.)
+- 풀이·오답 데이터가 다음 문제 생성에 활용된다.
+- 기존 REST API 경로, 인증 흐름, 노트 저장 형식, 원문 이동 계약이 유지된다.

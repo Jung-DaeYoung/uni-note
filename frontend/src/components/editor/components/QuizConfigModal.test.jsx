@@ -146,6 +146,34 @@ describe('QuizConfigModal', () => {
     expect(onGenerated.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
   });
 
+  it('생성 실패 시 서버가 보낸 메시지를 표시하고 모달을 닫지 않는다', async () => {
+    const user = userEvent.setup();
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    client.post.mockRejectedValueOnce({
+      response: { status: 503, data: { errorCode: 'QUIZ_VALIDATION_FAILED', message: '요청한 조건에 맞는 문제를 생성하지 못했습니다.' } },
+    });
+    const { onClose, onGenerated } = renderModal({ currentNoteId: 1 });
+
+    await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('요청한 조건에 맞는 문제를 생성하지 못했습니다.'));
+    expect(onGenerated).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('서버 메시지가 없으면 기본 실패 문구를 표시한다', async () => {
+    const user = userEvent.setup();
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    client.post.mockRejectedValueOnce(new Error('Network Error'));
+    renderModal({ currentNoteId: 1 });
+
+    await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('문제 생성 중 오류가 발생했습니다.'));
+    alertSpy.mockRestore();
+  });
+
   it('생성 중에는 닫기·취소 버튼이 비활성화되고 로딩 표시가 나타난다', async () => {
     const user = userEvent.setup();
     let resolvePost;

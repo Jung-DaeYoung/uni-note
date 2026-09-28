@@ -353,8 +353,9 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated }) => {
       });
       onGenerated(response.data);
       onClose();
-    } catch {
-      alert('문제 생성 중 오류가 발생했습니다.');
+    } catch (error) {
+      // 서버가 실패 원인(빈 노트, AI 호출 실패, 생성 결과 검증 실패 등)을 message로 내려주면 그대로 보여준다.
+      alert(error.response?.data?.message || '문제 생성 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }

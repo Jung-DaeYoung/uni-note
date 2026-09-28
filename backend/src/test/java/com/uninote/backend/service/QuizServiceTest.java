@@ -5,6 +5,7 @@ import com.uninote.backend.domain.Course;
 import com.uninote.backend.domain.Note;
 import com.uninote.backend.domain.Question;
 import com.uninote.backend.domain.QuizAttempt;
+import com.uninote.backend.domain.QuizDifficulty;
 import com.uninote.backend.domain.QuestionType;
 import com.uninote.backend.domain.QuizSet;
 import com.uninote.backend.domain.Student;
@@ -15,17 +16,23 @@ import com.uninote.backend.dto.QuizAttemptResponse;
 import com.uninote.backend.dto.QuizRequest;
 import com.uninote.backend.dto.QuizResponse;
 import com.uninote.backend.exception.CourseAccessException;
+import com.uninote.backend.exception.ExternalServiceException;
 import com.uninote.backend.exception.InvalidRequestException;
 import com.uninote.backend.exception.ResourceNotFoundException;
 import com.uninote.backend.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -43,11 +50,20 @@ class QuizServiceTest {
     private final QuizAiGenerationService quizAiGenerationService = mock(QuizAiGenerationService.class);
     private final QuestionResponseMapper questionResponseMapper = mock(QuestionResponseMapper.class);
     private final IncorrectNoteItemRepository incorrectNoteItemRepository = mock(IncorrectNoteItemRepository.class);
+    // 실제 검증 로직을 함께 확인하기 위해 mock이 아닌 실제 객체를 쓴다.
+    private final QuizQualityValidator quizQualityValidator = new QuizQualityValidator();
+    // 트랜잭션 경계만 흉내 낸다(mock 트랜잭션 매니저 위에서 콜백이 그대로 실행된다).
+    private final TransactionTemplate transactionTemplate = new TransactionTemplate(mock(PlatformTransactionManager.class));
+    private final Clock clock = mock(Clock.class);
 
     private final QuizService quizService = new QuizService(
             noteRepository, quizSetRepository, quizAttemptRepository, userAnswerRepository,
             questionRepository, objectMapper, quizAiGenerationService, questionResponseMapper,
-            incorrectNoteItemRepository);
+            incorrectNoteItemRepository, quizQualityValidator, transactionTemplate, clock);
+
+    // note 10L의 블록 b1에서 추출된 입력 (출처 허용 집합: 10L -> {b1})
+    private final QuizGenerationInput textInput =
+            new QuizGenerationInput("[[REF:10/b1]] 페이지 교체 ", List.of(), Map.of(10L, Set.of("b1")));
 
     private Student owner;
     private Student other;
@@ -83,6 +99,43 @@ class QuizServiceTest {
         attempt.setStudent(owner);
         attempt.setQuizSet(quizSet);
         attempt.setUserAnswers(Collections.emptyList());
+
+        when(clock.instant()).thenReturn(Instant.EPOCH);
+        when(questionRepository.save(any(Question.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    private Note ownedNote(long noteId) {
+        Note note = new Note();
+        note.setNoteId(noteId);
+        note.setStudent(owner);
+        note.setCourse(course);
+        return note;
+    }
+
+    private QuizRequest requestFor(List<Long> noteIds, Map<QuestionType, Integer> typeCounts) {
+        QuizRequest request = new QuizRequest();
+        request.setNoteIds(noteIds);
+        request.setTypeCounts(typeCounts);
+        request.setDifficulty(QuizDifficulty.NORMAL);
+        return request;
+    }
+
+    private QuestionResponse multipleChoice(String text, String answer) {
+        QuestionResponse q = new QuestionResponse();
+        q.setType(QuestionType.MULTIPLE_CHOICE);
+        q.setQuestionText(text);
+        q.setOptions(List.of("LRU", "FIFO", "OPT"));
+        q.setCorrectAnswer(answer);
+        q.setSourceNoteId(10L);
+        q.setSourceBlockId("b1");
+        return q;
+    }
+
+    private QuizResponse aiResponseWith(QuestionResponse... questions) {
+        QuizResponse response = new QuizResponse();
+        response.setTitle("페이지 교체 퀴즈");
+        response.setQuestions(new java.util.ArrayList<>(List.of(questions)));
+        return response;
     }
 
     @Test
@@ -311,24 +364,22 @@ class QuizServiceTest {
 
     @Test
     void generateQuizSucceedsWhenAllNotesAreOwnedByRequester() throws Exception {
-        Note note = new Note();
-        note.setNoteId(10L);
-        note.setStudent(owner);
-        note.setCourse(course);
-
+        Note note = ownedNote(10L);
         when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
-        QuizResponse aiResponse = new QuizResponse();
-        aiResponse.setQuestions(Collections.emptyList());
-        when(quizAiGenerationService.generateQuizContent(any(), any(), any())).thenReturn(aiResponse);
-
-        QuizRequest request = new QuizRequest();
-        request.setNoteIds(List.of(10L));
-        request.setTypeCounts(Map.of(QuestionType.MULTIPLE_CHOICE, 5));
+        when(quizAiGenerationService.prepareInput(List.of(note), owner)).thenReturn(textInput);
+        QuizResponse aiResponse = aiResponseWith(multipleChoice("가장 오래 사용되지 않은 페이지를 교체하는 알고리즘은?", "lru"));
+        QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+        when(quizAiGenerationService.requestQuiz(request, textInput)).thenReturn(aiResponse);
 
         QuizResponse response = quizService.generateQuiz(request, owner);
 
         assertThat(response).isSameAs(aiResponse);
-        verify(quizAiGenerationService).generateQuizContent(request, List.of(note), owner);
+        // 정답은 대소문자가 달라도 보기 원문으로 치환되어 저장된다.
+        ArgumentCaptor<Question> saved = ArgumentCaptor.forClass(Question.class);
+        verify(questionRepository).save(saved.capture());
+        assertThat(saved.getValue().getCorrectAnswer()).isEqualTo("LRU");
+        assertThat(saved.getValue().getSourceBlockId()).isEqualTo("b1");
+        verify(quizSetRepository).save(any(QuizSet.class));
     }
 
     @Test
@@ -354,28 +405,117 @@ class QuizServiceTest {
 
     @Test
     void generateQuizSucceedsWhenAllNotesBelongToTheSameCourse() throws Exception {
-        Note note1 = new Note();
-        note1.setNoteId(10L);
-        note1.setStudent(owner);
-        note1.setCourse(course);
-
-        Note note2 = new Note();
-        note2.setNoteId(11L);
-        note2.setStudent(owner);
-        note2.setCourse(course);
-
+        Note note1 = ownedNote(10L);
+        Note note2 = ownedNote(11L);
         when(noteRepository.findAllById(List.of(10L, 11L))).thenReturn(List.of(note1, note2));
-        QuizResponse aiResponse = new QuizResponse();
-        aiResponse.setQuestions(Collections.emptyList());
-        when(quizAiGenerationService.generateQuizContent(any(), any(), any())).thenReturn(aiResponse);
+        when(quizAiGenerationService.prepareInput(any(), any())).thenReturn(textInput);
+        QuizResponse aiResponse = aiResponseWith(multipleChoice("페이지 교체 알고리즘은?", "LRU"));
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(aiResponse);
 
-        QuizRequest request = new QuizRequest();
-        request.setNoteIds(List.of(10L, 11L));
-        request.setTypeCounts(Map.of(QuestionType.MULTIPLE_CHOICE, 5));
+        QuizRequest request = requestFor(List.of(10L, 11L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
 
         QuizResponse response = quizService.generateQuiz(request, owner);
 
         assertThat(response).isSameAs(aiResponse);
+    }
+
+    @Test
+    void generateQuizRejectsEmptyNoteContentWithoutCallingAi() {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any()))
+                .thenReturn(new QuizGenerationInput("  ", List.of(), Map.of()));
+
+        QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+
+        assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
+                .isInstanceOf(InvalidRequestException.class);
+        verify(quizAiGenerationService, never()).requestQuiz(any(), any());
+        verify(quizSetRepository, never()).save(any());
+    }
+
+    @Test
+    void generateQuizRegeneratesOnceWhenFirstResponseFailsValidation() {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any())).thenReturn(textInput);
+        QuizResponse emptyResponse = aiResponseWith();
+        QuizResponse validResponse = aiResponseWith(multipleChoice("페이지 교체 알고리즘은?", "LRU"));
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(emptyResponse, validResponse);
+
+        QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+
+        QuizResponse response = quizService.generateQuiz(request, owner);
+
+        assertThat(response).isSameAs(validResponse);
+        verify(quizAiGenerationService, times(2)).requestQuiz(any(), any());
+        // 재생성해도 노트 추출은 한 번만 한다.
+        verify(quizAiGenerationService, times(1)).prepareInput(any(), any());
+    }
+
+    @Test
+    void generateQuizFailsWithoutSavingWhenRegeneratedResponseAlsoFailsValidation() {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any())).thenReturn(textInput);
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(aiResponseWith(), aiResponseWith());
+
+        QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+
+        assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
+                .isInstanceOf(ExternalServiceException.class)
+                .extracting("errorCode").isEqualTo(ExternalServiceException.QUIZ_VALIDATION_FAILED);
+        verify(quizAiGenerationService, times(2)).requestQuiz(any(), any());
+        verify(quizSetRepository, never()).save(any());
+        verify(questionRepository, never()).save(any());
+    }
+
+    @Test
+    void generateQuizDoesNotRegenerateWhenFirstAttemptExceededTimeBudget() {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any())).thenReturn(textInput);
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(aiResponseWith());
+        when(clock.instant()).thenReturn(Instant.EPOCH, Instant.EPOCH.plusSeconds(31));
+
+        QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+
+        assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
+                .isInstanceOf(ExternalServiceException.class)
+                .extracting("errorCode").isEqualTo(ExternalServiceException.QUIZ_VALIDATION_FAILED);
+        verify(quizAiGenerationService, times(1)).requestQuiz(any(), any());
+    }
+
+    @Test
+    void generateQuizDoesNotRegenerateWhenAiCallFails() {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any())).thenReturn(textInput);
+        when(quizAiGenerationService.requestQuiz(any(), any()))
+                .thenThrow(new ExternalServiceException("AI 퀴즈 생성 서비스에 연결할 수 없습니다."));
+
+        QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+
+        assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
+                .isInstanceOf(ExternalServiceException.class)
+                .extracting("errorCode").isEqualTo(ExternalServiceException.EXTERNAL_SERVICE_ERROR);
+        verify(quizAiGenerationService, times(1)).requestQuiz(any(), any());
+    }
+
+    @Test
+    void generateQuizRegeneratesWhenAiResponseCannotBeParsed() {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any())).thenReturn(textInput);
+        QuizResponse validResponse = aiResponseWith(multipleChoice("페이지 교체 알고리즘은?", "LRU"));
+        when(quizAiGenerationService.requestQuiz(any(), any()))
+                .thenThrow(new ExternalServiceException(ExternalServiceException.AI_RESPONSE_INVALID, "형식 오류"))
+                .thenReturn(validResponse);
+
+        QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+
+        assertThat(quizService.generateQuiz(request, owner)).isSameAs(validResponse);
+        verify(quizAiGenerationService, times(2)).requestQuiz(any(), any());
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.uninote.backend.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uninote.backend.domain.Student;
+import com.uninote.backend.exception.ExternalServiceException;
 import com.uninote.backend.repository.StudentRepository;
 import com.uninote.backend.security.JwtFilter;
 import com.uninote.backend.security.JwtUtil;
@@ -9,6 +10,8 @@ import com.uninote.backend.security.SecurityConfig;
 import com.uninote.backend.service.QuizService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -20,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -112,6 +116,30 @@ class QuizControllerWebMvcTest {
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            ExternalServiceException.EXTERNAL_SERVICE_ERROR,
+            ExternalServiceException.AI_RESPONSE_INVALID,
+            ExternalServiceException.QUIZ_VALIDATION_FAILED
+    })
+    void AI생성실패는원인별errorCode와503을반환한다(String errorCode) throws Exception {
+        when(quizService.generateQuiz(any(), any()))
+                .thenThrow(new ExternalServiceException(errorCode, "생성 실패"));
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("noteIds", java.util.List.of(1L));
+        body.put("typeCounts", Map.of("SHORT_ANSWER", 3));
+        body.put("difficulty", "NORMAL");
+
+        mockMvc.perform(post("/api/quiz/generate")
+                        .header("Authorization", bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.errorCode").value(errorCode))
+                .andExpect(jsonPath("$.message").value("생성 실패"));
     }
 
     @Test

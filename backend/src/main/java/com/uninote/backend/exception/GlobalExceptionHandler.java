@@ -43,11 +43,11 @@ public class GlobalExceptionHandler {
     // AI 등 외부 연동 서비스 호출 실패/비정상 응답
     @ExceptionHandler(ExternalServiceException.class)
     public ResponseEntity<ErrorResponse> handleExternalService(ExternalServiceException ex) {
-        log.error("외부 서비스 연동 실패: {}", ex.getMessage());
+        log.error("외부 서비스 연동 실패 [{}]: {}", ex.getErrorCode(), ex.getMessage());
         ErrorResponse error = new ErrorResponse(
             LocalDateTime.now(),
             HttpStatus.SERVICE_UNAVAILABLE.value(),
-            "EXTERNAL_SERVICE_ERROR",
+            ex.getErrorCode(),
             ex.getMessage()
         );
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);

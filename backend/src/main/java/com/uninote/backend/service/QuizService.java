@@ -13,7 +13,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -27,6 +31,13 @@ public class QuizService {
     private static final int MAX_NOTES_PER_QUIZ = 20;
     private static final int MAX_QUESTIONS_PER_TYPE = 20;
     private static final int MAX_TOTAL_QUESTIONS = 30;
+    // AI 생성 결과 검증 실패 시 재생성은 1회만 한다(요청당 AI 호출 최대 2회).
+    private static final int MAX_AI_ATTEMPTS = 2;
+    // 전체 시간 예산 90초 - Gemini read timeout 60초(RestClientConfig). 첫 호출이 이보다 오래
+    // 걸렸으면 재생성하지 않아야 최악의 경우에도 90초 안에 끝난다.
+    private static final Duration MAX_ELAPSED_FOR_RETRY = Duration.ofSeconds(30);
+    private static final String VALIDATION_FAILED_MESSAGE =
+            "요청한 조건에 맞는 문제를 생성하지 못했습니다. 범위나 문항 수를 조정해 주세요.";
 
     private final NoteRepository noteRepository;
     private final QuizSetRepository quizSetRepository;
@@ -37,45 +48,90 @@ public class QuizService {
     private final QuizAiGenerationService quizAiGenerationService;
     private final QuestionResponseMapper questionResponseMapper;
     private final IncorrectNoteItemRepository incorrectNoteItemRepository;
+    private final QuizQualityValidator quizQualityValidator;
+    private final TransactionTemplate transactionTemplate;
+    private final Clock clock;
 
-    @Transactional
+    // AI 호출·검증은 트랜잭션 밖에서 하고(재생성 시 DB 트랜잭션을 오래 잡지 않도록), 검증을 통과한
+    // 결과만 저장 트랜잭션으로 묶는다. 같은 클래스 내부 호출은 @Transactional 프록시를 타지 않으므로
+    // TransactionTemplate을 쓴다.
     public QuizResponse generateQuiz(QuizRequest request, Student student) {
         List<Note> notes = noteRepository.findAllById(request.getNoteIds());
         validateNoteAccess(request.getNoteIds(), notes, student);
         validateGenerationLimits(request, notes);
 
-        QuizResponse quizResponse = quizAiGenerationService.generateQuizContent(request, notes, student);
-
-        if (!quizResponse.getQuestions().isEmpty()) {
-            QuizSet quizSet = new QuizSet();
-            quizSet.setTitle(quizResponse.getTitle());
-            quizSet.setDifficulty(request.getDifficulty());
-            quizSet.setSourceNotes(writeJson(request.getNoteIds()));
-            quizSet.setStudent(student);
-
-            if (!notes.isEmpty()) {
-                quizSet.setCourse(notes.get(0).getCourse());
-            }
-
-            quizSetRepository.save(quizSet);
-
-            for (QuestionResponse qr : quizResponse.getQuestions()) {
-                Question question = new Question();
-                question.setQuizSet(quizSet);
-                question.setType(qr.getType());
-                question.setQuestionText(qr.getQuestionText());
-                question.setOptions(writeJson(qr.getOptions()));
-                question.setCorrectAnswer(qr.getCorrectAnswer());
-                question.setExplanation(qr.getExplanation());
-                question.setSourceNoteId(qr.getSourceNoteId());
-                question.setSourceBlockId(qr.getSourceBlockId());
-
-                Question savedQuestion = questionRepository.save(question);
-                qr.setQuestionId(savedQuestion.getQuestionId()); // ID 주입
-                quizSet.getQuestions().add(savedQuestion);
-            }
-            quizResponse.setQuizSetId(quizSet.getQuizSetId()); // QuizResponse에도 ID 추가 필요
+        QuizGenerationInput input = quizAiGenerationService.prepareInput(notes, student);
+        if (input.isEmpty()) {
+            throw new InvalidRequestException("문제를 생성할 노트 내용이 없습니다.");
         }
+
+        QuizResponse quizResponse = generateValidatedQuiz(request, input);
+        return transactionTemplate.execute(status -> saveGeneratedQuiz(quizResponse, request, notes, student));
+    }
+
+    private QuizResponse generateValidatedQuiz(QuizRequest request, QuizGenerationInput input) {
+        Instant start = clock.instant();
+        for (int attempt = 1; ; attempt++) {
+            String failure;
+            try {
+                QuizResponse response = quizAiGenerationService.requestQuiz(request, input);
+                QuizQualityValidator.Result result =
+                        quizQualityValidator.validate(response, request, input.allowedSources());
+                if (result.valid()) {
+                    if (result.unverifiedCount() > 0) {
+                        log.info("출처를 확인할 수 없는 문항 {}개는 출처 없이 저장합니다.", result.unverifiedCount());
+                    }
+                    return response;
+                }
+                failure = String.join(" / ", result.errors());
+            } catch (ExternalServiceException e) {
+                // 호출 실패·타임아웃은 재생성해도 같은 결과일 가능성이 높고 시간 예산만 소모하므로 그대로 전파한다.
+                if (!ExternalServiceException.AI_RESPONSE_INVALID.equals(e.getErrorCode())) {
+                    throw e;
+                }
+                failure = e.getMessage();
+            }
+
+            Duration elapsed = Duration.between(start, clock.instant());
+            log.warn("AI 퀴즈 생성 결과 검증 실패 (시도 {}/{}, 경과 {}초): {}",
+                    attempt, MAX_AI_ATTEMPTS, elapsed.toSeconds(), failure);
+            if (attempt >= MAX_AI_ATTEMPTS || elapsed.compareTo(MAX_ELAPSED_FOR_RETRY) > 0) {
+                throw new ExternalServiceException(ExternalServiceException.QUIZ_VALIDATION_FAILED,
+                        VALIDATION_FAILED_MESSAGE);
+            }
+        }
+    }
+
+    private QuizResponse saveGeneratedQuiz(QuizResponse quizResponse, QuizRequest request, List<Note> notes,
+                                           Student student) {
+        QuizSet quizSet = new QuizSet();
+        quizSet.setTitle(quizResponse.getTitle());
+        quizSet.setDifficulty(request.getDifficulty());
+        quizSet.setSourceNotes(writeJson(request.getNoteIds()));
+        quizSet.setStudent(student);
+
+        if (!notes.isEmpty()) {
+            quizSet.setCourse(notes.get(0).getCourse());
+        }
+
+        quizSetRepository.save(quizSet);
+
+        for (QuestionResponse qr : quizResponse.getQuestions()) {
+            Question question = new Question();
+            question.setQuizSet(quizSet);
+            question.setType(qr.getType());
+            question.setQuestionText(qr.getQuestionText());
+            question.setOptions(writeJson(qr.getOptions()));
+            question.setCorrectAnswer(qr.getCorrectAnswer());
+            question.setExplanation(qr.getExplanation());
+            question.setSourceNoteId(qr.getSourceNoteId());
+            question.setSourceBlockId(qr.getSourceBlockId());
+
+            Question savedQuestion = questionRepository.save(question);
+            qr.setQuestionId(savedQuestion.getQuestionId()); // ID 주입
+            quizSet.getQuestions().add(savedQuestion);
+        }
+        quizResponse.setQuizSetId(quizSet.getQuizSetId()); // QuizResponse에도 ID 추가 필요
         return quizResponse;
     }
 

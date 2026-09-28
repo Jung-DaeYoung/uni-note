@@ -28,8 +28,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
@@ -56,18 +58,23 @@ public class QuizAiGenerationService {
         }
     }
 
-    public QuizResponse generateQuizContent(QuizRequest request, List<Note> notes, Student student) {
+    // 노트 콘텐츠를 AI 입력(텍스트·미디어)으로 변환하고, 실제로 REF 태그를 붙인 출처 쌍을 모은다.
+    public QuizGenerationInput prepareInput(List<Note> notes, Student student) {
         StringBuilder combinedText = new StringBuilder();
         List<Map<String, Object>> mediaParts = new ArrayList<>();
+        Map<Long, Set<String>> allowedSources = new HashMap<>();
         AtomicLong totalMediaBytes = new AtomicLong(0);
 
         for (Note note : notes) {
             if (note.getContent() != null) {
                 processNoteContent(note.getNoteId(), note.getContent(), combinedText, mediaParts,
-                        student.getStudentNum(), totalMediaBytes);
+                        allowedSources, student.getStudentNum(), totalMediaBytes);
             }
         }
+        return new QuizGenerationInput(combinedText.toString(), mediaParts, allowedSources);
+    }
 
+    public QuizResponse requestQuiz(QuizRequest request, QuizGenerationInput input) {
         String typeInstruction = request.getTypeCounts().entrySet().stream()
             .map(e -> e.getKey() + " " + e.getValue() + "문제")
             .collect(Collectors.joining(", "));
@@ -85,12 +92,12 @@ public class QuizAiGenerationService {
             "3. 텍스트 중심의 간결하고 명확한 설명을 제공하라.\n" +
             "4. 반드시 마크다운 없이 오직 JSON 객체로만 응답하라.\n" +
             "텍스트 내용: %s",
-            request.getDifficulty(), typeInstruction, request.getDifficulty(), combinedText.toString()
+            request.getDifficulty(), typeInstruction, request.getDifficulty(), input.text()
         );
 
         List<Map<String, Object>> parts = new ArrayList<>();
         parts.add(Map.of("text", prompt));
-        parts.addAll(mediaParts);
+        parts.addAll(input.mediaParts());
 
         Map<String, Object> schema = Map.of(
             "type", "OBJECT",
@@ -141,7 +148,8 @@ public class QuizAiGenerationService {
             quizResponse = objectMapper.readValue(text, QuizResponse.class);
         } catch (Exception e) {
             log.error("AI 응답을 문제 형식으로 변환하지 못했습니다.", e);
-            throw new ExternalServiceException("AI 응답을 문제 형식으로 변환하지 못했습니다.");
+            throw new ExternalServiceException(ExternalServiceException.AI_RESPONSE_INVALID,
+                    "AI 응답을 문제 형식으로 변환하지 못했습니다.");
         }
         if (quizResponse.getQuestions() == null) quizResponse.setQuestions(new ArrayList<>());
         return quizResponse;
@@ -154,59 +162,60 @@ public class QuizAiGenerationService {
         try {
             root = objectMapper.readTree(rawResponse);
         } catch (Exception e) {
-            throw new ExternalServiceException("AI 응답을 해석할 수 없습니다.");
+            throw invalidResponse("AI 응답을 해석할 수 없습니다.");
         }
 
         JsonNode candidates = root.path("candidates");
         if (!candidates.isArray() || candidates.isEmpty()) {
-            throw new ExternalServiceException("AI가 문제를 생성하지 못했습니다.");
+            throw invalidResponse("AI가 문제를 생성하지 못했습니다.");
         }
 
         JsonNode parts = candidates.get(0).path("content").path("parts");
         if (!parts.isArray() || parts.isEmpty()) {
-            throw new ExternalServiceException("AI 응답 구조가 올바르지 않습니다.");
+            throw invalidResponse("AI 응답 구조가 올바르지 않습니다.");
         }
 
         String text = parts.get(0).path("text").asText(null);
         if (text == null || text.isBlank()) {
-            throw new ExternalServiceException("AI 응답에 문제 내용이 없습니다.");
+            throw invalidResponse("AI 응답에 문제 내용이 없습니다.");
         }
         return text;
     }
 
+    private ExternalServiceException invalidResponse(String message) {
+        return new ExternalServiceException(ExternalServiceException.AI_RESPONSE_INVALID, message);
+    }
+
+    // 노트 JSON이 깨져 있으면 해당 노트를 조용히 빼고 생성을 계속하지 않고 요청을 실패시킨다.
     private void processNoteContent(Long noteId, String contentJson, StringBuilder combinedText,
-                                     List<Map<String, Object>> mediaParts, String studentNum, AtomicLong totalMediaBytes) {
+                                     List<Map<String, Object>> mediaParts, Map<Long, Set<String>> allowedSources,
+                                     String studentNum, AtomicLong totalMediaBytes) {
+        JsonNode root;
         try {
-            JsonNode root = objectMapper.readTree(contentJson);
-            extractDataFromNode(noteId, null, root, combinedText, mediaParts, studentNum, totalMediaBytes);
-        } catch (InvalidRequestException e) {
-            throw e; // 총 용량 초과 등 요청 자체를 막아야 하는 경우는 그대로 전파한다.
+            root = objectMapper.readTree(contentJson);
         } catch (Exception e) {
-            log.warn("노트 콘텐츠 파싱 실패", e);
+            log.warn("노트 콘텐츠 파싱 실패: noteId={}", noteId, e);
+            throw new InvalidRequestException("노트 내용을 읽을 수 없습니다: noteId=" + noteId);
         }
+        extractDataFromNode(noteId, null, root, combinedText, mediaParts, allowedSources, studentNum, totalMediaBytes);
     }
 
     private void extractDataFromNode(Long noteId, String currentBlockId, JsonNode node, StringBuilder textBuilder,
-                                      List<Map<String, Object>> mediaParts, String studentNum, AtomicLong totalMediaBytes) {
+                                      List<Map<String, Object>> mediaParts, Map<Long, Set<String>> allowedSources,
+                                      String studentNum, AtomicLong totalMediaBytes) {
         if (node.isObject()) {
             String type = node.path("type").asText();
             String blockId = node.path("attrs").has("id") ? node.path("attrs").path("id").asText() : currentBlockId;
 
             if ("text".equals(type)) {
-                if (blockId != null) {
-                    textBuilder.append("[[REF:").append(noteId).append("/").append(blockId).append("]] ");
-                }
+                appendRef(noteId, blockId, "", textBuilder, allowedSources);
                 textBuilder.append(node.path("text").asText()).append(" ");
             } else if ("image".equals(type)) {
-                if (blockId != null) {
-                    textBuilder.append("[[REF:").append(noteId).append("/").append(blockId).append("]] (Image Content) ");
-                }
+                appendRef(noteId, blockId, "(Image Content) ", textBuilder, allowedSources);
                 String src = node.path("attrs").path("src").asText();
                 addMediaPart(src, "image", mediaParts, studentNum, totalMediaBytes);
             } else if ("pdfBlock".equals(type)) {
-                if (blockId != null) {
-                    textBuilder.append("[[REF:").append(noteId).append("/").append(blockId).append("]] (PDF Content) ");
-                }
+                appendRef(noteId, blockId, "(PDF Content) ", textBuilder, allowedSources);
                 String src = node.path("attrs").path("src").asText();
                 addMediaPart(src, "application/pdf", mediaParts, studentNum, totalMediaBytes);
             }
@@ -214,14 +223,24 @@ public class QuizAiGenerationService {
             JsonNode content = node.path("content");
             if (content.isArray()) {
                 for (JsonNode child : content) {
-                    extractDataFromNode(noteId, blockId, child, textBuilder, mediaParts, studentNum, totalMediaBytes);
+                    extractDataFromNode(noteId, blockId, child, textBuilder, mediaParts, allowedSources,
+                            studentNum, totalMediaBytes);
                 }
             }
         } else if (node.isArray()) {
             for (JsonNode child : node) {
-                extractDataFromNode(noteId, currentBlockId, child, textBuilder, mediaParts, studentNum, totalMediaBytes);
+                extractDataFromNode(noteId, currentBlockId, child, textBuilder, mediaParts, allowedSources,
+                        studentNum, totalMediaBytes);
             }
         }
+    }
+
+    // blockId가 있을 때만 REF 태그를 붙이고, 같은 쌍을 출처 허용 집합에 기록한다.
+    private void appendRef(Long noteId, String blockId, String suffix, StringBuilder textBuilder,
+                           Map<Long, Set<String>> allowedSources) {
+        if (blockId == null) return;
+        textBuilder.append("[[REF:").append(noteId).append("/").append(blockId).append("]] ").append(suffix);
+        allowedSources.computeIfAbsent(noteId, k -> new HashSet<>()).add(blockId);
     }
 
     private void addMediaPart(String url, String defaultMimeType, List<Map<String, Object>> mediaParts,

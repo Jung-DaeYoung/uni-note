@@ -22,7 +22,10 @@ import com.uninote.backend.exception.ResourceNotFoundException;
 import com.uninote.backend.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -39,6 +42,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+// OutputCaptureExtension: 생성 결과 로그(quiz.generation) 검증용
+@ExtendWith(OutputCaptureExtension.class)
 class QuizServiceTest {
 
     private final NoteRepository noteRepository = mock(NoteRepository.class);
@@ -516,6 +521,84 @@ class QuizServiceTest {
 
         assertThat(quizService.generateQuiz(request, owner)).isSameAs(validResponse);
         verify(quizAiGenerationService, times(2)).requestQuiz(any(), any());
+    }
+
+    private static long countGenerationLogLines(CapturedOutput output) {
+        return output.getOut().lines().filter(line -> line.contains("quiz.generation ")).count();
+    }
+
+    @Test
+    void generateQuizLogsOneSuccessLineWithGenerationMetadata(CapturedOutput output) {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any())).thenReturn(textInput);
+        when(quizAiGenerationService.requestQuiz(any(), any()))
+                .thenReturn(aiResponseWith(multipleChoice("페이지 교체 알고리즘은?", "LRU")));
+
+        quizService.generateQuiz(requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1)), owner);
+
+        assertThat(countGenerationLogLines(output)).isEqualTo(1);
+        assertThat(output.getOut())
+                .contains("quiz.generation status=SUCCESS")
+                .contains("model=" + QuizAiGenerationService.MODEL_NAME)
+                .contains("promptVersion=" + QuizAiGenerationService.PROMPT_VERSION)
+                .contains("contentHash=" + textInput.contentHash())
+                .contains("attempts=1 regenerated=false unverified=0")
+                .contains("studId=1")
+                // 노트 본문은 로그에 남기지 않는다.
+                .doesNotContain("[[REF:10/b1]]");
+    }
+
+    @Test
+    void generateQuizLogsRegenerationInSuccessLine(CapturedOutput output) {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any())).thenReturn(textInput);
+        when(quizAiGenerationService.requestQuiz(any(), any()))
+                .thenReturn(aiResponseWith(), aiResponseWith(multipleChoice("페이지 교체 알고리즘은?", "LRU")));
+
+        quizService.generateQuiz(requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1)), owner);
+
+        assertThat(countGenerationLogLines(output)).isEqualTo(1);
+        assertThat(output.getOut()).contains("status=SUCCESS").contains("attempts=2 regenerated=true");
+    }
+
+    @Test
+    void generateQuizLogsValidationFailure(CapturedOutput output) {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any())).thenReturn(textInput);
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(aiResponseWith(), aiResponseWith());
+
+        assertThatThrownBy(() -> quizService.generateQuiz(
+                requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1)), owner))
+                .isInstanceOf(ExternalServiceException.class);
+
+        assertThat(countGenerationLogLines(output)).isEqualTo(1);
+        assertThat(output.getOut())
+                .contains("status=FAILED")
+                .contains("attempts=2 regenerated=true")
+                .contains("failureCode=" + ExternalServiceException.QUIZ_VALIDATION_FAILED)
+                .contains("failureReason=\"문항이 없습니다.\"");
+    }
+
+    @Test
+    void generateQuizLogsAiCallFailure(CapturedOutput output) {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any())).thenReturn(textInput);
+        when(quizAiGenerationService.requestQuiz(any(), any()))
+                .thenThrow(new ExternalServiceException("AI 퀴즈 생성 서비스에 연결할 수 없습니다."));
+
+        assertThatThrownBy(() -> quizService.generateQuiz(
+                requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1)), owner))
+                .isInstanceOf(ExternalServiceException.class);
+
+        assertThat(countGenerationLogLines(output)).isEqualTo(1);
+        assertThat(output.getOut())
+                .contains("status=FAILED")
+                .contains("attempts=1 regenerated=false")
+                .contains("failureCode=" + ExternalServiceException.EXTERNAL_SERVICE_ERROR);
     }
 
     @Test

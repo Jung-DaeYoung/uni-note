@@ -25,6 +25,8 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -116,6 +118,34 @@ class QuizControllerWebMvcTest {
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions generateWithShortAnswerCount(int count) throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("noteIds", java.util.List.of(1L));
+        body.put("typeCounts", Map.of("SHORT_ANSWER", count));
+        body.put("difficulty", "NORMAL");
+
+        return mockMvc.perform(post("/api/quiz/generate")
+                .header("Authorization", bearerToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)));
+    }
+
+    // 유형당 문항 수는 서비스 제한(1~20)과 같은 범위로 DTO 단계에서 먼저 검증된다.
+    @ParameterizedTest
+    @ValueSource(ints = {0, 21})
+    void typeCounts값이1에서20범위를벗어나면400을반환한다(int count) throws Exception {
+        generateWithShortAnswerCount(count)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+        verify(quizService, never()).generateQuiz(any(), any());
+    }
+
+    @Test
+    void typeCounts값20은DTO검증을통과한다() throws Exception {
+        generateWithShortAnswerCount(20).andExpect(status().isOk());
+        verify(quizService).generateQuiz(any(), any());
     }
 
     @ParameterizedTest

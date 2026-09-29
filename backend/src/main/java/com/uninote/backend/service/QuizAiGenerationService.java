@@ -3,6 +3,8 @@ package com.uninote.backend.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uninote.backend.domain.Note;
+import com.uninote.backend.domain.QuestionType;
+import com.uninote.backend.domain.QuizDifficulty;
 import com.uninote.backend.domain.Student;
 import com.uninote.backend.dto.QuizRequest;
 import com.uninote.backend.dto.QuizResponse;
@@ -26,6 +28,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -43,13 +46,18 @@ public class QuizAiGenerationService {
     // 첨부 이미지/PDF 총 용량 상한으로 둔다. AI 호출 페이로드가 지나치게 커지는 것을 막는다.
     private static final long MAX_TOTAL_MEDIA_BYTES = 20L * 1024 * 1024;
 
+    public static final String MODEL_NAME = "gemini-2.5-flash";
+    // 생성 결과 로그(quiz.generation)에 남는 prompt·response schema 버전.
+    // requestQuiz의 prompt 문자열이나 schema를 바꿀 때마다 올린다.
+    public static final String PROMPT_VERSION = "2026-09-29.1";
+
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
     private final FileAccessSigner fileAccessSigner;
 
     private final String GEMINI_API_KEY = System.getenv("GEMINI_API_KEY");
-    // 원래 모델인 gemini-2.5-flash 사용
-    private final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY;
+    private final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL_NAME
+            + ":generateContent?key=" + GEMINI_API_KEY;
 
     @PostConstruct
     public void validateConfig() {
@@ -99,17 +107,24 @@ public class QuizAiGenerationService {
         parts.add(Map.of("text", prompt));
         parts.addAll(input.mediaParts());
 
+        // 출처 태그가 하나도 없는 입력(미디어만 있는 노트 등)에서 출처를 필수로 요구하면
+        // 모델이 존재하지 않는 출처를 지어내므로, REF를 붙인 경우에만 필수로 둔다.
+        List<String> questionRequired = new ArrayList<>(List.of("type", "questionText", "correctAnswer", "explanation"));
+        if (!input.allowedSources().isEmpty()) {
+            questionRequired.addAll(List.of("sourceNoteId", "sourceBlockId"));
+        }
+
         Map<String, Object> schema = Map.of(
             "type", "OBJECT",
             "properties", Map.of(
                 "title", Map.of("type", "STRING"),
-                "difficulty", Map.of("type", "STRING"),
+                "difficulty", Map.of("type", "STRING", "enum", enumNames(QuizDifficulty.values())),
                 "questions", Map.of(
                     "type", "ARRAY",
                     "items", Map.of(
                         "type", "OBJECT",
                         "properties", Map.of(
-                            "type", Map.of("type", "STRING"),
+                            "type", Map.of("type", "STRING", "enum", enumNames(QuestionType.values())),
                             "questionText", Map.of("type", "STRING"),
                             "options", Map.of("type", "ARRAY", "items", Map.of("type", "STRING")),
                             "correctAnswer", Map.of("type", "STRING"),
@@ -117,7 +132,7 @@ public class QuizAiGenerationService {
                             "sourceNoteId", Map.of("type", "NUMBER"),
                             "sourceBlockId", Map.of("type", "STRING")
                         ),
-                        "required", List.of("type", "questionText", "correctAnswer")
+                        "required", questionRequired
                     )
                 )
             ),
@@ -180,6 +195,10 @@ public class QuizAiGenerationService {
             throw invalidResponse("AI 응답에 문제 내용이 없습니다.");
         }
         return text;
+    }
+
+    private static List<String> enumNames(Enum<?>[] values) {
+        return Arrays.stream(values).map(Enum::name).toList();
     }
 
     private ExternalServiceException invalidResponse(String message) {

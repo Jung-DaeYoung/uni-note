@@ -16,8 +16,9 @@ import java.util.Map;
 public class QuizRequest {
     @NotEmpty
     private List<@Positive Long> noteIds;
+    // 유형당 1~20개. QuizService.MAX_QUESTIONS_PER_TYPE, QuizConfigModal의 상한과 같게 유지한다.
     @NotEmpty
-    private Map<QuestionType, @Min(0) @Max(50) Integer> typeCounts;
+    private Map<QuestionType, @Min(1) @Max(20) Integer> typeCounts;
     @NotNull
     private QuizDifficulty difficulty;
 }

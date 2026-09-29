@@ -38,6 +38,8 @@ public class QuizService {
     private static final Duration MAX_ELAPSED_FOR_RETRY = Duration.ofSeconds(30);
     private static final String VALIDATION_FAILED_MESSAGE =
             "요청한 조건에 맞는 문제를 생성하지 못했습니다. 범위나 문항 수를 조정해 주세요.";
+    // 생성 결과 로그 전용 실패 코드. 저장 단계 예외는 기존 GlobalExceptionHandler 응답을 그대로 따른다.
+    private static final String STORAGE_ERROR = "STORAGE_ERROR";
 
     private final NoteRepository noteRepository;
     private final QuizSetRepository quizSetRepository;
@@ -65,12 +67,29 @@ public class QuizService {
             throw new InvalidRequestException("문제를 생성할 노트 내용이 없습니다.");
         }
 
-        QuizResponse quizResponse = generateValidatedQuiz(request, input);
-        return transactionTemplate.execute(status -> saveGeneratedQuiz(quizResponse, request, notes, student));
+        GenerationContext context = new GenerationContext(input.contentHash(), clock.instant(), student.getStudId());
+        GenerationResult result = generateValidatedQuiz(request, input, context);
+
+        QuizResponse saved;
+        try {
+            saved = transactionTemplate.execute(status -> saveGeneratedQuiz(result.response(), request, notes, student));
+        } catch (RuntimeException e) {
+            logGenerationResult(context, false, result.attempts(), result.unverifiedCount(),
+                    STORAGE_ERROR, e.getMessage(), null);
+            throw e;
+        }
+        logGenerationResult(context, true, result.attempts(), result.unverifiedCount(), null, null, saved.getQuizSetId());
+        return saved;
     }
 
-    private QuizResponse generateValidatedQuiz(QuizRequest request, QuizGenerationInput input) {
-        Instant start = clock.instant();
+    // 생성 결과 로그(P0-4)에 공통으로 남기는 요청 단위 정보.
+    private record GenerationContext(String contentHash, Instant start, Long studId) {}
+
+    private record GenerationResult(QuizResponse response, int attempts, int unverifiedCount) {}
+
+    private GenerationResult generateValidatedQuiz(QuizRequest request, QuizGenerationInput input,
+                                                   GenerationContext context) {
+        int lastUnverified = 0;
         for (int attempt = 1; ; attempt++) {
             String failure;
             try {
@@ -81,25 +100,50 @@ public class QuizService {
                     if (result.unverifiedCount() > 0) {
                         log.info("출처를 확인할 수 없는 문항 {}개는 출처 없이 저장합니다.", result.unverifiedCount());
                     }
-                    return response;
+                    return new GenerationResult(response, attempt, result.unverifiedCount());
                 }
+                lastUnverified = result.unverifiedCount();
                 failure = String.join(" / ", result.errors());
             } catch (ExternalServiceException e) {
                 // 호출 실패·타임아웃은 재생성해도 같은 결과일 가능성이 높고 시간 예산만 소모하므로 그대로 전파한다.
                 if (!ExternalServiceException.AI_RESPONSE_INVALID.equals(e.getErrorCode())) {
+                    logGenerationResult(context, false, attempt, 0, e.getErrorCode(), e.getMessage(), null);
                     throw e;
                 }
+                lastUnverified = 0;
                 failure = e.getMessage();
             }
 
-            Duration elapsed = Duration.between(start, clock.instant());
+            Duration elapsed = Duration.between(context.start(), clock.instant());
             log.warn("AI 퀴즈 생성 결과 검증 실패 (시도 {}/{}, 경과 {}초): {}",
                     attempt, MAX_AI_ATTEMPTS, elapsed.toSeconds(), failure);
             if (attempt >= MAX_AI_ATTEMPTS || elapsed.compareTo(MAX_ELAPSED_FOR_RETRY) > 0) {
+                logGenerationResult(context, false, attempt, lastUnverified,
+                        ExternalServiceException.QUIZ_VALIDATION_FAILED, failure, null);
                 throw new ExternalServiceException(ExternalServiceException.QUIZ_VALIDATION_FAILED,
                         VALIDATION_FAILED_MESSAGE);
             }
         }
+    }
+
+    // AI 생성 요청 1건당 결과 한 줄을 key=value 형식으로 남긴다. 추후 품질 분석·재현에 쓰며,
+    // 노트 본문·문제 텍스트·학번 같은 개인정보는 넣지 않는다(사용자는 내부 studId로만 식별).
+    private void logGenerationResult(GenerationContext context, boolean success, int attempts, int unverified,
+                                     String failureCode, String failureReason, Long quizSetId) {
+        log.info("quiz.generation status={} model={} promptVersion={} contentHash={} attempts={} regenerated={} "
+                        + "unverified={} elapsedMs={} failureCode={} failureReason=\"{}\" quizSetId={} studId={}",
+                success ? "SUCCESS" : "FAILED",
+                QuizAiGenerationService.MODEL_NAME,
+                QuizAiGenerationService.PROMPT_VERSION,
+                context.contentHash(),
+                attempts,
+                attempts > 1,
+                unverified,
+                Duration.between(context.start(), clock.instant()).toMillis(),
+                failureCode == null ? "" : failureCode,
+                failureReason == null ? "" : failureReason.replace("\"", "'"),
+                quizSetId == null ? "" : quizSetId,
+                context.studId());
     }
 
     private QuizResponse saveGeneratedQuiz(QuizResponse quizResponse, QuizRequest request, List<Note> notes,

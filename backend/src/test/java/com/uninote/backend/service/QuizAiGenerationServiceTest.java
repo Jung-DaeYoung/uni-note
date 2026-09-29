@@ -3,6 +3,7 @@ package com.uninote.backend.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uninote.backend.domain.Note;
 import com.uninote.backend.domain.QuestionType;
+import com.uninote.backend.domain.QuizDifficulty;
 import com.uninote.backend.domain.Student;
 import com.uninote.backend.dto.QuizRequest;
 import com.uninote.backend.dto.QuizResponse;
@@ -137,6 +138,97 @@ class QuizAiGenerationServiceTest {
         assertThat(response.getQuestions()).isEmpty();
     }
 
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> lastRequestBody() {
+        var captor = org.mockito.ArgumentCaptor.forClass(org.springframework.http.HttpEntity.class);
+        org.mockito.Mockito.verify(restTemplate).postForObject(anyString(), captor.capture(), eq(String.class));
+        return (Map<String, Object>) captor.getValue().getBody();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> lastResponseSchema() {
+        Map<String, Object> generationConfig = (Map<String, Object>) lastRequestBody().get("generationConfig");
+        return (Map<String, Object>) generationConfig.get("responseSchema");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> questionItemSchema(Map<String, Object> schema) {
+        Map<String, Object> properties = (Map<String, Object>) schema.get("properties");
+        Map<String, Object> questions = (Map<String, Object>) properties.get("questions");
+        return (Map<String, Object>) questions.get("items");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void requestQuizSchemaRestrictsEnumsAndRequiresExplanationAndSourcesWhenRefsExist() throws Exception {
+        when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
+
+        service.requestQuiz(simpleRequest(List.of(1L)), textInput());
+
+        Map<String, Object> schema = lastResponseSchema();
+        Map<String, Object> difficulty =
+                (Map<String, Object>) ((Map<String, Object>) schema.get("properties")).get("difficulty");
+        assertThat(difficulty.get("enum")).isEqualTo(List.of("EASY", "NORMAL", "HARD"));
+
+        Map<String, Object> item = questionItemSchema(schema);
+        Map<String, Object> type = (Map<String, Object>) ((Map<String, Object>) item.get("properties")).get("type");
+        assertThat(type.get("enum")).isEqualTo(List.of("MULTIPLE_CHOICE", "SHORT_ANSWER", "OX"));
+        assertThat((List<String>) item.get("required")).containsExactlyInAnyOrder(
+                "type", "questionText", "correctAnswer", "explanation", "sourceNoteId", "sourceBlockId");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void requestQuizSchemaDoesNotRequireSourcesWhenInputHasNoRefs() throws Exception {
+        when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
+
+        service.requestQuiz(simpleRequest(List.of(1L)), new QuizGenerationInput("(Image Content) ", List.of(), Map.of()));
+
+        assertThat((List<String>) questionItemSchema(lastResponseSchema()).get("required"))
+                .containsExactlyInAnyOrder("type", "questionText", "correctAnswer", "explanation");
+    }
+
+    // prompt 문구가 의도치 않게 바뀌지 않도록 고정한다. 바꿀 때는 PROMPT_VERSION도 함께 올린다.
+    @Test
+    @SuppressWarnings("unchecked")
+    void requestQuizPromptIsUnchanged() throws Exception {
+        when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
+        QuizRequest request = simpleRequest(List.of(1L));
+        request.setDifficulty(QuizDifficulty.NORMAL);
+
+        service.requestQuiz(request, textInput());
+
+        List<Map<String, Object>> contents = (List<Map<String, Object>>) lastRequestBody().get("contents");
+        List<Map<String, Object>> parts = (List<Map<String, Object>>) contents.get(0).get("parts");
+        assertThat(parts.get(0).get("text")).isEqualTo(
+                "강의 내용(텍스트, 이미지, PDF)을 기반으로 퀴즈를 생성하라.\n" +
+                "텍스트 내용에는 [[REF:noteId/blockId]] 형태의 출처 메타데이터가 포함되어 있다.\n" +
+                "모든 문항(question)은 반드시 제공된 출처 중 하나를 근거로 생성해야 하며, 해당 문항의 근거가 된 noteId와 blockId를 'sourceNoteId'와 'sourceBlockId' 필드에 정확히 기입하라.\n" +
+                "난이도: NORMAL.\n" +
+                "유형별 문제 수 배분: MULTIPLE_CHOICE 5문제.\n" +
+                "응답 구조: { \"title\": \"제목\", \"difficulty\": \"NORMAL\", \"questions\": [ { \"type\": \"유형\", \"questionText\": \"내용\", \"options\": [\"A\", \"B\"], \"correctAnswer\": \"정답\", \"explanation\": \"해설\", \"sourceNoteId\": 1, \"sourceBlockId\": \"b1\" } ] }.\n" +
+                "--- 엄격 준수 사항 ---\n" +
+                "1. JSON 응답 내의 어떠한 숫자 값(또는 숫자로 이루어진 문자열)도 500자를 초과할 수 없다.\n" +
+                "2. 설명(explanation)이나 정답(correctAnswer)에 불필요하게 긴 숫자 나열, 복잡한 수식, 또는 로우 데이터(raw data)를 포함하지 마라.\n" +
+                "3. 텍스트 중심의 간결하고 명확한 설명을 제공하라.\n" +
+                "4. 반드시 마크다운 없이 오직 JSON 객체로만 응답하라.\n" +
+                "텍스트 내용: [[REF:1/b1]] 페이지 교체 ");
+    }
+
+    @Test
+    void contentHashIsStableForSameInputAndChangesWithTextOrMedia() {
+        Map<String, Object> media = Map.of("inline_data", Map.of("mime_type", "image/png", "data", "AAAA"));
+        Map<String, Object> otherMedia = Map.of("inline_data", Map.of("mime_type", "image/png", "data", "BBBB"));
+        QuizGenerationInput base = new QuizGenerationInput("본문", List.of(media), Map.of());
+
+        assertThat(base.contentHash())
+                .hasSize(64)
+                .isEqualTo(new QuizGenerationInput("본문", List.of(media), Map.of()).contentHash())
+                .isNotEqualTo(new QuizGenerationInput("다른 본문", List.of(media), Map.of()).contentHash())
+                .isNotEqualTo(new QuizGenerationInput("본문", List.of(otherMedia), Map.of()).contentHash())
+                .isNotEqualTo(new QuizGenerationInput("본문", List.of(), Map.of()).contentHash());
+    }
+
     @Test
     void prepareInputCollectsOnlyReferencedSources() throws Exception {
         String contentJson = objectMapper.writeValueAsString(Map.of(
@@ -191,10 +283,7 @@ class QuizAiGenerationServiceTest {
 
     @SuppressWarnings("unchecked")
     private int countInlineMediaPartsInLastRequest() {
-        var captor = org.mockito.ArgumentCaptor.forClass(org.springframework.http.HttpEntity.class);
-        org.mockito.Mockito.verify(restTemplate).postForObject(anyString(), captor.capture(), eq(String.class));
-        Map<String, Object> body = (Map<String, Object>) captor.getValue().getBody();
-        List<Map<String, Object>> contents = (List<Map<String, Object>>) body.get("contents");
+        List<Map<String, Object>> contents = (List<Map<String, Object>>) lastRequestBody().get("contents");
         List<Map<String, Object>> parts = (List<Map<String, Object>>) contents.get(0).get("parts");
         return (int) parts.stream().filter(p -> p.containsKey("inline_data")).count();
     }

@@ -35,7 +35,7 @@
 
 | Method | Endpoint | 인증 | 요청 | 응답 |
 |---|---|---:|---|---|
-| POST | `/quiz/generate` | 예 | `{ noteIds, typeCounts, difficulty, blockIds? }` — `blockIds`(선택, 최대 500개)를 주면 `noteIds`가 1개일 때만 해당 블록과 하위 블록으로 생성 | `QuizResponse` |
+| POST | `/quiz/generate` | 예 | `{ noteIds, typeCounts, difficulty, blockSelections? }` — `blockSelections: [{ noteId, blockIds }]`(선택)에 있는 노트는 해당 블록과 하위 블록만, 나머지 `noteIds` 노트는 전체로 생성. `noteId`는 `noteIds`에 포함되어야 하며 전체 블록은 최대 500개 | `QuizResponse` |
 | GET | `/quiz/my` | 예 | 없음 | `QuizSetResponse[]` |
 | GET | `/quiz/{quizSetId}` | 예 | 없음 | `QuizSetDetailResponse` |
 | DELETE | `/quiz/{quizSetId}` | 예 | 없음 | 빈 응답 |

@@ -2,6 +2,7 @@ package com.uninote.backend.dto;
 
 import com.uninote.backend.domain.QuestionType;
 import com.uninote.backend.domain.QuizDifficulty;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -23,8 +24,20 @@ public class QuizRequest {
     private Map<QuestionType, @Min(1) @Max(20) Integer> typeCounts;
     @NotNull
     private QuizDifficulty difficulty;
-    // 선택 필드. 지정하면 noteIds의 단일 노트에서 이 블록(과 하위 블록)만으로 문제를 생성한다.
-    // 생략하거나 비어 있으면 노트 전체를 사용한다.
-    @Size(max = 500)
-    private List<@NotBlank String> blockIds;
+    // 선택 필드. 노트별로 블록(과 하위 블록)만 문제 범위로 쓴다. 여기 없는 noteIds의 노트는
+    // 노트 전체를 사용하며, 생략하거나 비어 있으면 모든 노트를 전체로 쓴다.
+    // noteId는 noteIds에 포함되어야 한다(QuizService에서 검증).
+    @Valid
+    @Size(max = 20)
+    private List<BlockSelection> blockSelections;
+
+    @Data
+    public static class BlockSelection {
+        @NotNull
+        @Positive
+        private Long noteId;
+        @NotEmpty
+        @Size(max = 500)
+        private List<@NotBlank String> blockIds;
+    }
 }

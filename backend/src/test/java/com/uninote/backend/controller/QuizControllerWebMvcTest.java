@@ -142,13 +142,13 @@ class QuizControllerWebMvcTest {
         verify(quizService, never()).generateQuiz(any(), any());
     }
 
-    private org.springframework.test.web.servlet.ResultActions generateWithBlockIds(java.util.List<String> blockIds)
+    private org.springframework.test.web.servlet.ResultActions generateWithBlockSelection(Map<String, Object> selection)
             throws Exception {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("noteIds", java.util.List.of(1L));
+        body.put("noteIds", java.util.List.of(1L, 2L));
         body.put("typeCounts", Map.of("SHORT_ANSWER", 3));
         body.put("difficulty", "NORMAL");
-        body.put("blockIds", blockIds);
+        body.put("blockSelections", java.util.List.of(selection));
 
         return mockMvc.perform(post("/api/quiz/generate")
                 .header("Authorization", bearerToken())
@@ -156,27 +156,35 @@ class QuizControllerWebMvcTest {
                 .content(objectMapper.writeValueAsString(body)));
     }
 
-    @Test
-    void blockIds가500개를넘으면400을반환한다() throws Exception {
-        java.util.List<String> tooMany = java.util.stream.IntStream.range(0, 501).mapToObj(i -> "b" + i).toList();
+    private static Map<String, Object> selectionOf(Object noteId, Object blockIds) {
+        Map<String, Object> selection = new LinkedHashMap<>();
+        selection.put("noteId", noteId);
+        selection.put("blockIds", blockIds);
+        return selection;
+    }
 
-        generateWithBlockIds(tooMany)
+    static java.util.stream.Stream<Map<String, Object>> invalidBlockSelections() {
+        return java.util.stream.Stream.of(
+                selectionOf(null, java.util.List.of("b1")),
+                selectionOf(2L, java.util.List.of()),
+                selectionOf(2L, java.util.List.of("b1", " ")),
+                selectionOf(2L, java.util.stream.IntStream.range(0, 501).mapToObj(i -> "b" + i).toList())
+        );
+    }
+
+    // noteId 누락, 빈 blockIds, 빈 문자열 원소, 노트당 500개 초과
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("invalidBlockSelections")
+    void 잘못된blockSelections는400을반환한다(Map<String, Object> selection) throws Exception {
+        generateWithBlockSelection(selection)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
         verify(quizService, never()).generateQuiz(any(), any());
     }
 
     @Test
-    void blockIds에빈문자열이있으면400을반환한다() throws Exception {
-        generateWithBlockIds(java.util.List.of("b1", " "))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
-        verify(quizService, never()).generateQuiz(any(), any());
-    }
-
-    @Test
-    void blockIds가있는요청은DTO검증을통과한다() throws Exception {
-        generateWithBlockIds(java.util.List.of("b1", "b2")).andExpect(status().isOk());
+    void blockSelections가있는요청은DTO검증을통과한다() throws Exception {
+        generateWithBlockSelection(selectionOf(2L, java.util.List.of("b1", "b2"))).andExpect(status().isOk());
         verify(quizService).generateQuiz(any(), any());
     }
 

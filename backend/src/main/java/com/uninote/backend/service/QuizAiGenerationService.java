@@ -67,36 +67,45 @@ public class QuizAiGenerationService {
     }
 
     // 노트 콘텐츠를 AI 입력(텍스트·미디어)으로 변환하고, 실제로 REF 태그를 붙인 출처 쌍을 모은다.
-    // blockScope가 null이면 노트 전체, 아니면 해당 blockId 블록(과 그 하위 블록)만 추출한다.
-    public QuizGenerationInput prepareInput(List<Note> notes, Student student, Set<String> blockScope) {
-        Extraction extraction = new Extraction(student.getStudentNum(), blockScope);
+    // blockScopes는 noteId별 선택 블록이다. 항목이 없는 노트는 전체를, 있는 노트는 해당 blockId
+    // 블록(과 그 하위 블록)만 추출한다. blockId는 노트 안에서만 유일하므로 항상 노트 단위로 판정한다.
+    public QuizGenerationInput prepareInput(List<Note> notes, Student student, Map<Long, Set<String>> blockScopes) {
+        Extraction extraction = new Extraction(student.getStudentNum());
 
         for (Note note : notes) {
+            Set<String> blockScope = blockScopes.get(note.getNoteId());
+            extraction.startNote(blockScope);
             if (note.getContent() != null) {
                 processNoteContent(note.getNoteId(), note.getContent(), extraction);
             }
-        }
-
-        if (blockScope != null && !extraction.foundBlockIds.containsAll(blockScope)) {
-            throw new InvalidRequestException("선택한 블록을 찾을 수 없습니다. 노트가 저장된 뒤 다시 시도해 주세요.");
+            if (blockScope != null && !extraction.foundBlockIds.containsAll(blockScope)) {
+                String title = note.getTitle() == null || note.getTitle().isBlank() ? "제목 없음" : note.getTitle();
+                throw new InvalidRequestException(
+                        "'" + title + "' 노트에서 선택한 블록을 찾을 수 없습니다. 노트가 저장된 뒤 다시 시도해 주세요.");
+            }
         }
         return new QuizGenerationInput(extraction.text.toString(), extraction.mediaParts, extraction.allowedSources);
     }
 
-    // 노트 순회 중 누적되는 추출 상태.
+    // 노트 순회 중 누적되는 추출 상태. blockScope·foundBlockIds는 노트마다 새로 시작한다.
     private static final class Extraction {
         final StringBuilder text = new StringBuilder();
         final List<Map<String, Object>> mediaParts = new ArrayList<>();
         final Map<Long, Set<String>> allowedSources = new HashMap<>();
         final AtomicLong totalMediaBytes = new AtomicLong(0);
-        // 범위 모드에서 선택한 blockId가 저장된 노트에 실제로 있는지 확인하기 위해 모은다.
-        final Set<String> foundBlockIds = new HashSet<>();
         final String studentNum;
-        final Set<String> blockScope;
+        // 현재 노트의 선택 블록(null이면 노트 전체)과, 선택한 blockId가 저장된 노트에 실제로
+        // 있는지 확인하기 위해 모으는 현재 노트의 blockId 집합.
+        Set<String> blockScope;
+        Set<String> foundBlockIds = new HashSet<>();
 
-        Extraction(String studentNum, Set<String> blockScope) {
+        Extraction(String studentNum) {
             this.studentNum = studentNum;
-            this.blockScope = blockScope;
+        }
+
+        void startNote(Set<String> noteBlockScope) {
+            this.blockScope = noteBlockScope;
+            this.foundBlockIds = new HashSet<>();
         }
     }
 

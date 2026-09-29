@@ -31,6 +31,8 @@ public class QuizService {
     private static final int MAX_NOTES_PER_QUIZ = 20;
     private static final int MAX_QUESTIONS_PER_TYPE = 20;
     private static final int MAX_TOTAL_QUESTIONS = 30;
+    // 블록 범위 선택 시 모든 노트를 합친 선택 블록 수 상한(QuizConfigModal과 동일).
+    private static final int MAX_SELECTED_BLOCKS = 500;
     // AI 생성 결과 검증 실패 시 재생성은 1회만 한다(요청당 AI 호출 최대 2회).
     private static final int MAX_AI_ATTEMPTS = 2;
     // 전체 시간 예산 90초 - Gemini read timeout 60초(RestClientConfig). 첫 호출이 이보다 오래
@@ -61,17 +63,17 @@ public class QuizService {
         List<Note> notes = noteRepository.findAllById(request.getNoteIds());
         validateNoteAccess(request.getNoteIds(), notes, student);
         validateGenerationLimits(request, notes);
-        Set<String> blockScope = resolveBlockScope(request);
+        Map<Long, Set<String>> blockScopes = resolveBlockScopes(request);
 
-        QuizGenerationInput input = quizAiGenerationService.prepareInput(notes, student, blockScope);
+        QuizGenerationInput input = quizAiGenerationService.prepareInput(notes, student, blockScopes);
         if (input.isEmpty()) {
-            throw new InvalidRequestException(blockScope == null
+            throw new InvalidRequestException(blockScopes.isEmpty()
                     ? "문제를 생성할 노트 내용이 없습니다."
-                    : "선택한 블록에 문제를 생성할 내용이 없습니다.");
+                    : "선택한 범위에 문제를 생성할 내용이 없습니다.");
         }
 
         GenerationContext context = new GenerationContext(input.contentHash(), clock.instant(), student.getStudId(),
-                blockScope);
+                blockScopes);
         GenerationResult result = generateValidatedQuiz(request, input, context);
 
         QuizResponse saved;
@@ -87,19 +89,30 @@ public class QuizService {
     }
 
     // 생성 결과 로그(P0-4)에 공통으로 남기는 요청 단위 정보.
-    // blockScope가 null이면 노트 전체 모드다.
-    private record GenerationContext(String contentHash, Instant start, Long studId, Set<String> blockScope) {}
+    // blockScopes는 noteId별 선택 블록이며, 비어 있으면 모든 노트를 전체로 쓴다.
+    private record GenerationContext(String contentHash, Instant start, Long studId,
+                                     Map<Long, Set<String>> blockScopes) {}
 
-    // 블록 범위는 단일 노트에서만 허용한다(P1-5). blockIds가 없으면 노트 전체 모드(null)다.
-    private Set<String> resolveBlockScope(QuizRequest request) {
-        List<String> blockIds = request.getBlockIds();
-        if (blockIds == null || blockIds.isEmpty()) {
-            return null;
+    // 노트별 블록 범위(P1-5). 블록을 고른 노트는 반드시 noteIds에 있어야 한다 — noteIds가
+    // 소유권·같은 강의 검증(validateNoteAccess)의 기준이므로 이를 우회하지 못하게 한다.
+    private Map<Long, Set<String>> resolveBlockScopes(QuizRequest request) {
+        List<QuizRequest.BlockSelection> selections = request.getBlockSelections();
+        if (selections == null || selections.isEmpty()) {
+            return Map.of();
         }
-        if (request.getNoteIds().size() != 1) {
-            throw new InvalidRequestException("블록 범위는 노트 1개에서만 선택할 수 있습니다.");
+        Set<Long> requestedNoteIds = new HashSet<>(request.getNoteIds());
+        Map<Long, Set<String>> scopes = new HashMap<>();
+        for (QuizRequest.BlockSelection selection : selections) {
+            if (!requestedNoteIds.contains(selection.getNoteId())) {
+                throw new InvalidRequestException("블록을 선택한 노트가 요청 노트 목록에 없습니다.");
+            }
+            scopes.computeIfAbsent(selection.getNoteId(), k -> new HashSet<>()).addAll(selection.getBlockIds());
         }
-        return new HashSet<>(blockIds);
+        int totalBlocks = scopes.values().stream().mapToInt(Set::size).sum();
+        if (totalBlocks > MAX_SELECTED_BLOCKS) {
+            throw new InvalidRequestException("한 번에 선택할 수 있는 블록은 최대 " + MAX_SELECTED_BLOCKS + "개입니다.");
+        }
+        return scopes;
     }
 
     private record GenerationResult(QuizResponse response, int attempts, int unverifiedCount) {}
@@ -149,7 +162,7 @@ public class QuizService {
                                      String failureCode, String failureReason, Long quizSetId) {
         log.info("quiz.generation status={} model={} promptVersion={} contentHash={} attempts={} regenerated={} "
                         + "unverified={} elapsedMs={} failureCode={} failureReason=\"{}\" quizSetId={} studId={} "
-                        + "scope={} blockCount={}",
+                        + "scope={} blockCount={} blockNoteCount={}",
                 success ? "SUCCESS" : "FAILED",
                 QuizAiGenerationService.MODEL_NAME,
                 QuizAiGenerationService.PROMPT_VERSION,
@@ -162,8 +175,9 @@ public class QuizService {
                 failureReason == null ? "" : failureReason.replace("\"", "'"),
                 quizSetId == null ? "" : quizSetId,
                 context.studId(),
-                context.blockScope() == null ? "NOTE" : "BLOCK",
-                context.blockScope() == null ? 0 : context.blockScope().size());
+                context.blockScopes().isEmpty() ? "NOTE" : "BLOCK",
+                context.blockScopes().values().stream().mapToInt(Set::size).sum(),
+                context.blockScopes().size());
     }
 
     private QuizResponse saveGeneratedQuiz(QuizResponse quizResponse, QuizRequest request, List<Note> notes,

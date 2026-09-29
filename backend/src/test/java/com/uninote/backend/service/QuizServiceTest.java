@@ -41,7 +41,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 // OutputCaptureExtension: 생성 결과 로그(quiz.generation) 검증용
@@ -373,7 +372,7 @@ class QuizServiceTest {
     void generateQuizSucceedsWhenAllNotesAreOwnedByRequester() throws Exception {
         Note note = ownedNote(10L);
         when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
-        when(quizAiGenerationService.prepareInput(eq(List.of(note)), eq(owner), isNull())).thenReturn(textInput);
+        when(quizAiGenerationService.prepareInput(eq(List.of(note)), eq(owner), eq(Map.of()))).thenReturn(textInput);
         QuizResponse aiResponse = aiResponseWith(multipleChoice("가장 오래 사용되지 않은 페이지를 교체하는 알고리즘은?", "lru"));
         QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
         when(quizAiGenerationService.requestQuiz(request, textInput)).thenReturn(aiResponse);
@@ -584,51 +583,78 @@ class QuizServiceTest {
                 .contains("failureReason=\"문항이 없습니다.\"");
     }
 
+    private static QuizRequest.BlockSelection selection(long noteId, String... blockIds) {
+        QuizRequest.BlockSelection selection = new QuizRequest.BlockSelection();
+        selection.setNoteId(noteId);
+        selection.setBlockIds(List.of(blockIds));
+        return selection;
+    }
+
     @Test
-    void generateQuizPassesSelectedBlocksAsScopeAndLogsBlockScope(CapturedOutput output) {
+    void generateQuizPassesPerNoteBlockScopesAndLogsBlockScope(CapturedOutput output) {
+        Note note1 = ownedNote(10L);
+        Note note2 = ownedNote(11L);
+        Note note3 = ownedNote(12L);
+        when(noteRepository.findAllById(List.of(10L, 11L, 12L))).thenReturn(List.of(note1, note2, note3));
+        when(quizAiGenerationService.prepareInput(any(), any(), any())).thenReturn(textInput);
+        when(quizAiGenerationService.requestQuiz(any(), any()))
+                .thenReturn(aiResponseWith(multipleChoice("페이지 교체 알고리즘은?", "LRU")));
+        QuizRequest request = requestFor(List.of(10L, 11L, 12L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+        // 노트 10은 전체, 11·12는 블록 일부. 같은 노트가 여러 번 오면 합치고 중복은 한 번만 센다.
+        request.setBlockSelections(List.of(selection(11L, "b1", "b2"), selection(12L, "b1"), selection(11L, "b2", "b3")));
+
+        quizService.generateQuiz(request, owner);
+
+        verify(quizAiGenerationService).prepareInput(eq(List.of(note1, note2, note3)), eq(owner),
+                eq(Map.of(11L, Set.of("b1", "b2", "b3"), 12L, Set.of("b1"))));
+        assertThat(output.getOut()).contains("status=SUCCESS").contains("scope=BLOCK blockCount=4 blockNoteCount=2");
+    }
+
+    @Test
+    void generateQuizWithoutBlockSelectionsUsesWholeNoteScope(CapturedOutput output) {
         Note note = ownedNote(10L);
         when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
         when(quizAiGenerationService.prepareInput(any(), any(), any())).thenReturn(textInput);
         when(quizAiGenerationService.requestQuiz(any(), any()))
                 .thenReturn(aiResponseWith(multipleChoice("페이지 교체 알고리즘은?", "LRU")));
         QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
-        request.setBlockIds(List.of("b1", "b2", "b1"));
+        request.setBlockSelections(List.of());
 
         quizService.generateQuiz(request, owner);
 
-        verify(quizAiGenerationService).prepareInput(eq(List.of(note)), eq(owner), eq(Set.of("b1", "b2")));
-        assertThat(output.getOut()).contains("status=SUCCESS").contains("scope=BLOCK blockCount=2");
+        verify(quizAiGenerationService).prepareInput(eq(List.of(note)), eq(owner), eq(Map.of()));
+        assertThat(output.getOut()).contains("scope=NOTE blockCount=0 blockNoteCount=0");
     }
 
     @Test
-    void generateQuizWithoutBlockIdsUsesWholeNoteScope(CapturedOutput output) {
+    void generateQuizRejectsBlockSelectionForNoteOutsideNoteIdsWithoutCallingAi() {
         Note note = ownedNote(10L);
         when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
-        when(quizAiGenerationService.prepareInput(any(), any(), any())).thenReturn(textInput);
-        when(quizAiGenerationService.requestQuiz(any(), any()))
-                .thenReturn(aiResponseWith(multipleChoice("페이지 교체 알고리즘은?", "LRU")));
         QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
-        request.setBlockIds(List.of());
+        // noteIds 밖의 노트(소유권·강의 검증을 거치지 않은 노트)의 블록은 허용하지 않는다.
+        request.setBlockSelections(List.of(selection(99L, "b1")));
 
-        quizService.generateQuiz(request, owner);
-
-        verify(quizAiGenerationService).prepareInput(eq(List.of(note)), eq(owner), isNull());
-        assertThat(output.getOut()).contains("scope=NOTE blockCount=0");
+        assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessageContaining("요청 노트 목록에 없습니다");
+        verify(quizAiGenerationService, never()).prepareInput(any(), any(), any());
+        verify(quizAiGenerationService, never()).requestQuiz(any(), any());
     }
 
     @Test
-    void generateQuizRejectsBlockScopeAcrossMultipleNotesWithoutCallingAi() {
+    void generateQuizRejectsTooManySelectedBlocksAcrossNotes() {
         Note note1 = ownedNote(10L);
         Note note2 = ownedNote(11L);
         when(noteRepository.findAllById(List.of(10L, 11L))).thenReturn(List.of(note1, note2));
         QuizRequest request = requestFor(List.of(10L, 11L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
-        request.setBlockIds(List.of("b1"));
+        String[] first = java.util.stream.IntStream.range(0, 300).mapToObj(i -> "a" + i).toArray(String[]::new);
+        String[] second = java.util.stream.IntStream.range(0, 201).mapToObj(i -> "b" + i).toArray(String[]::new);
+        request.setBlockSelections(List.of(selection(10L, first), selection(11L, second)));
 
         assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
                 .isInstanceOf(InvalidRequestException.class)
-                .hasMessageContaining("노트 1개");
+                .hasMessageContaining("최대 500개");
         verify(quizAiGenerationService, never()).prepareInput(any(), any(), any());
-        verify(quizAiGenerationService, never()).requestQuiz(any(), any());
     }
 
     @Test
@@ -638,11 +664,11 @@ class QuizServiceTest {
         when(quizAiGenerationService.prepareInput(any(), any(), any()))
                 .thenReturn(new QuizGenerationInput(" ", List.of(), Map.of()));
         QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
-        request.setBlockIds(List.of("empty"));
+        request.setBlockSelections(List.of(selection(10L, "empty")));
 
         assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
                 .isInstanceOf(InvalidRequestException.class)
-                .hasMessage("선택한 블록에 문제를 생성할 내용이 없습니다.");
+                .hasMessage("선택한 범위에 문제를 생성할 내용이 없습니다.");
         verify(quizAiGenerationService, never()).requestQuiz(any(), any());
     }
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import QuizConfigModal from './QuizConfigModal';
 import { NoteTreeProvider } from '../../../context/NoteTreeContext';
@@ -41,7 +41,7 @@ describe('QuizConfigModal', () => {
   it('노트 트리를 렌더링하고 currentNoteId를 기본 선택한다', () => {
     renderModal({ currentNoteId: 1 });
 
-    expect(screen.getByText('부모 노트')).toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: '선택 요약' })).getByText('부모 노트')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: /부모 노트/ })).toBeChecked();
   });
 
@@ -193,9 +193,9 @@ describe('QuizConfigModal', () => {
     await waitFor(() => expect(screen.queryByText('문제 생성 중...')).not.toBeInTheDocument());
   });
 
-  describe('블록 선택 모드', () => {
-    // 제목(t) 다음에 h2 "개요"(아래 문단 p1, h3 "세부"와 그 아래 문단 p2), h2 "결론"(p3), id 없는 pdfBlock
-    const savedNote = {
+  describe('노트별 블록 선택', () => {
+    // 노트 1(부모): 제목(t) 다음에 h2 "개요"(p1, h3 "세부"와 p2), h2 "결론"(p3), id 없는 pdfBlock
+    const parentNote = {
       noteId: 1,
       content: JSON.stringify({
         type: 'doc',
@@ -211,102 +211,227 @@ describe('QuizConfigModal', () => {
         ],
       }),
     };
-
-    const enterBlockMode = async (user) => {
-      client.get.mockResolvedValueOnce({ data: savedNote });
-      await user.click(screen.getByRole('radio', { name: '블록 선택' }));
-      await screen.findByRole('checkbox', { name: /개요 본문/ });
+    // 노트 2(자식): 노트 1과 같은 blockId(p1)를 가진 블록이 있다.
+    const childNote = {
+      noteId: 2,
+      content: JSON.stringify({
+        type: 'doc',
+        content: [
+          { type: 'heading', attrs: { id: 't2', level: 1 }, content: [{ type: 'text', text: '자식 제목' }] },
+          { type: 'paragraph', attrs: { id: 'p1' }, content: [{ type: 'text', text: '자식 첫 문단' }] },
+          { type: 'paragraph', attrs: { id: 'c2' }, content: [{ type: 'text', text: '자식 둘째 문단' }] },
+        ],
+      }),
     };
 
-    it('저장본을 다시 읽어 제목을 제외한 id 보유 블록만 보여준다', async () => {
+    const openBlocks = async (user, title, note) => {
+      client.get.mockResolvedValueOnce({ data: note });
+      await user.click(screen.getByRole('button', { name: `${title} 블록 선택 열기` }));
+      return screen.findByRole('group', { name: `${title}의 블록` });
+    };
+
+    const renderWithSaveStatus = (saveStatus) => render(
+      <NoteTreeProvider noteTree={noteTree}>
+        <QuizConfigModal isOpen currentNoteId={1} onClose={vi.fn()} onGenerated={vi.fn()} saveStatus={saveStatus} />
+      </NoteTreeProvider>
+    );
+
+    it('노트의 "블록"을 누르면 그 노트의 저장본을 읽어 노트 아래에 제목을 제외한 블록을 보여준다', async () => {
       const user = userEvent.setup();
       renderModal({ currentNoteId: 1 });
 
-      await enterBlockMode(user);
+      const panel = await openBlocks(user, '부모 노트', parentNote);
 
       expect(client.get).toHaveBeenCalledWith('/notes/1');
-      expect(screen.queryByRole('checkbox', { name: /노트 제목/ })).not.toBeInTheDocument();
-      expect(screen.getAllByRole('checkbox', { name: /개요|세부|결론/ })).toHaveLength(6);
-      expect(screen.getByText('PDF 등 일부 블록은 노트 전체 모드에서만 포함됩니다')).toBeInTheDocument();
-      expect(screen.getByText('블록을 하나 이상 선택하세요')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '문제 생성 시작' })).toBeDisabled();
+      const panelQueries = within(panel);
+      await panelQueries.findByRole('checkbox', { name: /개요 본문/ });
+      expect(panelQueries.queryByRole('checkbox', { name: /노트 제목/ })).not.toBeInTheDocument();
+      expect(panelQueries.getAllByRole('checkbox')).toHaveLength(6);
+      expect(panelQueries.getByText('PDF 등 일부 블록은 노트 전체를 선택할 때만 포함됩니다')).toBeInTheDocument();
+      // 현재 노트이므로 자동 저장 안내가 보인다.
+      expect(panelQueries.getByText('최근 입력은 자동 저장(약 2초) 후 목록에 반영됩니다')).toBeInTheDocument();
+      expect(screen.getByText('현재 노트')).toBeInTheDocument();
+    });
+
+    it('블록을 고르면 노트가 부분 선택되고, 모두 해제하면 노트도 해제된다', async () => {
+      const user = userEvent.setup();
+      renderModal({ currentNoteId: 1 });
+      // 기본 선택된 현재 노트를 먼저 해제해 블록 선택만 남긴다.
+      await user.click(screen.getByRole('checkbox', { name: /^부모 노트$/ }));
+      const panel = within(await openBlocks(user, '부모 노트', parentNote));
+      const noteCheckbox = screen.getByRole('checkbox', { name: /^부모 노트$/ });
+
+      await user.click(await panel.findByRole('checkbox', { name: /결론 본문/ }));
+
+      expect(noteCheckbox).toBePartiallyChecked();
+      expect(screen.getByText('블록 1개')).toBeInTheDocument();
+
+      await user.click(panel.getByRole('checkbox', { name: /결론 본문/ }));
+
+      expect(noteCheckbox).not.toBePartiallyChecked();
+      expect(noteCheckbox).not.toBeChecked();
+      expect(screen.getByText('노트를 하나 이상 선택하세요')).toBeInTheDocument();
     });
 
     it('heading을 선택하면 다음 같은 레벨 이하 heading 전까지 함께 선택·해제된다', async () => {
       const user = userEvent.setup();
-      renderModal({ currentNoteId: 1 });
-      await enterBlockMode(user);
+      renderModal({ currentNoteId: 999 });
+      const panel = within(await openBlocks(user, '부모 노트', parentNote));
 
-      const intro = screen.getByRole('checkbox', { name: /제목 2\s*개요$/ });
+      const intro = await panel.findByRole('checkbox', { name: /제목 2\s*개요$/ });
       await user.click(intro);
 
-      expect(screen.getByRole('checkbox', { name: /개요 본문/ })).toBeChecked();
-      expect(screen.getByRole('checkbox', { name: /제목 3\s*세부$/ })).toBeChecked();
-      expect(screen.getByRole('checkbox', { name: /세부 본문/ })).toBeChecked();
-      expect(screen.getByRole('checkbox', { name: /결론$/ })).not.toBeChecked();
-      expect(screen.getByRole('checkbox', { name: /결론 본문/ })).not.toBeChecked();
+      expect(panel.getByRole('checkbox', { name: /개요 본문/ })).toBeChecked();
+      expect(panel.getByRole('checkbox', { name: /제목 3\s*세부$/ })).toBeChecked();
+      expect(panel.getByRole('checkbox', { name: /세부 본문/ })).toBeChecked();
+      expect(panel.getByRole('checkbox', { name: /결론$/ })).not.toBeChecked();
+      expect(panel.getByRole('checkbox', { name: /결론 본문/ })).not.toBeChecked();
 
       await user.click(intro);
 
-      expect(screen.getByRole('checkbox', { name: /세부 본문/ })).not.toBeChecked();
+      expect(panel.getByRole('checkbox', { name: /세부 본문/ })).not.toBeChecked();
     });
 
-    it('블록 모드 payload에만 blockIds가 노트 순서대로 들어간다', async () => {
+    it('노트 전체 선택 상태에서 블록 하나를 해제하면 나머지 블록만 선택된다', async () => {
+      const user = userEvent.setup();
+      renderModal({ currentNoteId: 1 });
+      const panel = within(await openBlocks(user, '부모 노트', parentNote));
+
+      // 전체 선택된 노트의 블록은 모두 체크되어 보인다.
+      expect(await panel.findByRole('checkbox', { name: /결론 본문/ })).toBeChecked();
+      await user.click(panel.getByRole('checkbox', { name: /결론 본문/ }));
+
+      expect(screen.getByRole('checkbox', { name: /^부모 노트$/ })).toBePartiallyChecked();
+      expect(screen.getByText('블록 5개')).toBeInTheDocument();
+    });
+
+    it('두 노트에서 고른 블록이 요약 칩과 payload에서 노트별로 나뉜다', async () => {
       const user = userEvent.setup();
       client.post.mockResolvedValueOnce({ data: { quizSetId: 7 } });
       const { onClose } = renderModal({ currentNoteId: 1 });
-      await enterBlockMode(user);
+      await user.click(screen.getByRole('checkbox', { name: /^부모 노트$/ }));
 
-      await user.click(screen.getByRole('checkbox', { name: /결론 본문/ }));
-      await user.click(screen.getByRole('checkbox', { name: /개요 본문/ }));
+      const parentPanel = within(await openBlocks(user, '부모 노트', parentNote));
+      await user.click(await parentPanel.findByRole('checkbox', { name: /결론 본문/ }));
+      await user.click(parentPanel.getByRole('checkbox', { name: /개요 본문/ }));
+      const childPanel = within(await openBlocks(user, '자식 노트', childNote));
+      await user.click(await childPanel.findByRole('checkbox', { name: /자식 둘째 문단/ }));
+
+      const summary = within(screen.getByRole('list', { name: '선택 요약' }));
+      expect(summary.getByText('부모 노트')).toBeInTheDocument();
+      expect(summary.getByText('· 블록 2개')).toBeInTheDocument();
+      expect(summary.getByText('자식 노트')).toBeInTheDocument();
+      expect(summary.getByText('· 블록 1개')).toBeInTheDocument();
+
       await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
 
       await waitFor(() => expect(onClose).toHaveBeenCalled());
       expect(client.post).toHaveBeenCalledWith('/quiz/generate', {
-        noteIds: [1],
-        blockIds: ['p1', 'p3'],
+        noteIds: [1, 2],
+        blockSelections: [
+          { noteId: 1, blockIds: ['p1', 'p3'] },
+          { noteId: 2, blockIds: ['c2'] },
+        ],
         typeCounts: { MULTIPLE_CHOICE: 2, OX: 2, SHORT_ANSWER: 1 },
         difficulty: 'NORMAL',
       });
     });
 
-    it('노트 전체 모드로 돌아가면 payload에 blockIds가 없다', async () => {
+    it('노트 전체 선택과 다른 노트의 블록 선택을 섞을 수 있고, 노트 체크박스를 누르면 전체로 바뀐다', async () => {
       const user = userEvent.setup();
-      client.post.mockResolvedValueOnce({ data: {} });
+      client.post.mockResolvedValue({ data: {} });
       const { onClose } = renderModal({ currentNoteId: 1 });
-      await enterBlockMode(user);
-      await user.click(screen.getByRole('checkbox', { name: /개요 본문/ }));
+      const childPanel = within(await openBlocks(user, '자식 노트', childNote));
+      await user.click(await childPanel.findByRole('checkbox', { name: /자식 첫 문단/ }));
 
-      await user.click(screen.getByRole('radio', { name: '노트 전체' }));
       await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
-
       await waitFor(() => expect(onClose).toHaveBeenCalled());
-      expect(client.post.mock.calls[0][1]).not.toHaveProperty('blockIds');
+      expect(client.post.mock.calls[0][1]).toMatchObject({
+        noteIds: [1, 2],
+        blockSelections: [{ noteId: 2, blockIds: ['p1'] }],
+      });
+
+      // 부분 선택된 자식 노트의 체크박스를 누르면 전체 선택으로 바뀌고 blockSelections가 사라진다.
+      await user.click(screen.getByRole('checkbox', { name: /^자식 노트$/ }));
+      expect(screen.getByRole('checkbox', { name: /^자식 노트$/ })).toBeChecked();
+      await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+      await waitFor(() => expect(client.post).toHaveBeenCalledTimes(2));
+      expect(client.post.mock.calls[1][1]).not.toHaveProperty('blockSelections');
     });
 
-    it('자동 저장 중이면 생성 버튼이 비활성화된다', async () => {
+    it('요약 칩의 ✕는 그 노트 선택만 해제한다', async () => {
       const user = userEvent.setup();
-      render(
-        <NoteTreeProvider noteTree={noteTree}>
-          <QuizConfigModal isOpen currentNoteId={1} onClose={vi.fn()} onGenerated={vi.fn()} saveStatus="saving" />
-        </NoteTreeProvider>
-      );
-      await enterBlockMode(user);
-      await user.click(screen.getByRole('checkbox', { name: /개요 본문/ }));
+      renderModal({ currentNoteId: 1 });
+
+      await user.click(screen.getByRole('button', { name: '부모 노트 선택 해제' }));
+
+      expect(screen.getByRole('checkbox', { name: /^부모 노트$/ })).not.toBeChecked();
+      expect(screen.getByText('선택된 노트가 없습니다.')).toBeInTheDocument();
+    });
+
+    it('현재 노트의 블록을 고른 상태에서만 자동 저장 중이면 생성을 막는다', async () => {
+      const user = userEvent.setup();
+      renderWithSaveStatus('saving');
+
+      // 노트 전체 선택만 있을 때는 막지 않는다.
+      expect(screen.getByRole('button', { name: '문제 생성 시작' })).toBeEnabled();
+
+      const panel = within(await openBlocks(user, '부모 노트', parentNote));
+      await user.click(await panel.findByRole('checkbox', { name: /결론 본문/ }));
 
       expect(screen.getByText('노트 자동 저장이 끝난 뒤 생성할 수 있습니다')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '문제 생성 시작' })).toBeDisabled();
     });
 
-    it('블록 목록을 불러오지 못하면 사유를 표시하고 생성할 수 없다', async () => {
+    it('내용 없는 블록은 목록에 나오지 않고, 이미지 블록은 "(이미지)"로 표시된다', async () => {
+      const user = userEvent.setup();
+      client.post.mockResolvedValueOnce({ data: {} });
+      const { onClose } = renderModal({ currentNoteId: 1 });
+      await user.click(screen.getByRole('checkbox', { name: /^부모 노트$/ }));
+      const noteWithEmptyBlocks = {
+        noteId: 1,
+        content: JSON.stringify({
+          type: 'doc',
+          content: [
+            { type: 'heading', attrs: { id: 't', level: 1 }, content: [{ type: 'text', text: '노트 제목' }] },
+            { type: 'heading', attrs: { id: 'h', level: 2 }, content: [{ type: 'text', text: '본론' }] },
+            { type: 'paragraph', attrs: { id: 'empty1' } },
+            { type: 'paragraph', attrs: { id: 'p' }, content: [{ type: 'text', text: '본론 문단' }] },
+            { type: 'paragraph', attrs: { id: 'blank' }, content: [{ type: 'text', text: '   ' }] },
+            { type: 'image', attrs: { id: 'img', src: 'a.png' } },
+            { type: 'heading', attrs: { id: 'empty-h', level: 2 } },
+          ],
+        }),
+      };
+
+      const panel = within(await openBlocks(user, '부모 노트', noteWithEmptyBlocks));
+      await panel.findByRole('checkbox', { name: /본론 문단/ });
+
+      // 제목 2 "본론", 문단, 이미지 3개만 선택할 수 있다(빈 문단·공백 문단·빈 heading 제외).
+      expect(panel.getAllByRole('checkbox')).toHaveLength(3);
+      expect(panel.queryByText('(내용 없음)')).not.toBeInTheDocument();
+      expect(panel.getByRole('checkbox', { name: /이미지\s*\(이미지\)/ })).toBeInTheDocument();
+
+      // heading 범위 선택과 payload에 빈 블록 id가 들어가지 않는다.
+      await user.click(panel.getByRole('checkbox', { name: /제목 2\s*본론$/ }));
+      expect(screen.getByText('블록 3개')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(client.post.mock.calls[0][1].blockSelections).toEqual([
+        { noteId: 1, blockIds: ['h', 'p', 'img'] },
+      ]);
+    });
+
+    it('블록 목록을 불러오지 못하면 그 노트 아래에 사유를 표시한다', async () => {
       const user = userEvent.setup();
       client.get.mockRejectedValueOnce(new Error('Network Error'));
       renderModal({ currentNoteId: 1 });
 
-      await user.click(screen.getByRole('radio', { name: '블록 선택' }));
+      await user.click(screen.getByRole('button', { name: '부모 노트 블록 선택 열기' }));
 
-      expect(await screen.findAllByText('블록 목록을 불러오지 못했습니다.')).not.toHaveLength(0);
-      expect(screen.getByRole('button', { name: '문제 생성 시작' })).toBeDisabled();
+      const panel = await screen.findByRole('group', { name: '부모 노트의 블록' });
+      expect(await within(panel).findByText('블록 목록을 불러오지 못했습니다.')).toBeInTheDocument();
     });
   });
 });

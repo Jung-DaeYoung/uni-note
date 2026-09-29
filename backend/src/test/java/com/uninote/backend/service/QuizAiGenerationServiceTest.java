@@ -23,6 +23,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -96,7 +97,7 @@ class QuizAiGenerationServiceTest {
             + "\"content\":[{\"type\":\"text\",\"text\":\"페이지 교체\"}]}]}";
 
     private QuizGenerationInput textInput() {
-        return service.prepareInput(List.of(noteWithContent(1L, TEXT_NOTE_JSON)), student);
+        return service.prepareInput(List.of(noteWithContent(1L, TEXT_NOTE_JSON)), student, null);
     }
 
     @Test
@@ -244,24 +245,95 @@ class QuizAiGenerationServiceTest {
                 )
         ));
 
-        QuizGenerationInput input = service.prepareInput(List.of(noteWithContent(7L, contentJson)), student);
+        QuizGenerationInput input = service.prepareInput(List.of(noteWithContent(7L, contentJson)), student, null);
 
         assertThat(input.allowedSources()).isEqualTo(Map.of(7L, java.util.Set.of("b1")));
         assertThat(input.text()).contains("[[REF:7/b1]] LRU").contains("FIFO");
         assertThat(input.isEmpty()).isFalse();
     }
 
+    // 제목 heading(t) · 범위 밖 문단(p1) · 리스트(list > item 안의 문단 li1) · 이미지 없는 문단(p2)
+    private static final String SCOPED_NOTE_JSON =
+            "{\"type\":\"doc\",\"content\":["
+            + "{\"type\":\"heading\",\"attrs\":{\"id\":\"t\",\"level\":1},\"content\":[{\"type\":\"text\",\"text\":\"제목\"}]},"
+            + "{\"type\":\"paragraph\",\"attrs\":{\"id\":\"p1\"},\"content\":[{\"type\":\"text\",\"text\":\"범위밖문단\"}]},"
+            + "{\"type\":\"bulletList\",\"attrs\":{\"id\":\"list\"},\"content\":[{\"type\":\"listItem\",\"content\":["
+            + "{\"type\":\"paragraph\",\"attrs\":{\"id\":\"li1\"},\"content\":[{\"type\":\"text\",\"text\":\"리스트항목\"}]}]}]},"
+            + "{\"type\":\"paragraph\",\"attrs\":{\"id\":\"p2\"},\"content\":[{\"type\":\"text\",\"text\":\"선택문단\"}]}"
+            + "]}";
+
+    @Test
+    void prepareInputWithoutScopeExtractsWholeNote() {
+        QuizGenerationInput input =
+                service.prepareInput(List.of(noteWithContent(5L, SCOPED_NOTE_JSON)), student, null);
+
+        assertThat(input.text()).contains("제목", "범위밖문단", "리스트항목", "선택문단");
+        assertThat(input.allowedSources()).isEqualTo(Map.of(5L, Set.of("t", "p1", "li1", "p2")));
+    }
+
+    @Test
+    void prepareInputWithScopeExtractsOnlySelectedBlocksAndTheirChildren() {
+        QuizGenerationInput input = service.prepareInput(
+                List.of(noteWithContent(5L, SCOPED_NOTE_JSON)), student, Set.of("list", "p2"));
+
+        assertThat(input.text())
+                .contains("[[REF:5/li1]] 리스트항목", "[[REF:5/p2]] 선택문단")
+                .doesNotContain("제목", "범위밖문단", "REF:5/p1", "REF:5/t");
+        // 출처 허용 집합이 곧 선택 범위다(범위 밖 출처는 검증기에서 미검증 처리된다).
+        assertThat(input.allowedSources()).isEqualTo(Map.of(5L, Set.of("li1", "p2")));
+    }
+
+    @Test
+    void prepareInputWithScopeExcludesMediaOutsideScope() throws Exception {
+        String fileName = writeTestFile("image-bytes");
+        String sig = fileAccessSigner.sign(fileName, "owner-num");
+        String src = "http://localhost:8080/api/upload/view/" + fileName + "?owner=owner-num&sig=" + sig;
+        String contentJson = objectMapper.writeValueAsString(Map.of(
+                "type", "doc",
+                "content", List.of(
+                        Map.of("type", "image", "attrs", Map.of("id", "img", "src", src)),
+                        Map.of("type", "paragraph", "attrs", Map.of("id", "p"),
+                                "content", List.of(Map.of("type", "text", "text", "본문")))
+                )
+        ));
+
+        QuizGenerationInput input =
+                service.prepareInput(List.of(noteWithContent(1L, contentJson)), student, Set.of("p"));
+
+        assertThat(input.mediaParts()).isEmpty();
+        assertThat(input.text()).doesNotContain("Image Content");
+    }
+
+    @Test
+    void prepareInputRejectsBlockIdMissingFromSavedNote() {
+        assertThatThrownBy(() -> service.prepareInput(
+                List.of(noteWithContent(5L, SCOPED_NOTE_JSON)), student, Set.of("p2", "not-saved-yet")))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessageContaining("선택한 블록을 찾을 수 없습니다");
+    }
+
+    @Test
+    void prepareInputTreatsNullBlockIdAsMissing() {
+        String contentJson = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"attrs\":{\"id\":null},"
+                + "\"content\":[{\"type\":\"text\",\"text\":\"옛 블록\"}]}]}";
+
+        QuizGenerationInput input = service.prepareInput(List.of(noteWithContent(2L, contentJson)), student, null);
+
+        assertThat(input.text()).contains("옛 블록").doesNotContain("REF:2/null");
+        assertThat(input.allowedSources()).isEmpty();
+    }
+
     @Test
     void prepareInputIsEmptyForEmptyDocument() {
         QuizGenerationInput input = service.prepareInput(
-                List.of(noteWithContent(1L, "{\"type\":\"doc\",\"content\":[]}")), student);
+                List.of(noteWithContent(1L, "{\"type\":\"doc\",\"content\":[]}")), student, null);
 
         assertThat(input.isEmpty()).isTrue();
     }
 
     @Test
     void prepareInputRejectsBrokenNoteJson() {
-        assertThatThrownBy(() -> service.prepareInput(List.of(noteWithContent(3L, "{broken")), student))
+        assertThatThrownBy(() -> service.prepareInput(List.of(noteWithContent(3L, "{broken")), student, null))
                 .isInstanceOf(InvalidRequestException.class)
                 .hasMessageContaining("noteId=3");
     }
@@ -313,7 +385,7 @@ class QuizAiGenerationServiceTest {
                         "attrs", Map.of("src", src)
                 ))
         ));
-        QuizGenerationInput input = service.prepareInput(List.of(noteWithContent(1L, contentJson)), student);
+        QuizGenerationInput input = service.prepareInput(List.of(noteWithContent(1L, contentJson)), student, null);
 
         assertThat(input.mediaParts()).isEmpty();
     }
@@ -331,7 +403,7 @@ class QuizAiGenerationServiceTest {
                         "attrs", Map.of("src", src)
                 ))
         ));
-        QuizGenerationInput input = service.prepareInput(List.of(noteWithContent(1L, contentJson)), student);
+        QuizGenerationInput input = service.prepareInput(List.of(noteWithContent(1L, contentJson)), student, null);
         when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
 
         service.requestQuiz(simpleRequest(List.of(1L)), input);

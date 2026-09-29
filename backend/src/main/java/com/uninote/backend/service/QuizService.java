@@ -61,13 +61,17 @@ public class QuizService {
         List<Note> notes = noteRepository.findAllById(request.getNoteIds());
         validateNoteAccess(request.getNoteIds(), notes, student);
         validateGenerationLimits(request, notes);
+        Set<String> blockScope = resolveBlockScope(request);
 
-        QuizGenerationInput input = quizAiGenerationService.prepareInput(notes, student);
+        QuizGenerationInput input = quizAiGenerationService.prepareInput(notes, student, blockScope);
         if (input.isEmpty()) {
-            throw new InvalidRequestException("문제를 생성할 노트 내용이 없습니다.");
+            throw new InvalidRequestException(blockScope == null
+                    ? "문제를 생성할 노트 내용이 없습니다."
+                    : "선택한 블록에 문제를 생성할 내용이 없습니다.");
         }
 
-        GenerationContext context = new GenerationContext(input.contentHash(), clock.instant(), student.getStudId());
+        GenerationContext context = new GenerationContext(input.contentHash(), clock.instant(), student.getStudId(),
+                blockScope);
         GenerationResult result = generateValidatedQuiz(request, input, context);
 
         QuizResponse saved;
@@ -83,7 +87,20 @@ public class QuizService {
     }
 
     // 생성 결과 로그(P0-4)에 공통으로 남기는 요청 단위 정보.
-    private record GenerationContext(String contentHash, Instant start, Long studId) {}
+    // blockScope가 null이면 노트 전체 모드다.
+    private record GenerationContext(String contentHash, Instant start, Long studId, Set<String> blockScope) {}
+
+    // 블록 범위는 단일 노트에서만 허용한다(P1-5). blockIds가 없으면 노트 전체 모드(null)다.
+    private Set<String> resolveBlockScope(QuizRequest request) {
+        List<String> blockIds = request.getBlockIds();
+        if (blockIds == null || blockIds.isEmpty()) {
+            return null;
+        }
+        if (request.getNoteIds().size() != 1) {
+            throw new InvalidRequestException("블록 범위는 노트 1개에서만 선택할 수 있습니다.");
+        }
+        return new HashSet<>(blockIds);
+    }
 
     private record GenerationResult(QuizResponse response, int attempts, int unverifiedCount) {}
 
@@ -131,7 +148,8 @@ public class QuizService {
     private void logGenerationResult(GenerationContext context, boolean success, int attempts, int unverified,
                                      String failureCode, String failureReason, Long quizSetId) {
         log.info("quiz.generation status={} model={} promptVersion={} contentHash={} attempts={} regenerated={} "
-                        + "unverified={} elapsedMs={} failureCode={} failureReason=\"{}\" quizSetId={} studId={}",
+                        + "unverified={} elapsedMs={} failureCode={} failureReason=\"{}\" quizSetId={} studId={} "
+                        + "scope={} blockCount={}",
                 success ? "SUCCESS" : "FAILED",
                 QuizAiGenerationService.MODEL_NAME,
                 QuizAiGenerationService.PROMPT_VERSION,
@@ -143,7 +161,9 @@ public class QuizService {
                 failureCode == null ? "" : failureCode,
                 failureReason == null ? "" : failureReason.replace("\"", "'"),
                 quizSetId == null ? "" : quizSetId,
-                context.studId());
+                context.studId(),
+                context.blockScope() == null ? "NOTE" : "BLOCK",
+                context.blockScope() == null ? 0 : context.blockScope().size());
     }
 
     private QuizResponse saveGeneratedQuiz(QuizResponse quizResponse, QuizRequest request, List<Note> notes,

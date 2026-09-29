@@ -67,19 +67,37 @@ public class QuizAiGenerationService {
     }
 
     // 노트 콘텐츠를 AI 입력(텍스트·미디어)으로 변환하고, 실제로 REF 태그를 붙인 출처 쌍을 모은다.
-    public QuizGenerationInput prepareInput(List<Note> notes, Student student) {
-        StringBuilder combinedText = new StringBuilder();
-        List<Map<String, Object>> mediaParts = new ArrayList<>();
-        Map<Long, Set<String>> allowedSources = new HashMap<>();
-        AtomicLong totalMediaBytes = new AtomicLong(0);
+    // blockScope가 null이면 노트 전체, 아니면 해당 blockId 블록(과 그 하위 블록)만 추출한다.
+    public QuizGenerationInput prepareInput(List<Note> notes, Student student, Set<String> blockScope) {
+        Extraction extraction = new Extraction(student.getStudentNum(), blockScope);
 
         for (Note note : notes) {
             if (note.getContent() != null) {
-                processNoteContent(note.getNoteId(), note.getContent(), combinedText, mediaParts,
-                        allowedSources, student.getStudentNum(), totalMediaBytes);
+                processNoteContent(note.getNoteId(), note.getContent(), extraction);
             }
         }
-        return new QuizGenerationInput(combinedText.toString(), mediaParts, allowedSources);
+
+        if (blockScope != null && !extraction.foundBlockIds.containsAll(blockScope)) {
+            throw new InvalidRequestException("선택한 블록을 찾을 수 없습니다. 노트가 저장된 뒤 다시 시도해 주세요.");
+        }
+        return new QuizGenerationInput(extraction.text.toString(), extraction.mediaParts, extraction.allowedSources);
+    }
+
+    // 노트 순회 중 누적되는 추출 상태.
+    private static final class Extraction {
+        final StringBuilder text = new StringBuilder();
+        final List<Map<String, Object>> mediaParts = new ArrayList<>();
+        final Map<Long, Set<String>> allowedSources = new HashMap<>();
+        final AtomicLong totalMediaBytes = new AtomicLong(0);
+        // 범위 모드에서 선택한 blockId가 저장된 노트에 실제로 있는지 확인하기 위해 모은다.
+        final Set<String> foundBlockIds = new HashSet<>();
+        final String studentNum;
+        final Set<String> blockScope;
+
+        Extraction(String studentNum, Set<String> blockScope) {
+            this.studentNum = studentNum;
+            this.blockScope = blockScope;
+        }
     }
 
     public QuizResponse requestQuiz(QuizRequest request, QuizGenerationInput input) {
@@ -206,9 +224,7 @@ public class QuizAiGenerationService {
     }
 
     // 노트 JSON이 깨져 있으면 해당 노트를 조용히 빼고 생성을 계속하지 않고 요청을 실패시킨다.
-    private void processNoteContent(Long noteId, String contentJson, StringBuilder combinedText,
-                                     List<Map<String, Object>> mediaParts, Map<Long, Set<String>> allowedSources,
-                                     String studentNum, AtomicLong totalMediaBytes) {
+    private void processNoteContent(Long noteId, String contentJson, Extraction extraction) {
         JsonNode root;
         try {
             root = objectMapper.readTree(contentJson);
@@ -216,50 +232,57 @@ public class QuizAiGenerationService {
             log.warn("노트 콘텐츠 파싱 실패: noteId={}", noteId, e);
             throw new InvalidRequestException("노트 내용을 읽을 수 없습니다: noteId=" + noteId);
         }
-        extractDataFromNode(noteId, null, root, combinedText, mediaParts, allowedSources, studentNum, totalMediaBytes);
+        extractDataFromNode(noteId, null, extraction.blockScope == null, root, extraction);
     }
 
-    private void extractDataFromNode(Long noteId, String currentBlockId, JsonNode node, StringBuilder textBuilder,
-                                      List<Map<String, Object>> mediaParts, Map<Long, Set<String>> allowedSources,
-                                      String studentNum, AtomicLong totalMediaBytes) {
+    // inScope: 이 노드가 추출 범위 안인지. 자기 id가 선택됐거나 조상이 범위 안이면 범위 안이며,
+    // 범위 밖 노드는 텍스트·REF·미디어를 넣지 않고 하위 노드만 계속 순회한다.
+    private void extractDataFromNode(Long noteId, String currentBlockId, boolean inScope, JsonNode node,
+                                     Extraction extraction) {
         if (node.isObject()) {
             String type = node.path("type").asText();
-            String blockId = node.path("attrs").has("id") ? node.path("attrs").path("id").asText() : currentBlockId;
+            // id가 null로 저장된 블록은 id가 없는 것으로 보고 부모 블록 id를 물려받는다.
+            JsonNode attrs = node.path("attrs");
+            String ownId = attrs.hasNonNull("id") ? attrs.path("id").asText() : null;
+            String blockId = ownId != null ? ownId : currentBlockId;
+            if (ownId != null) {
+                extraction.foundBlockIds.add(ownId);
+            }
+            boolean nodeInScope = inScope || (ownId != null && extraction.blockScope.contains(ownId));
 
-            if ("text".equals(type)) {
-                appendRef(noteId, blockId, "", textBuilder, allowedSources);
-                textBuilder.append(node.path("text").asText()).append(" ");
-            } else if ("image".equals(type)) {
-                appendRef(noteId, blockId, "(Image Content) ", textBuilder, allowedSources);
-                String src = node.path("attrs").path("src").asText();
-                addMediaPart(src, "image", mediaParts, studentNum, totalMediaBytes);
-            } else if ("pdfBlock".equals(type)) {
-                appendRef(noteId, blockId, "(PDF Content) ", textBuilder, allowedSources);
-                String src = node.path("attrs").path("src").asText();
-                addMediaPart(src, "application/pdf", mediaParts, studentNum, totalMediaBytes);
+            if (nodeInScope) {
+                if ("text".equals(type)) {
+                    appendRef(noteId, blockId, "", extraction);
+                    extraction.text.append(node.path("text").asText()).append(" ");
+                } else if ("image".equals(type)) {
+                    appendRef(noteId, blockId, "(Image Content) ", extraction);
+                    addMediaPart(attrs.path("src").asText(), "image", extraction.mediaParts,
+                            extraction.studentNum, extraction.totalMediaBytes);
+                } else if ("pdfBlock".equals(type)) {
+                    appendRef(noteId, blockId, "(PDF Content) ", extraction);
+                    addMediaPart(attrs.path("src").asText(), "application/pdf", extraction.mediaParts,
+                            extraction.studentNum, extraction.totalMediaBytes);
+                }
             }
 
             JsonNode content = node.path("content");
             if (content.isArray()) {
                 for (JsonNode child : content) {
-                    extractDataFromNode(noteId, blockId, child, textBuilder, mediaParts, allowedSources,
-                            studentNum, totalMediaBytes);
+                    extractDataFromNode(noteId, blockId, nodeInScope, child, extraction);
                 }
             }
         } else if (node.isArray()) {
             for (JsonNode child : node) {
-                extractDataFromNode(noteId, currentBlockId, child, textBuilder, mediaParts, allowedSources,
-                        studentNum, totalMediaBytes);
+                extractDataFromNode(noteId, currentBlockId, inScope, child, extraction);
             }
         }
     }
 
     // blockId가 있을 때만 REF 태그를 붙이고, 같은 쌍을 출처 허용 집합에 기록한다.
-    private void appendRef(Long noteId, String blockId, String suffix, StringBuilder textBuilder,
-                           Map<Long, Set<String>> allowedSources) {
+    private void appendRef(Long noteId, String blockId, String suffix, Extraction extraction) {
         if (blockId == null) return;
-        textBuilder.append("[[REF:").append(noteId).append("/").append(blockId).append("]] ").append(suffix);
-        allowedSources.computeIfAbsent(noteId, k -> new HashSet<>()).add(blockId);
+        extraction.text.append("[[REF:").append(noteId).append("/").append(blockId).append("]] ").append(suffix);
+        extraction.allowedSources.computeIfAbsent(noteId, k -> new HashSet<>()).add(blockId);
     }
 
     private void addMediaPart(String url, String defaultMimeType, List<Map<String, Object>> mediaParts,

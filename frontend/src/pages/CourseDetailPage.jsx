@@ -167,6 +167,7 @@ const CourseDetailPage = () => {
         courseId={courseId}
         currentNoteId={noteId}
         onGenerated={(res) => setQuizResult(res)}
+        saveStatus={saveState.status}
       />
       {quizResult && (
         <CBTPlayer quizData={quizResult} onClose={() => setQuizResult(null)} courseId={courseId} />

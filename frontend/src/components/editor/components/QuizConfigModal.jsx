@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNoteTree } from '../../../context/NoteTreeContext';
 import { X, Check, BookOpen, Loader2, ChevronRight, Minus, Plus } from 'lucide-react';
 import client from '../../../api/client';
@@ -27,9 +27,73 @@ const DIFFICULTY_OPTIONS = [
   { value: 'HARD', label: '상 · 심화', description: '응용 및 심화' },
 ];
 
-const SummaryStrip = ({ noteCount, typeCount, totalQuestions, difficultyLabel }) => (
+const SCOPE_NOTE = 'NOTE';
+const SCOPE_BLOCK = 'BLOCK';
+
+// BlockId.js 적용 대상 블록의 목록 표시용 라벨
+const BLOCK_TYPE_LABELS = {
+  paragraph: '문단',
+  heading: '제목',
+  blockquote: '인용',
+  codeBlock: '코드',
+  taskList: '체크리스트',
+  bulletList: '목록',
+  orderedList: '번호 목록',
+  image: '이미지',
+};
+const BLOCK_PREVIEW_LENGTH = 60;
+
+const collectText = (node) => {
+  if (!node) return '';
+  if (node.type === 'text') return node.text || '';
+  return (node.content || []).map(collectText).join(' ');
+};
+
+// 서버에 저장된 노트 JSON(문자열)에서 선택 가능한 최상위 블록 목록을 만든다.
+// 첫 노드는 제목이므로 제외하고, id가 없는 블록(pdfBlock 등)은 선택할 수 없어 따로 표시만 한다.
+const parseNoteBlocks = (rawContent) => {
+  let doc;
+  try {
+    doc = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+  } catch {
+    return { blocks: [], hasUnselectable: false };
+  }
+  const nodes = Array.isArray(doc?.content) ? doc.content.slice(1) : [];
+  const blocks = [];
+  let hasUnselectable = false;
+  nodes.forEach((node) => {
+    const id = node?.attrs?.id;
+    if (!id) {
+      hasUnselectable = true;
+      return;
+    }
+    const text = collectText(node).replace(/\s+/g, ' ').trim();
+    blocks.push({
+      id,
+      type: node.type,
+      level: node.type === 'heading' ? node.attrs.level || 1 : null,
+      preview: text.length > BLOCK_PREVIEW_LENGTH ? `${text.slice(0, BLOCK_PREVIEW_LENGTH)}…` : text,
+    });
+  });
+  return { blocks, hasUnselectable };
+};
+
+// heading을 선택하면 다음 같은 레벨 이하 heading 전까지의 블록을 함께 선택한다.
+const getBlockRangeIds = (blocks, index) => {
+  const target = blocks[index];
+  if (target.type !== 'heading') return [target.id];
+  const ids = [target.id];
+  for (let i = index + 1; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (block.type === 'heading' && block.level <= target.level) break;
+    ids.push(block.id);
+  }
+  return ids;
+};
+
+const SummaryStrip = ({ scopeCount, scopeUnit, typeCount, totalQuestions, difficultyLabel }) => (
   <div className="px-5 py-3 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400 shrink-0">
-    <span><span className="font-semibold text-blue-600 dark:text-blue-400">{noteCount}</span>개 노트</span>
+    <span><span className="font-semibold text-blue-600 dark:text-blue-400">{scopeCount}</span>개 {scopeUnit}</span>
     <span><span className="font-semibold text-blue-600 dark:text-blue-400">{typeCount}</span>개 유형</span>
     <span>총 <span className="font-semibold text-blue-600 dark:text-blue-400">{totalQuestions}</span>문항</span>
     <span>{difficultyLabel}</span>
@@ -90,10 +154,82 @@ const NoteTreeRow = ({ note, level, selectedIds, expandedIds, onToggleNote, onTo
   );
 };
 
+const ScopeModeToggle = ({ scopeMode, onChange }) => (
+  <div role="radiogroup" aria-label="학습 범위 선택" className="mt-2 grid grid-cols-2 gap-2">
+    {[
+      { value: SCOPE_NOTE, label: '노트 전체' },
+      { value: SCOPE_BLOCK, label: '블록 선택' },
+    ].map(opt => (
+      <button
+        key={opt.value}
+        type="button"
+        role="radio"
+        aria-checked={scopeMode === opt.value}
+        onClick={() => onChange(opt.value)}
+        className={`py-2 rounded-lg border text-xs font-semibold transition-colors ${
+          scopeMode === opt.value
+            ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 dark:border-blue-500/60 text-blue-700 dark:text-blue-300'
+            : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
+        }`}
+      >
+        {opt.label}
+      </button>
+    ))}
+  </div>
+);
+
+const BlockScopeSection = ({ blocks, hasUnselectable, loading, error, selectedBlockIds, onToggleBlock }) => (
+  <div className="mt-3">
+    <p className="text-xs text-slate-500 dark:text-slate-400">현재 노트에서 문제를 생성할 블록을 선택하세요</p>
+    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">최근 입력은 자동 저장(약 2초) 후 목록에 반영됩니다</p>
+    <div className="mt-2 space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-slate-50/50 dark:bg-slate-800/50">
+      {loading ? (
+        <p className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <Loader2 size={14} className="animate-spin" />
+          블록 목록을 불러오는 중...
+        </p>
+      ) : error ? (
+        <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+      ) : blocks.length === 0 ? (
+        <p className="text-xs text-slate-500 dark:text-slate-400">선택할 수 있는 블록이 없습니다.</p>
+      ) : (
+        blocks.map((block, index) => {
+          const isSelected = selectedBlockIds.includes(block.id);
+          return (
+            <label
+              key={block.id}
+              className={`flex items-center gap-2 py-1.5 px-1 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/70 dark:bg-blue-500/10' : 'hover:bg-white dark:hover:bg-slate-800'}`}
+              style={{ paddingLeft: block.type === 'heading' ? `${(block.level - 1) * 12 + 4}px` : undefined }}
+            >
+              <input
+                type="checkbox"
+                className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+                checked={isSelected}
+                onChange={() => onToggleBlock(index)}
+              />
+              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                {block.type === 'heading' ? `제목 ${block.level}` : BLOCK_TYPE_LABELS[block.type] || block.type}
+              </span>
+              <span className={`flex-1 truncate text-xs ${block.type === 'heading' ? 'font-semibold' : ''} ${isSelected ? 'text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400'}`}>
+                {block.preview || '(내용 없음)'}
+              </span>
+            </label>
+          );
+        })
+      )}
+    </div>
+    {hasUnselectable && !loading && !error && (
+      <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">PDF 등 일부 블록은 노트 전체 모드에서만 포함됩니다</p>
+    )}
+    {!loading && !error && (
+      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">선택된 블록 {selectedBlockIds.length}개</p>
+    )}
+  </div>
+);
+
 const NoteScopeSection = ({ noteTree, selectedIds, expandedIds, onToggleNote, onToggleExpand }) => (
-  <div>
-    <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">학습 범위</label>
-    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">문제를 생성할 노트를 선택하세요</p>
+  <div className="mt-3">
+    <p className="text-xs text-slate-500 dark:text-slate-400">문제를 생성할 노트를 선택하세요</p>
     <div className="mt-2 space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-slate-50/50 dark:bg-slate-800/50">
       {noteTree.map(note => (
         <NoteTreeRow
@@ -204,7 +340,7 @@ const DifficultySection = ({ difficulty, onChange }) => (
   </div>
 );
 
-const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated }) => {
+const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStatus = 'synced' }) => {
   const { noteTree } = useNoteTree();
   const [selectedIds, setSelectedIds] = useState([parseInt(currentNoteId)]);
   const [expandedIds, setExpandedIds] = useState([parseInt(currentNoteId)]); // 현재 노트의 부모들은 펼쳐진 상태로 시작하는 것이 좋지만, 일단 현재 노드만 포함
@@ -220,6 +356,14 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated }) => {
   });
   const [difficulty, setDifficulty] = useState('NORMAL');
   const [loading, setLoading] = useState(false);
+  const [scopeMode, setScopeMode] = useState(SCOPE_NOTE);
+  const [blocks, setBlocks] = useState([]);
+  const [hasUnselectableBlocks, setHasUnselectableBlocks] = useState(false);
+  const [blocksLoading, setBlocksLoading] = useState(false);
+  const [blocksError, setBlocksError] = useState(null);
+  const [selectedBlockIds, setSelectedBlockIds] = useState([]);
+  // 블록 모드를 빠르게 껐다 켤 때 늦게 도착한 이전 응답이 목록을 덮어쓰지 않게 한다.
+  const blockRequestSeqRef = useRef(0);
 
   // 이 모달은 isOpen과 무관하게 부모에 항상 마운트되어 있으므로(아래 !isOpen 조기 반환),
   // selectedIds/expandedIds의 useState 초기값은 최초 마운트 시점의 currentNoteId만 캡처한다.
@@ -232,10 +376,55 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated }) => {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedIds([id]);
       setExpandedIds([id]);
+      setScopeMode(SCOPE_NOTE);
+      setSelectedBlockIds([]);
     }
   }, [isOpen, currentNoteId]);
 
   if (!isOpen) return null;
+
+  // 블록 모드에 들어갈 때마다 서버 저장본을 다시 읽는다. 서버는 저장본 기준으로 블록을
+  // 추출·검증하므로, 목록도 저장본 기준이어야 선택한 블록이 서버에서 "없는 블록"이 되지 않는다.
+  const loadBlocks = async () => {
+    const seq = ++blockRequestSeqRef.current;
+    setBlocksLoading(true);
+    setBlocksError(null);
+    setSelectedBlockIds([]);
+    try {
+      const response = await client.get(`/notes/${currentNoteId}`);
+      if (seq !== blockRequestSeqRef.current) return;
+      const parsed = parseNoteBlocks(response.data?.content);
+      setBlocks(parsed.blocks);
+      setHasUnselectableBlocks(parsed.hasUnselectable);
+    } catch (error) {
+      if (seq !== blockRequestSeqRef.current) return;
+      setBlocks([]);
+      setBlocksError(error.response?.data?.message || '블록 목록을 불러오지 못했습니다.');
+    } finally {
+      if (seq === blockRequestSeqRef.current) setBlocksLoading(false);
+    }
+  };
+
+  const changeScopeMode = (mode) => {
+    if (mode === scopeMode) return;
+    setScopeMode(mode);
+    if (mode === SCOPE_BLOCK) {
+      loadBlocks();
+    } else {
+      blockRequestSeqRef.current++;
+      setBlocksLoading(false);
+    }
+  };
+
+  const toggleBlock = (index) => {
+    const targetIds = getBlockRangeIds(blocks, index);
+    const isSelecting = !selectedBlockIds.includes(blocks[index].id);
+    setSelectedBlockIds(prev => (
+      isSelecting
+        ? [...prev, ...targetIds.filter(id => !prev.includes(id))]
+        : prev.filter(id => !targetIds.includes(id))
+    ));
+  };
 
   const toggleNote = (noteId) => {
     // 해당 노드와 모든 자식 노드 ID를 찾는 헬퍼 함수
@@ -327,9 +516,20 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated }) => {
   );
   const difficultyLabel = DIFFICULTY_OPTIONS.find(opt => opt.value === difficulty)?.label ?? difficulty;
 
+  const isBlockMode = scopeMode === SCOPE_BLOCK;
+  const scopeDisabledReason = isBlockMode
+    ? (blocksLoading ? '블록 목록을 불러오는 중입니다' :
+      blocksError ? blocksError :
+      saveStatus === 'saving' ? '노트 자동 저장이 끝난 뒤 생성할 수 있습니다' :
+      saveStatus === 'error' ? '노트 저장에 실패했습니다. 저장을 다시 시도한 뒤 생성하세요' :
+      selectedBlockIds.length === 0 ? '블록을 하나 이상 선택하세요' :
+      null)
+    : (selectedIds.length === 0 ? '노트를 하나 이상 선택하세요' :
+      selectedIds.length > MAX_NOTES_PER_QUIZ ? `노트는 최대 ${MAX_NOTES_PER_QUIZ}개까지 선택할 수 있습니다` :
+      null);
+
   const disabledReason =
-    selectedIds.length === 0 ? '노트를 하나 이상 선택하세요' :
-    selectedIds.length > MAX_NOTES_PER_QUIZ ? `노트는 최대 ${MAX_NOTES_PER_QUIZ}개까지 선택할 수 있습니다` :
+    scopeDisabledReason ? scopeDisabledReason :
     activeTypeCount === 0 ? '문제 유형을 하나 이상 선택하세요' :
     totalQuestions === 0 ? '각 유형의 문항 수를 확인하세요' :
     totalQuestions > MAX_TOTAL_QUESTIONS ? `총 문항 수는 ${MAX_TOTAL_QUESTIONS}개를 초과할 수 없습니다` :
@@ -345,12 +545,23 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated }) => {
       if (activeTypes[type]) counts[type] = typeCounts[type];
     });
 
-    try {
-      const response = await client.post('/quiz/generate', {
+    // 노트 전체 모드 payload는 기존과 동일하게 두고, 블록 모드에서만 blockIds를 추가한다.
+    // blockIds는 노트 안 순서대로 보낸다.
+    const payload = isBlockMode
+      ? {
+        noteIds: [parseInt(currentNoteId)],
+        blockIds: blocks.map(block => block.id).filter(id => selectedBlockIds.includes(id)),
+        typeCounts: counts,
+        difficulty
+      }
+      : {
         noteIds: selectedIds,
         typeCounts: counts,
         difficulty
-      });
+      };
+
+    try {
+      const response = await client.post('/quiz/generate', payload);
       onGenerated(response.data);
       onClose();
     } catch (error) {
@@ -390,7 +601,8 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated }) => {
         </div>
 
         <SummaryStrip
-          noteCount={selectedIds.length}
+          scopeCount={isBlockMode ? selectedBlockIds.length : selectedIds.length}
+          scopeUnit={isBlockMode ? '블록' : '노트'}
           typeCount={activeTypeCount}
           totalQuestions={totalQuestions}
           difficultyLabel={difficultyLabel}
@@ -401,13 +613,28 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated }) => {
             fieldset은 안쪽에서 disabled 상속(로딩 중 입력 일괄 비활성화) 역할만 한다. */}
         <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
           <fieldset disabled={loading} className="p-4 space-y-4 border-0 m-0 min-w-0">
-            <NoteScopeSection
-              noteTree={noteTree}
-              selectedIds={selectedIds}
-              expandedIds={expandedIds}
-              onToggleNote={toggleNote}
-              onToggleExpand={toggleExpand}
-            />
+            <div>
+              <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">학습 범위</label>
+              <ScopeModeToggle scopeMode={scopeMode} onChange={changeScopeMode} />
+              {isBlockMode ? (
+                <BlockScopeSection
+                  blocks={blocks}
+                  hasUnselectable={hasUnselectableBlocks}
+                  loading={blocksLoading}
+                  error={blocksError}
+                  selectedBlockIds={selectedBlockIds}
+                  onToggleBlock={toggleBlock}
+                />
+              ) : (
+                <NoteScopeSection
+                  noteTree={noteTree}
+                  selectedIds={selectedIds}
+                  expandedIds={expandedIds}
+                  onToggleNote={toggleNote}
+                  onToggleExpand={toggleExpand}
+                />
+              )}
+            </div>
             <QuestionTypeSection
               activeTypes={activeTypes}
               typeCounts={typeCounts}

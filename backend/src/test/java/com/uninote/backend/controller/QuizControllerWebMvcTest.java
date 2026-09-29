@@ -142,6 +142,44 @@ class QuizControllerWebMvcTest {
         verify(quizService, never()).generateQuiz(any(), any());
     }
 
+    private org.springframework.test.web.servlet.ResultActions generateWithBlockIds(java.util.List<String> blockIds)
+            throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("noteIds", java.util.List.of(1L));
+        body.put("typeCounts", Map.of("SHORT_ANSWER", 3));
+        body.put("difficulty", "NORMAL");
+        body.put("blockIds", blockIds);
+
+        return mockMvc.perform(post("/api/quiz/generate")
+                .header("Authorization", bearerToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)));
+    }
+
+    @Test
+    void blockIds가500개를넘으면400을반환한다() throws Exception {
+        java.util.List<String> tooMany = java.util.stream.IntStream.range(0, 501).mapToObj(i -> "b" + i).toList();
+
+        generateWithBlockIds(tooMany)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+        verify(quizService, never()).generateQuiz(any(), any());
+    }
+
+    @Test
+    void blockIds에빈문자열이있으면400을반환한다() throws Exception {
+        generateWithBlockIds(java.util.List.of("b1", " "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+        verify(quizService, never()).generateQuiz(any(), any());
+    }
+
+    @Test
+    void blockIds가있는요청은DTO검증을통과한다() throws Exception {
+        generateWithBlockIds(java.util.List.of("b1", "b2")).andExpect(status().isOk());
+        verify(quizService).generateQuiz(any(), any());
+    }
+
     @Test
     void typeCounts값20은DTO검증을통과한다() throws Exception {
         generateWithShortAnswerCount(20).andExpect(status().isOk());

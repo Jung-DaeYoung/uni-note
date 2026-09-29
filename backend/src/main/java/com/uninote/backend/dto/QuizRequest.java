@@ -4,9 +4,11 @@ import com.uninote.backend.domain.QuestionType;
 import com.uninote.backend.domain.QuizDifficulty;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.util.List;
@@ -21,4 +23,8 @@ public class QuizRequest {
     private Map<QuestionType, @Min(1) @Max(20) Integer> typeCounts;
     @NotNull
     private QuizDifficulty difficulty;
+    // 선택 필드. 지정하면 noteIds의 단일 노트에서 이 블록(과 하위 블록)만으로 문제를 생성한다.
+    // 생략하거나 비어 있으면 노트 전체를 사용한다.
+    @Size(max = 500)
+    private List<@NotBlank String> blockIds;
 }

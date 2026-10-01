@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   MessageSquare,
@@ -52,8 +52,6 @@ const CourseDetailPage = () => {
     setSavedForNoteId(noteId);
     setSaveState({ status: 'synced', retry: () => {} });
   }
-
-  const handleNoteSaved = useCallback(() => fetchTree(), [fetchTree]);
 
   // --- Sidebar Content ---
   const sidebarContent = (
@@ -177,7 +175,7 @@ const CourseDetailPage = () => {
             <div className={`mx-auto transition-all duration-500 pt-8 ${isBoardOpen ? 'max-w-4xl' : 'max-w-7xl'}`}>
               <div className="px-8 pb-10">
                 {noteId && noteData && noteData.noteId === parseInt(noteId) ? (
-                  <NotionEditor key={noteId} noteId={noteId} courseId={courseId} initialData={noteData} onSaved={handleNoteSaved} onSaveStateChange={setSaveState} />
+                  <NotionEditor key={noteId} noteId={noteId} courseId={courseId} initialData={noteData} onSaved={fetchTree} onSaveStateChange={setSaveState} />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-40 opacity-20 text-slate-900 dark:text-slate-100">
                     <FileText size={64} className="mb-4" />

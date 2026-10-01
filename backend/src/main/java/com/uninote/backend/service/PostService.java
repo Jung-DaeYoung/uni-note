@@ -118,48 +118,42 @@ public class PostService {
     }
 
     private void requireAuthor(Student author, String studentNum, String message) {
-        if (!author.getStudentNum().trim().equals(studentNum.trim())) {
+        if (!isAuthor(author, studentNum)) {
             throw new CourseAccessException(message);
         }
     }
 
+    private static boolean isAuthor(Student author, String studentNum) {
+        return author != null && studentNum != null
+                && author.getStudentNum().trim().equals(studentNum.trim());
+    }
+
+    private static String anonymousName(Student author) {
+        return author == null ? "익명" : "익명 " + (author.getStudId() % 100);
+    }
+
     // 댓글을 뺀 게시글 응답. 대시보드(DashboardService)의 최근 게시글도 이 변환을 쓴다.
     static PostResponse.PostResponseBuilder summaryBuilder(Post post, String studentNum) {
-        String authorName = "익명";
-        boolean isPostAuthor = false;
-
-        if (post.getStudent() != null && studentNum != null) {
-            isPostAuthor = post.getStudent().getStudentNum().trim().equals(studentNum.trim());
-            authorName = "익명 " + (post.getStudent().getStudId() % 100);
-        }
-
         return PostResponse.builder()
                 .postId(post.getPostId())
                 .courseId(post.getCourse().getCourseId())
                 .courseName(post.getCourse().getCourseName())
                 .title(post.getTitle())
                 .content(post.getContent())
-                .authorName(authorName)
-                .author(isPostAuthor)
+                .authorName(anonymousName(post.getStudent()))
+                .author(isAuthor(post.getStudent(), studentNum))
                 .createdAt(post.getCreatedAt());
     }
 
     private PostResponse convertToResponse(Post post, String studentNum) {
         List<CommentResponse> comments = post.getComments().stream()
-                .map(c -> {
-                    boolean isCommentAuthor = c.getStudent() != null && studentNum != null && 
-                            c.getStudent().getStudentNum().trim().equals(studentNum.trim());
-                    String commentAuthorName = (c.getStudent() != null) ? 
-                            "익명 " + (c.getStudent().getStudId() % 100) : "익명";
-                    
-                    return CommentResponse.builder()
+                .map(c -> CommentResponse.builder()
                         .commentId(c.getCommentId())
                         .content(c.getContent())
-                        .authorName(commentAuthorName)
-                        .author(isCommentAuthor)
+                        .authorName(anonymousName(c.getStudent()))
+                        .author(isAuthor(c.getStudent(), studentNum))
                         .createdAt(c.getCreatedAt())
-                        .build();
-                })
+                        .build())
                 .collect(Collectors.toList());
 
         return summaryBuilder(post, studentNum).comments(comments).build();

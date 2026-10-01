@@ -25,16 +25,4 @@ export default Extension.create({
       },
     ];
   },
-
-  // 노드가 생성될 때 ID가 없으면 부여하는 로직 (강제성 부여)
-  onTransaction({ transaction }) {
-    if (!transaction.docChanged) return;
-
-    const { doc } = transaction;
-    doc.descendants((node) => {
-      if (node.isBlock && this.options.types?.includes(node.type.name) && !node.attrs.id) {
-        // 이 부분은 사실 renderHTML에서 처리되지만, 명시적 관리를 위해 남겨둠
-      }
-    });
-  },
 });

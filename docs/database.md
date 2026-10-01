@@ -26,7 +26,7 @@ Entity는 JPA로 관리되며 기본 키는 자동 증가 ID다. 실제 테이�
 | Entity / 테이블 | 주요 필드 | 관계 |
 |---|---|---|
 | `QuizSet` / `quiz_sets` | `quizSetId` PK, `title`, `difficulty`, `sourceNotes`, 생성 시각 | `Course` N:1, `Student` N:1, `Question` 1:N, `QuizAttempt` 1:N |
-| `Question` / `questions` | `questionId` PK, `type`, `questionText`, `imagePath`, `options`, `correctAnswer`, `explanation`, `sourceNoteId`, `sourceBlockId` | `QuizSet` N:1 |
+| `Question` / `questions` | `questionId` PK, `type`, `questionText`, `options`, `correctAnswer`, `explanation`, `sourceNoteId`, `sourceBlockId` | `QuizSet` N:1 |
 | `QuizAttempt` / `quiz_attempts` | `attemptId` PK, `score`, `status`, `startTime`, `endTime` | `QuizSet` N:1, `Student` N:1, `UserAnswer` 1:N |
 | `UserAnswer` / `user_answers` | `userAnswerId` PK, `submittedAnswer`, `isCorrect` | `QuizAttempt` N:1, `Question` N:1 |
 

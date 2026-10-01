@@ -14,5 +14,4 @@ public class QuizSetResponse {
     private String courseName;
     private QuizDifficulty difficulty;
     private LocalDateTime createdAt;
-    private Integer lastScore; // 마지막 풀이 점수 (선택)
 }

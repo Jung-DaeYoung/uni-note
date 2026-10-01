@@ -1,7 +1,17 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import debounce from 'lodash.debounce';
 import axios from 'axios';
 import client from '../../../api/client';
+
+// 마지막 호출 뒤 ms 동안 추가 호출이 없으면 fn을 실행한다. cancel()로 대기 중인 실행을 취소한다.
+const debounce = (fn, ms) => {
+  let timer;
+  const debounced = (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+  debounced.cancel = () => clearTimeout(timer);
+  return debounced;
+};
 
 // 손상된 JSON이 에디터를 통째로 멈추게 하지 않도록 파싱을 보호한다.
 const safeParseJson = (value) => {

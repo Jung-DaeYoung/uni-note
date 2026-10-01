@@ -180,16 +180,6 @@ class IncorrectNoteServiceTest {
     }
 
     @Test
-    void otherStudentCannotRemoveItemFromSomeoneElsesGroup() {
-        when(groupRepository.findById(30L)).thenReturn(Optional.of(group));
-
-        assertThatThrownBy(() -> incorrectNoteService.removeItemFromGroup(30L, 40L, other))
-                .isInstanceOf(CourseAccessException.class);
-
-        verify(itemRepository, never()).delete(any());
-    }
-
-    @Test
     void ownerCanGetOwnPracticeSession() {
         when(groupRepository.findById(30L)).thenReturn(Optional.of(group));
 

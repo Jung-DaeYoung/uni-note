@@ -18,12 +18,12 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -35,7 +35,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -92,7 +91,7 @@ public class QuizAiGenerationService {
         final StringBuilder text = new StringBuilder();
         final List<Map<String, Object>> mediaParts = new ArrayList<>();
         final Map<Long, Set<String>> allowedSources = new HashMap<>();
-        final AtomicLong totalMediaBytes = new AtomicLong(0);
+        long totalMediaBytes;
         final String studentNum;
         // 현재 노트의 선택 블록(null이면 노트 전체)과, 선택한 blockId가 저장된 노트에 실제로
         // 있는지 확인하기 위해 모으는 현재 노트의 blockId 집합.
@@ -265,12 +264,10 @@ public class QuizAiGenerationService {
                     extraction.text.append(node.path("text").asText()).append(" ");
                 } else if ("image".equals(type)) {
                     appendRef(noteId, blockId, "(Image Content) ", extraction);
-                    addMediaPart(attrs.path("src").asText(), "image", extraction.mediaParts,
-                            extraction.studentNum, extraction.totalMediaBytes);
+                    addMediaPart(attrs.path("src").asText(), "image", extraction);
                 } else if ("pdfBlock".equals(type)) {
                     appendRef(noteId, blockId, "(PDF Content) ", extraction);
-                    addMediaPart(attrs.path("src").asText(), "application/pdf", extraction.mediaParts,
-                            extraction.studentNum, extraction.totalMediaBytes);
+                    addMediaPart(attrs.path("src").asText(), "application/pdf", extraction);
                 }
             }
 
@@ -294,8 +291,7 @@ public class QuizAiGenerationService {
         extraction.allowedSources.computeIfAbsent(noteId, k -> new HashSet<>()).add(blockId);
     }
 
-    private void addMediaPart(String url, String defaultMimeType, List<Map<String, Object>> mediaParts,
-                               String studentNum, AtomicLong totalMediaBytes) {
+    private void addMediaPart(String url, String defaultMimeType, Extraction extraction) {
         try {
             URI uri = URI.create(url);
             String path = uri.getPath();
@@ -304,10 +300,10 @@ public class QuizAiGenerationService {
             // 서명(owner/sig)이 있는 URL은 실제로 이 학생에게 발급된 파일인지 확인한다.
             // 서명이 전혀 없는 URL은 서명 도입 이전의 화이트리스트 레거시 파일이므로
             // (P1-1/2단계에서 이미 검토·승인된 잔여 위험) 기존과 동일하게 통과시킨다.
-            Map<String, String> query = parseQuery(uri.getRawQuery());
-            String sig = query.get("sig");
+            MultiValueMap<String, String> query = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
+            String sig = query.getFirst("sig");
             boolean hasSignature = query.containsKey("owner") || sig != null;
-            if (hasSignature && !fileAccessSigner.isValid(fileName, studentNum, sig)) {
+            if (hasSignature && !fileAccessSigner.isValid(fileName, extraction.studentNum, sig)) {
                 log.warn("본인 소유가 아닌 파일 참조를 건너뜁니다: {}", fileName);
                 return;
             }
@@ -315,8 +311,8 @@ public class QuizAiGenerationService {
             Path filePath = Paths.get("uploads").resolve(fileName);
             if (!Files.exists(filePath)) return;
 
-            long fileSize = Files.size(filePath);
-            if (totalMediaBytes.addAndGet(fileSize) > MAX_TOTAL_MEDIA_BYTES) {
+            extraction.totalMediaBytes += Files.size(filePath);
+            if (extraction.totalMediaBytes > MAX_TOTAL_MEDIA_BYTES) {
                 throw new InvalidRequestException("첨부된 이미지/PDF의 총 용량이 너무 큽니다.");
             }
 
@@ -328,7 +324,7 @@ public class QuizAiGenerationService {
             else if (fileName.toLowerCase().endsWith(".jpg") || fileName.toLowerCase().endsWith(".jpeg")) mimeType = "image/jpeg";
             else if (fileName.toLowerCase().endsWith(".pdf")) mimeType = "application/pdf";
 
-            mediaParts.add(Map.of(
+            extraction.mediaParts.add(Map.of(
                 "inline_data", Map.of(
                     "mime_type", mimeType,
                     "data", base64Data
@@ -339,18 +335,5 @@ public class QuizAiGenerationService {
         } catch (Exception e) {
             log.warn("미디어 데이터 변환 실패: " + url, e);
         }
-    }
-
-    private Map<String, String> parseQuery(String rawQuery) {
-        if (rawQuery == null || rawQuery.isBlank()) return Map.of();
-        Map<String, String> result = new HashMap<>();
-        for (String pair : rawQuery.split("&")) {
-            int idx = pair.indexOf('=');
-            if (idx < 0) continue;
-            String key = URLDecoder.decode(pair.substring(0, idx), StandardCharsets.UTF_8);
-            String value = URLDecoder.decode(pair.substring(idx + 1), StandardCharsets.UTF_8);
-            result.put(key, value);
-        }
-        return result;
     }
 }

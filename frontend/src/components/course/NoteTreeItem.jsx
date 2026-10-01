@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, FileText, FolderOpen, Trash2 } from 'lucide-react';
 
-const NoteTreeItem = ({ item, courseId, depth = 0, currentNoteId, onDelete }) => {
+const NoteTreeItem = ({ item, courseId, currentNoteId, onDelete }) => {
   const [isOpen, setIsOpen] = useState(true);
   const navigate = useNavigate();
   const hasChildren = item.children && item.children.length > 0;
@@ -16,7 +16,6 @@ const NoteTreeItem = ({ item, courseId, depth = 0, currentNoteId, onDelete }) =>
           ? 'border-blue-500 bg-blue-500/10 text-white'
           : 'border-transparent hover:bg-slate-800 text-slate-400 hover:text-slate-100'
         }`}
-        style={{ marginLeft: `${depth * 12}px` }}
         onClick={() => navigate(`/course/${courseId}/note/${item.noteId}`)}
       >
         <button
@@ -57,7 +56,6 @@ const NoteTreeItem = ({ item, courseId, depth = 0, currentNoteId, onDelete }) =>
               key={child.noteId}
               item={child}
               courseId={courseId}
-              depth={depth}
               currentNoteId={currentNoteId}
               onDelete={onDelete}
             />

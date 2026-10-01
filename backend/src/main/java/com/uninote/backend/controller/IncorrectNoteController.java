@@ -39,12 +39,6 @@ public class IncorrectNoteController {
         return ResponseEntity.noContent().build();
     }
 
-    @DeleteMapping("/groups/{groupId}/questions/{questionId}")
-    public ResponseEntity<Void> removeItem(@PathVariable @Positive Long groupId, @PathVariable @Positive Long questionId, Principal principal) {
-        incorrectNoteService.removeItemFromGroup(groupId, questionId, getStudent(principal));
-        return ResponseEntity.noContent().build();
-    }
-
     @GetMapping("/groups/{groupId}/practice")
     public ResponseEntity<QuizSetDetailResponse> getPracticeSession(@PathVariable @Positive Long groupId, Principal principal) {
         return ResponseEntity.ok(incorrectNoteService.getPracticeSession(groupId, getStudent(principal)));
@@ -63,11 +57,6 @@ public class IncorrectNoteController {
     @GetMapping("/statistics/types")
     public ResponseEntity<List<QuestionTypeIncorrectStatResponse>> getTypeStatistics(Principal principal) {
         return ResponseEntity.ok(incorrectNoteService.getTypeStatistics(getStudent(principal)));
-    }
-
-    @GetMapping("/questions")
-    public ResponseEntity<List<IncorrectQuestionStatResponse>> getQuestionStatistics(Principal principal) {
-        return ResponseEntity.ok(incorrectNoteService.getQuestionStatistics(getStudent(principal)));
     }
 
     @GetMapping("/review-today")

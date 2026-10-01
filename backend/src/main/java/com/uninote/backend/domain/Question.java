@@ -25,8 +25,6 @@ public class Question {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String questionText;
 
-    private String imagePath;
-
     @Column(columnDefinition = "TEXT")
     private String options; // JSON for multiple choice
 

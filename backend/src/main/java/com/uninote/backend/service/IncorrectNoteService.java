@@ -76,14 +76,6 @@ public class IncorrectNoteService {
         groupRepository.delete(getOwnedGroup(groupId, student));
     }
 
-    @Transactional
-    public void removeItemFromGroup(Long groupId, Long questionId, Student student) {
-        getOwnedGroup(groupId, student);
-
-        itemRepository.findByGroup_IdAndQuestion_QuestionId(groupId, questionId)
-            .ifPresent(itemRepository::delete);
-    }
-
     @Transactional(readOnly = true)
     public QuizSetDetailResponse getPracticeSession(Long groupId, Student student) {
         IncorrectNoteGroup group = getOwnedGroup(groupId, student);
@@ -170,28 +162,6 @@ public class IncorrectNoteService {
                     .build();
             })
             .sorted(Comparator.comparingDouble(QuestionTypeIncorrectStatResponse::getAccuracyRate)) // 취약 유형 먼저
-            .collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
-    public List<IncorrectQuestionStatResponse> getQuestionStatistics(Student student) {
-        return buildQuestionReviewStats(student).stream()
-            .map(s -> IncorrectQuestionStatResponse.builder()
-                .questionId(s.getQuestion().getQuestionId())
-                .questionText(s.getQuestion().getQuestionText())
-                .courseId(s.getCourseId())
-                .courseName(s.getCourseName())
-                .sourceNoteId(s.getQuestion().getSourceNoteId())
-                .sourceBlockId(s.getQuestion().getSourceBlockId())
-                .type(s.getQuestion().getType())
-                .attemptCount(s.getAttemptCount())
-                .correctCount(s.getCorrectCount())
-                .incorrectCount(s.getIncorrectCount())
-                .lastAttemptedAt(s.getLastAttemptedAt())
-                .lastIncorrectAt(s.getLastIncorrectAt())
-                .accuracyRate(s.getAccuracyRate())
-                .reviewPriority(s.getReviewPriority())
-                .build())
             .collect(Collectors.toList());
     }
 

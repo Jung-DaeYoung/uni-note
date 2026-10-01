@@ -104,7 +104,6 @@ const useIncorrectNotes = (view) => {
     navigate(`/course/${item.courseId}/note/${q.sourceNoteId}`, {
       state: {
         sourceBlockId: q.sourceBlockId,
-        sourceNavigationId: String(q.questionId),
       },
     });
   };

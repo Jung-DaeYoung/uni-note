@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, History, CheckCircle2, ChevronRight, Loader2 } from 'lucide-react';
 import client from '../../../api/client';
 
@@ -6,25 +6,22 @@ const QuizAttemptsModal = ({ isOpen, onClose, quizSetId, quizTitle, onViewAttemp
   const [attempts, setAttempts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const fetchAttempts = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await client.get(`/quiz/${quizSetId}/attempts`);
-      setAttempts(res.data);
-    } catch (err) {
-      console.error("시도 기록 조회 실패:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [quizSetId]);
-
+  // 모달이 열릴 때 서버 목록을 새로 불러오는 표준 fetch-on-open 패턴이다.
   useEffect(() => {
-    if (isOpen && quizSetId) {
-      // 모달이 열릴 때 서버 목록을 새로 불러오는 표준 fetch-on-open 패턴이다.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      fetchAttempts();
-    }
-  }, [isOpen, quizSetId, fetchAttempts]);
+    if (!isOpen || !quizSetId) return;
+    const fetchAttempts = async () => {
+      setIsLoading(true);
+      try {
+        const res = await client.get(`/quiz/${quizSetId}/attempts`);
+        setAttempts(res.data);
+      } catch (err) {
+        console.error("시도 기록 조회 실패:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchAttempts();
+  }, [isOpen, quizSetId]);
 
   if (!isOpen) return null;
 

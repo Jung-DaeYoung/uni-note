@@ -1,99 +1,84 @@
-# 과잉 구현 정리 계획 (2026-10-01)
+# 과잉 구현 정리 2차 계획 (2026-10-01)
 
-`ponytail-audit`으로 저장소 전체(backend main, frontend src, 의존성)를 훑어 찾은 과잉 구현 20건을 정리한다. 동작·API 응답·DB 저장 형식은 바꾸지 않고, 코드 양만 줄인다.
+1차 정리(`dbde944`) 이후 `ponytail-audit`을 다시 돌려 찾은 15건을 정리한다. 남은 것은 대부분 자잘한 중복과 쓰이지 않는 코드다. 동작·API 응답·DB 저장 형식은 바꾸지 않는다(예외는 3단계 한 건).
 
 ## 범위와 원칙
 
-- 대상은 중복 코드, 쓰이지 않는 코드, 표준 라이브러리로 대체할 수 있는 코드다. 버그·보안·성능은 범위 밖이다.
-- REST 경로, 응답 필드명, 상태 코드, 오류 메시지 문구, 화면 동작은 그대로 유지한다.
+- 대상은 중복 코드, 쓰이지 않는 코드, 필요 없는 설정이다. 버그·보안·성능은 범위 밖이다.
+- REST 경로, 응답 필드명, 상태 코드, 오류 메시지 문구는 그대로 유지한다.
+- 화면이 달라지는 항목은 3단계의 블록 메뉴 "AI 요약/질문" 버튼 삭제 하나뿐이다. 사용자 확인을 받아 진행했다.
 - 테스트 코드는 감사 대상이 아니었다. 정리한 코드를 검증하던 테스트만 함께 고친다.
-- 줄 수는 추정치다. 전체 약 -237줄, 의존성 -2개.
-- 단계마다 따로 커밋할 수 있게 서로 독립적으로 나눴다. 순서는 줄어드는 양이 큰 순이다.
+- 줄 수는 추정치다. 전체 약 -105줄, 의존성 -1개(선택).
+- 단계마다 따로 커밋할 수 있게 서로 독립적으로 나눴다.
 
 ## 구현 단계
 
-### 1. backend: 예외 핸들러 중복 제거 (약 -45줄)
+### 1. backend: 컨트롤러·서비스 중복 제거 (약 -36줄)
 
-- `GlobalExceptionHandler`의 핸들러 10개가 `ErrorResponse` 생성 8줄을 그대로 반복한다.
-- `respond(HttpStatus status, String errorCode, String message)` private 헬퍼를 만들고 각 핸들러는 이를 호출한다.
-- `errorCode` 문자열, 상태 코드, 메시지, 기존 `log.error` 호출은 그대로 둔다.
+- `QuizController`(8곳)와 `IncorrectNoteController`(10곳)의 `Student student = …;` 지역 변수를 서비스 호출 인자로 인라인한다. `QuizController`에도 `IncorrectNoteController`와 같은 `getStudent(principal)` 헬퍼를 둔다.
+- `DashboardService`의 게시글 → `PostResponse` 변환이 `PostService.convertToResponse`의 "익명 N" 작성자 로직과 빌더를 복제한다. 댓글을 뺀 공통 변환을 한 곳에 두고 양쪽에서 호출한다.
+  - 대시보드 응답(`recentPosts`)에 댓글이 들어가지 않는 현재 형식을 유지한다. 댓글을 넣으면 응답이 바뀌고 lazy loading 쿼리도 늘어난다.
+  - `PostService`는 작성자 비교에 `trim()`을 쓰고 `DashboardService`는 쓰지 않는다. 공통화할 때 `trim()`을 쓰는 쪽으로 맞춘다.
+- `PostService`의 작성자 본인 확인 4곳을 `requireAuthor(owner, studentNum, message)`로 뽑는다. 오류 메시지 문구는 그대로 둔다.
+- (보류) `validateEnrollment`가 `NoteService`와 `PostService`에 똑같이 있다. `EnrollmentRepository`의 `default` 메서드로 옮기면 리포지토리를 mock으로 쓰는 서비스 테스트에서 검증이 실행되지 않아 테스트를 여러 개 고쳐야 한다. 4줄 중복이라 그대로 둔다.
 
-### 2. backend: AI 퀴즈 생성 정리 (약 -41줄)
+### 2. backend: 쓰이지 않는 코드·설정 삭제 (약 -5줄)
 
-- `QuizGenerationInput.contentHash()` 삭제. 로그 필드 하나를 위해 텍스트와 미디어 base64 전체를 SHA-256으로 해시하는데, 이 값을 읽는 코드가 없다. `GenerationContext.contentHash`와 로그의 `contentHash=`도 함께 지운다.
-- `QuizService.logGenerationResult`에서 `regenerated=`(→ `attempts > 1`로 유도 가능), `scope=`(→ `blockCount == 0`으로 유도 가능) 필드 삭제.
-- `QuizService.validateGenerationLimits`의 `typeCounts` null/empty 검사 삭제. `QuizRequest`의 `@NotEmpty`와 컨트롤러 `@Valid`가 이미 막는다.
-  - 유형별 범위 검사의 `count == null` 가드는 남긴다. `@Min`/`@Max`는 null 값을 통과시킨다.
-- `QuizService`의 `notes.isEmpty()` 가드 2곳(`saveGeneratedQuiz`, `validateSameCourse`) 삭제. `noteIds`는 `@NotEmpty`이고 `validateNoteAccess`가 개수 일치를 확인하므로 도달하지 않는다.
-- `QuizQualityValidator.validateCounts`의 총 문항 수 검사 삭제. 유형별 개수 검사와 "문제 유형이 없습니다" 오류로 이미 걸러진다.
-- `QuizQualityValidator.isBlank` 삭제, Spring `StringUtils.hasText`로 대체.
+- `UserAnswerRepository.findByQuizAttempt_AttemptId` 삭제. 호출부가 없다.
+- `QuestionAnswerStat.getType()`과 집계 쿼리의 `q.type AS type`, `GROUP BY`의 `q.type` 삭제. 서비스는 `Question.getType()`을 읽는다.
+- `application.yaml`의 `hibernate.dialect`(기동 시 Hibernate가 불필요하다고 경고, HHH90000025)와 `driver-class-name`(JDBC URL에서 자동 판별) 삭제.
+  - `application-prod.yaml`과 `application-local.yaml.example`에 같은 설정이 있으면 함께 지운다.
 
-### 3. frontend: 에디터 중복 제거 (약 -57줄)
+### 3. frontend: 블록 핸들 정리 (약 -21줄)
 
-- `NotionEditor.jsx` 슬래시 명령 6개(제목 1·2, 할 일 목록, 불렛 리스트, 코드 블록, 인용구)가 같은 모양이다. `[title, icon, chain => chain.toggleX()]` 표에서 `map`으로 만든다. 명령 순서와 제목 문구는 유지한다.
-- `NotionEditor.jsx` 이미지·PDF 슬래시 명령의 `<input type="file">` 생성 코드를 `pickFile(accept, onFile)` 하나로 합친다.
-- `useNoteUploads.js`의 `handleImageUpload`와 `handlePdfUpload`를 내부 `upload(file, { endpoint, extensions, mimeTypes, label })` 하나로 합친다. 두 함수의 이름과 반환 형식(이미지는 URL 문자열, PDF는 `{ url, title }`)은 유지한다.
+- (확인 완료) 블록 메뉴의 "AI 요약/질문" 버튼 삭제. `alert`만 띄우는 스텁이다. `handleAiAction`, 버튼, 구분선, `Sparkles` import를 함께 지운다. 메뉴에서 항목이 사라지므로 화면이 바뀐다.
+- `pos` 상태에서 항상 0인 `left`를 빼고 `top`만 보관한다.
+- 메뉴 바깥 클릭 effect를 `if (!isMenuOpen) return;` 후 리스너 등록·해제로 줄인다.
 
-### 4. backend: 업로드·인증 정리 (약 -32줄)
+### 4. frontend: 퀴즈 화면 정리 (약 -16줄)
 
-- `ImageUploadController`의 서빙 엔드포인트 3개가 파일명 검증과 인가 전처리를 반복한다. 전처리를 `serveFile(fileName, owner, sig, originalName)` 안으로 옮기고 `isValidFileName`을 지운다.
-  - 파일명 형식 오류(400)를 인가 실패(403)보다 먼저 판정하는 순서는 유지한다.
-- `ImageUploadController.startsWith` 삭제, `Arrays.equals(content, 0, n, prefix, 0, n)`으로 대체(길이 검사 포함).
-- `Files.exists` 검사 삭제. `Files.createDirectories`는 디렉터리가 이미 있어도 실패하지 않는다.
-- `JwtUtil.validateToken`과 `getStudentNum`이 같은 토큰을 두 번 파싱한다. 실패 시 null을 반환하는 `parseSubject(token)` 하나로 합치고 `JwtFilter`를 맞춘다.
+- `CBTPlayer.jsx`: `calculateScore`의 루프와 결과 화면의 정답 판정이 같은 비교를 중복한다. `isCorrectAt(q, idx)` 하나와 `questions.filter(isCorrectAt).length`로 합친다.
+  - 비교 규칙(trim + 소문자)은 서버 채점(`QuizService.isAnswerCorrect`)과 같게 유지한다.
+  - report 모드는 지금처럼 서버가 준 `isCorrect`와 `score`를 쓴다.
+- `IncorrectNoteModal.jsx`: `finally`의 `setIsLoading(true); // 실제로는 false여야 함` 죽은 줄 삭제.
+- `IncorrectNoteModal.jsx`의 `fetchGroups`, `QuizAttemptsModal.jsx`의 `fetchAttempts`는 호출부가 effect 하나뿐이다. `useCallback`을 걷어내고 effect 안으로 옮긴다.
+- `CBTPlayer.jsx`, `useIncorrectNotes.js`: 이동 state의 `sourceNavigationId` 삭제. 읽는 곳이 없다.
+- `CourseDetailPage.jsx`: `QuizConfigModal`이 받지 않는 `courseId` prop 삭제, `handleSaveStateChange` `useCallback` 대신 `setSaveState`를 직접 전달.
 
-### 5. backend: 오답노트 서비스 정리 (약 -22줄)
+### 5. frontend: 쓰이지 않는 설정·파일 삭제 (약 -27줄)
 
-- `IncorrectNoteService`에서 `findById().orElseThrow()` + `validateOwnership` 조합이 4번 반복된다. `getOwnedGroup(groupId, student)`로 뽑는다.
-- `QuestionReviewStat`가 `QuestionAnswerStat`의 필드 7개를 그대로 복사한다. `stat` 참조와 파생 필드 4개(`question`, `accuracyRate`, `recentlyIncorrect`, `reviewPriority`)만 보관한다.
-- 통계 응답 DTO의 필드와 정렬 순서는 그대로다.
+- `vite.config.js`: 쓰이지 않는 `@` 경로 별칭과 이를 위한 `path`/`url` import, `__dirname` 삭제.
+- `index.css`: 참조가 없는 CSS 변수 5개 삭제(`--primary-color`, `--secondary-color`, `--card-bg`, `--text-muted`, `--border-color`). `--bg-color`와 `--text-main`은 쓰이므로 남긴다.
+- `frontend/README.md`: Vite 템플릿 기본 문서다. 삭제하거나 실행 방법(`npm install`, `npm run dev`, `.env.example` 안내) 몇 줄로 교체한다.
 
-### 6. frontend: 나머지 정리 (약 -37줄)
-
-- `useCourseBoard.js`의 댓글 작성·수정·삭제 핸들러가 "목록 재조회 후 선택 글 갱신" 5줄을 반복한다. `refreshPosts()`로 뽑는다.
-- `QuizConfigModal.jsx`의 `ScopeCheckbox` 컴포넌트 삭제, `<input>`에 콜백 ref `ref={el => { if (el) el.indeterminate = isPartial; }}`를 직접 쓴다.
-- `QuizConfigModal.jsx`의 payload 삼항 두 분기를 객체 하나와 `...(partialNoteIds.length > 0 && { blockSelections })`로 합친다. 블록 선택이 없을 때 payload에 `blockSelections` 키가 없어야 하는 점은 유지한다.
-- `CourseContext.jsx`에서 소비자가 없는 `studentName`, `isLoading`, `refreshCourses` 삭제. `/dashboard/courses` 응답은 그대로다.
-- `AuthContext.jsx`의 `decodeJwtPayload`를 `JSON.parse(atob(base64))`로 줄인다. `exp`만 읽으므로 UTF-8 복원이 필요 없다.
-- `useSourceBlockScroll.js`의 `scrollToBlockId` fallback 삭제. 호출부가 없다.
-
-### 7. frontend: 쓰지 않는 파일·의존성 삭제
-
-- 참조가 없는 템플릿 에셋 4개 삭제: `src/assets/hero.png`, `src/assets/react.svg`, `src/assets/vite.svg`, `public/icons.svg`.
-- import하지 않는 `@tiptap/extension-bubble-menu`를 `package.json`에서 제거하고 `package-lock.json`을 갱신한다.
-
-### 8. (선택) lodash.debounce 제거
+### 6. (선택) lodash.debounce 제거
 
 - `useNoteAutosave.js`의 debounce 두 개를 `setTimeout`/`clearTimeout`으로 바꾸면 의존성이 하나 준다.
-- 줄 수는 줄지 않고 자동 저장 debounce 계약(서버 2000ms, localStorage 300ms, `cancel`)을 건드리므로 우선순위가 가장 낮다. 1~7단계와 따로 판단한다.
+- 줄 수는 줄지 않고 자동 저장 debounce 계약(서버 2000ms, localStorage 300ms, `cancel`)을 건드린다. 1차 계획에서도 보류한 항목이며, 1~5단계와 따로 판단한다.
 
 ## 수정 대상 파일
 
-backend (`backend/src/main/java/com/uninote/backend/`)
+backend (`backend/src/main/`)
 
-- `exception/GlobalExceptionHandler.java`
-- `service/QuizGenerationInput.java`, `service/QuizService.java`, `service/QuizQualityValidator.java`
-- `service/IncorrectNoteService.java`
-- `controller/ImageUploadController.java`
-- `security/JwtUtil.java`, `security/JwtFilter.java`
+- `java/com/uninote/backend/controller/QuizController.java`, `IncorrectNoteController.java`
+- `java/com/uninote/backend/service/DashboardService.java`, `PostService.java`
+- `java/com/uninote/backend/repository/UserAnswerRepository.java`, `QuestionAnswerStat.java`
+- `resources/application.yaml` (같은 설정이 있으면 `application-prod.yaml`, `application-local.yaml.example`)
 
 frontend (`frontend/`)
 
-- `src/components/editor/NotionEditor.jsx`
-- `src/components/editor/hooks/useNoteUploads.js`, `useSourceBlockScroll.js`, `useNoteAutosave.js`(8단계만)
-- `src/components/editor/components/QuizConfigModal.jsx`
-- `src/hooks/useCourseBoard.js`
-- `src/context/CourseContext.jsx`, `src/context/AuthContext.jsx`
-- `package.json`, `package-lock.json`, 에셋 4개
+- `src/components/editor/components/BlockHandle.jsx`, `CBTPlayer.jsx`, `IncorrectNoteModal.jsx`, `QuizAttemptsModal.jsx`
+- `src/hooks/useIncorrectNotes.js`
+- `src/pages/CourseDetailPage.jsx`
+- `src/index.css`, `vite.config.js`, `README.md`
+- `src/components/editor/hooks/useNoteAutosave.js`, `package.json`, `package-lock.json` (6단계만)
 
 ## 테스트
 
-- 삭제한 코드를 직접 검증하던 테스트는 함께 지우거나 고친다.
-  - `QuizServiceTest`: `contentHash`, 로그 필드, `typeCounts` 빈 값 검사 관련
-  - `QuizAiGenerationServiceTest`: `contentHash` 관련
-  - `QuizQualityValidatorTest`: 총 문항 수 불일치 메시지를 기대하는 단정
-  - `JwtUtilTest`: `validateToken`/`getStudentNum` 호출부
-- 그 밖의 기존 테스트는 수정 없이 통과해야 한다. 특히 `GlobalExceptionHandlerTest`, `ImageUploadControllerTest`, `IncorrectNoteServiceTest`, `QuizConfigModal.test.jsx`, `AuthContext.test.jsx`가 응답 형식과 동작이 그대로임을 확인해 준다.
+- 기존 테스트는 수정 없이 통과해야 한다. 특히 다음이 응답 형식과 동작이 그대로임을 확인해 준다.
+  - backend: `DashboardServiceTest`, `PostServiceTest`, `NoteServiceTest`, `IncorrectNoteServiceTest`, `QuizControllerTest`, `IncorrectNoteControllerTest`
+  - frontend: `CBTPlayer.test.jsx`
+- `IncorrectNoteServiceTest`가 `QuestionAnswerStat.getType()`을 스텁하고 있으면 그 줄만 지운다.
 - 새 테스트는 추가하지 않는다.
 
 ## 검증
@@ -108,17 +93,22 @@ npm run build
 npm run test
 ```
 
+실서버 확인 (local 프로파일, `docs/0928.md`의 테스트 계정)
+
+- 백엔드가 dialect 경고 없이 기동하고 MySQL에 정상 연결되는지.
+- 대시보드 응답의 `recentPosts`에 `comments`가 추가되지 않았는지, `authorName`·`isAuthor`가 그대로인지.
+- 게시글·댓글 수정·삭제에서 본인이 아닐 때 403과 기존 메시지가 나오는지.
+- 풀이 제출 후 오답 통계(요약·강의별·유형별·문제별·오늘의 복습) 수치가 정리 전과 같은지.
+
 수동 확인
 
-- 노트에서 슬래시 명령 10개가 기존 순서대로 나오고 각각 동작하는지.
-- 이미지·PDF 업로드(슬래시 명령, 드래그 앤 드롭)와 업로드한 파일 보기·다운로드.
-- 로그인 후 새로고침해도 인증이 유지되는지, 만료 토큰이 정리되는지.
-- 게시판 댓글 작성·수정·삭제 후 목록과 상세가 갱신되는지.
-- AI 문제 생성에서 노트 전체 선택과 블록 일부 선택이 모두 되는지, 일부 블록 노트의 체크박스가 부분 선택으로 보이는지.
-- 오답노트 통계와 오늘의 복습 수치가 정리 전과 같은지.
+- 블록 핸들이 마우스를 따라 움직이고, 메뉴가 바깥 클릭으로 닫히며, 복제·삭제·드래그 이동이 되는지.
+- 퀴즈 풀이 후 결과 화면의 점수와 문항별 정오 표시가 맞는지, 풀이 이력의 과거 결과(report 모드)가 그대로 보이는지.
+- 오답노트 담기 모달과 풀이 기록 모달이 열릴 때 목록을 불러오는지.
+- 결과 화면과 오늘의 복습에서 "원문 보기"가 해당 블록으로 이동·하이라이트하는지.
 
 ## 완료 기준
 
-- 1~7단계가 반영되고 backend 테스트, frontend lint·build·test가 모두 통과한다.
-- REST 경로, 응답 필드, 상태 코드, 오류 메시지, 화면 동작이 정리 전과 같다.
-- `quiz.generation` 로그에서 `contentHash`, `regenerated`, `scope` 필드만 빠진다.
+- 1~5단계가 반영되고 backend 테스트, frontend lint·build·test가 모두 통과한다.
+- REST 경로, 응답 필드, 상태 코드, 오류 메시지가 정리 전과 같다.
+- 화면 변화는 블록 메뉴의 "AI 요약/질문" 항목이 사라지는 것 하나뿐이다(확인을 받은 경우).

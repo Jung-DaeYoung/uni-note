@@ -23,53 +23,47 @@ public class QuizController {
 
     @DeleteMapping("/{quizSetId}")
     public ResponseEntity<Void> deleteQuiz(@PathVariable @Positive Long quizSetId, Principal principal) {
-        Student student = studentRepository.getByStudentNum(principal.getName());
-        quizService.deleteQuiz(quizSetId, student);
+        quizService.deleteQuiz(quizSetId, getStudent(principal));
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{quizSetId}")
     public ResponseEntity<QuizSetDetailResponse> getQuizDetail(@PathVariable @Positive Long quizSetId, Principal principal) {
-        Student student = studentRepository.getByStudentNum(principal.getName());
-        return ResponseEntity.ok(quizService.getQuizDetail(quizSetId, student));
+        return ResponseEntity.ok(quizService.getQuizDetail(quizSetId, getStudent(principal)));
     }
 
     @GetMapping("/my")
     public ResponseEntity<List<QuizSetResponse>> getMyQuizzes(Principal principal) {
-        Student student = studentRepository.getByStudentNum(principal.getName());
-        return ResponseEntity.ok(quizService.getMyQuizzes(student));
+        return ResponseEntity.ok(quizService.getMyQuizzes(getStudent(principal)));
     }
 
     @PostMapping("/generate")
     public ResponseEntity<QuizResponse> generateQuiz(@Valid @RequestBody QuizRequest request, Principal principal) {
-        Student student = studentRepository.getByStudentNum(principal.getName());
-
-        QuizResponse response = quizService.generateQuiz(request, student);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(quizService.generateQuiz(request, getStudent(principal)));
     }
 
     @PostMapping("/attempts")
     public ResponseEntity<Void> saveAttempt(@Valid @RequestBody QuizAttemptRequest request, Principal principal) {
-        Student student = studentRepository.getByStudentNum(principal.getName());
-        quizService.saveAttempt(request, student);
+        quizService.saveAttempt(request, getStudent(principal));
         return ResponseEntity.ok().build();
     }
 
     @GetMapping("/attempts/my")
     public ResponseEntity<List<QuizAttemptResponse>> getMyAttempts(Principal principal) {
-        Student student = studentRepository.getByStudentNum(principal.getName());
-        return ResponseEntity.ok(quizService.getMyAttempts(student));
+        return ResponseEntity.ok(quizService.getMyAttempts(getStudent(principal)));
     }
 
     @GetMapping("/attempts/{attemptId}")
     public ResponseEntity<QuizAttemptDetailResponse> getAttemptDetail(@PathVariable @Positive Long attemptId, Principal principal) {
-        Student student = studentRepository.getByStudentNum(principal.getName());
-        return ResponseEntity.ok(quizService.getAttemptDetail(attemptId, student));
+        return ResponseEntity.ok(quizService.getAttemptDetail(attemptId, getStudent(principal)));
     }
 
     @GetMapping("/{quizSetId}/attempts")
     public ResponseEntity<List<QuizAttemptResponse>> getAttemptsByQuizSet(@PathVariable @Positive Long quizSetId, Principal principal) {
-        Student student = studentRepository.getByStudentNum(principal.getName());
-        return ResponseEntity.ok(quizService.getAttemptsByQuizSet(quizSetId, student));
+        return ResponseEntity.ok(quizService.getAttemptsByQuizSet(quizSetId, getStudent(principal)));
+    }
+
+    private Student getStudent(Principal principal) {
+        return studentRepository.getByStudentNum(principal.getName());
     }
 }

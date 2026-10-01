@@ -35,15 +35,9 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
     setAnswers({ ...answers, [currentIdx]: option });
   };
 
-  const calculateScore = () => {
-    let score = 0;
-    questions.forEach((q, idx) => {
-      const userAnswer = String(answers[idx] || '').trim().toLowerCase();
-      const correctAnswer = String(q.correctAnswer).trim().toLowerCase();
-      if (userAnswer === correctAnswer) score++;
-    });
-    return score;
-  };
+  // 서버 채점(QuizService.isAnswerCorrect)과 같은 trim + 소문자 비교.
+  const isCorrectAt = (q, idx) =>
+    String(answers[idx] || '').trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase();
 
   const handleSubmit = async () => {
     if (isSaving) return;
@@ -84,7 +78,6 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
     navigate(`/course/${courseId}/note/${q.sourceNoteId}`, {
       state: {
         sourceBlockId: q.sourceBlockId,
-        sourceNavigationId: String(q.questionId),
       },
     });
     onClose();
@@ -92,7 +85,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
 
   // 결과 리포트 화면 (제출 완료 또는 리포트 모드)
   if (submitted) {
-    const score = mode === 'report' ? quizData.score : calculateScore();
+    const score = mode === 'report' ? quizData.score : questions.filter(isCorrectAt).length;
     const total = questions.length;
 
     return (
@@ -114,7 +107,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
           <div className="space-y-6">
             {questions.map((q, idx) => {
               const userAnswer = mode === 'report' ? q.submittedAnswer : (answers[idx] || '');
-              const isCorrect = mode === 'report' ? q.isCorrect : (String(userAnswer).trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase());
+              const isCorrect = mode === 'report' ? q.isCorrect : isCorrectAt(q, idx);
               
               return (
                 <div key={idx} className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 relative group">

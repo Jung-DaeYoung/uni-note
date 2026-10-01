@@ -53,7 +53,6 @@ const CourseDetailPage = () => {
     setSaveState({ status: 'synced', retry: () => {} });
   }
 
-  const handleSaveStateChange = useCallback((state) => setSaveState(state), []);
   const handleNoteSaved = useCallback(() => fetchTree(), [fetchTree]);
 
   // --- Sidebar Content ---
@@ -164,7 +163,6 @@ const CourseDetailPage = () => {
       <QuizConfigModal
         isOpen={isQuizModalOpen}
         onClose={() => setIsQuizModalOpen(false)}
-        courseId={courseId}
         currentNoteId={noteId}
         onGenerated={(res) => setQuizResult(res)}
         saveStatus={saveState.status}
@@ -179,7 +177,7 @@ const CourseDetailPage = () => {
             <div className={`mx-auto transition-all duration-500 pt-8 ${isBoardOpen ? 'max-w-4xl' : 'max-w-7xl'}`}>
               <div className="px-8 pb-10">
                 {noteId && noteData && noteData.noteId === parseInt(noteId) ? (
-                  <NotionEditor key={noteId} noteId={noteId} courseId={courseId} initialData={noteData} onSaved={handleNoteSaved} onSaveStateChange={handleSaveStateChange} />
+                  <NotionEditor key={noteId} noteId={noteId} courseId={courseId} initialData={noteData} onSaved={handleNoteSaved} onSaveStateChange={setSaveState} />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-40 opacity-20 text-slate-900 dark:text-slate-100">
                     <FileText size={64} className="mb-4" />

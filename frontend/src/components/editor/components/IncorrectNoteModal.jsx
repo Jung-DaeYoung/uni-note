@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Plus, BookOpen, Check, Loader2, Bookmark } from 'lucide-react';
 import client from '../../../api/client';
 
@@ -10,32 +10,29 @@ const IncorrectNoteModal = ({ isOpen, onClose, questionId }) => {
   const [newTitle, setNewTitle] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState(null);
 
-  const fetchGroups = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await client.get('/quiz/incorrect/groups');
-      setGroups(res.data);
-      if (res.data.length === 0) {
-        setIsCreating(true);
-      }
-    } catch (err) {
-      console.error("오답노트 목록 조회 실패:", err);
-    } finally {
-      setIsLoading(true); // 실제로는 false여야 함, 아래에서 수정
-      setIsLoading(false);
-    }
-  }, []);
-
+  // 모달이 열릴 때 서버 목록을 새로 불러오는 표준 fetch-on-open 패턴이다.
   useEffect(() => {
-    if (isOpen) {
-      // 모달이 열릴 때 서버 목록을 새로 불러오는 표준 fetch-on-open 패턴이다.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      fetchGroups();
-      setIsCreating(false);
-      setNewTitle('');
-      setSelectedGroupId(null);
-    }
-  }, [isOpen, fetchGroups]);
+    if (!isOpen) return;
+    const fetchGroups = async () => {
+      setIsLoading(true);
+      try {
+        const res = await client.get('/quiz/incorrect/groups');
+        setGroups(res.data);
+        if (res.data.length === 0) {
+          setIsCreating(true);
+        }
+      } catch (err) {
+        console.error("오답노트 목록 조회 실패:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchGroups();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsCreating(false);
+    setNewTitle('');
+    setSelectedGroupId(null);
+  }, [isOpen]);
 
   const handleSave = async () => {
     if (isSaving) return;

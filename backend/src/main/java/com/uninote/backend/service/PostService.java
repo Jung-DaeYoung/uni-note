@@ -73,10 +73,7 @@ public class PostService {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid comment ID"));
 
-        // 작성자 본인 확인
-        if (!comment.getStudent().getStudentNum().trim().equals(studentNum.trim())) {
-            throw new CourseAccessException("작성자 본인만 수정할 수 있습니다.");
-        }
+        requireAuthor(comment.getStudent(), studentNum, "작성자 본인만 수정할 수 있습니다.");
         
         comment.setContent(content);
     }
@@ -86,10 +83,7 @@ public class PostService {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid comment ID"));
 
-        // 작성자 본인 확인
-        if (!comment.getStudent().getStudentNum().trim().equals(studentNum.trim())) {
-            throw new CourseAccessException("작성자 본인만 삭제할 수 있습니다.");
-        }
+        requireAuthor(comment.getStudent(), studentNum, "작성자 본인만 삭제할 수 있습니다.");
         
         commentRepository.delete(comment);
     }
@@ -99,10 +93,7 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid post ID"));
 
-        // 작성자 본인 확인
-        if (!post.getStudent().getStudentNum().equals(studentNum)) {
-            throw new CourseAccessException("작성자 본인만 삭제할 수 있습니다.");
-        }
+        requireAuthor(post.getStudent(), studentNum, "작성자 본인만 삭제할 수 있습니다.");
         
         postRepository.delete(post);
     }
@@ -112,10 +103,7 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid post ID"));
 
-        // 작성자 본인 확인
-        if (!post.getStudent().getStudentNum().equals(studentNum)) {
-            throw new CourseAccessException("작성자 본인만 수정할 수 있습니다.");
-        }
+        requireAuthor(post.getStudent(), studentNum, "작성자 본인만 수정할 수 있습니다.");
         
         post.setTitle(request.getTitle());
         post.setContent(request.getContent());
@@ -129,15 +117,34 @@ public class PostService {
         }
     }
 
-    private PostResponse convertToResponse(Post post, String studentNum) {
+    private void requireAuthor(Student author, String studentNum, String message) {
+        if (!author.getStudentNum().trim().equals(studentNum.trim())) {
+            throw new CourseAccessException(message);
+        }
+    }
+
+    // 댓글을 뺀 게시글 응답. 대시보드(DashboardService)의 최근 게시글도 이 변환을 쓴다.
+    static PostResponse.PostResponseBuilder summaryBuilder(Post post, String studentNum) {
         String authorName = "익명";
         boolean isPostAuthor = false;
-        
+
         if (post.getStudent() != null && studentNum != null) {
             isPostAuthor = post.getStudent().getStudentNum().trim().equals(studentNum.trim());
             authorName = "익명 " + (post.getStudent().getStudId() % 100);
         }
 
+        return PostResponse.builder()
+                .postId(post.getPostId())
+                .courseId(post.getCourse().getCourseId())
+                .courseName(post.getCourse().getCourseName())
+                .title(post.getTitle())
+                .content(post.getContent())
+                .authorName(authorName)
+                .author(isPostAuthor)
+                .createdAt(post.getCreatedAt());
+    }
+
+    private PostResponse convertToResponse(Post post, String studentNum) {
         List<CommentResponse> comments = post.getComments().stream()
                 .map(c -> {
                     boolean isCommentAuthor = c.getStudent() != null && studentNum != null && 
@@ -155,16 +162,6 @@ public class PostService {
                 })
                 .collect(Collectors.toList());
 
-        return PostResponse.builder()
-                .postId(post.getPostId())
-                .courseId(post.getCourse().getCourseId())
-                .courseName(post.getCourse().getCourseName())
-                .title(post.getTitle())
-                .content(post.getContent())
-                .authorName(authorName)
-                .author(isPostAuthor)
-                .createdAt(post.getCreatedAt())
-                .comments(comments)
-                .build();
+        return summaryBuilder(post, studentNum).comments(comments).build();
     }
 }

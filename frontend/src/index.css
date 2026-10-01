@@ -3,13 +3,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --primary-color: #2563eb;
-  --secondary-color: #3b82f6;
   --bg-color: #f8fafc;
-  --card-bg: #ffffff;
   --text-main: #1e293b;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
 }
 
 body {

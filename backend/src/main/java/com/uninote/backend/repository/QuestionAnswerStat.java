@@ -1,7 +1,5 @@
 package com.uninote.backend.repository;
 
-import com.uninote.backend.domain.QuestionType;
-
 import java.time.LocalDateTime;
 
 // 학생 한 명의 문제별 풀이 이력을 집계하기 위한 projection.
@@ -11,7 +9,6 @@ public interface QuestionAnswerStat {
     Long getQuestionId();
     Long getCourseId();       // 문제의 퀴즈 세트에 강의가 없으면 null
     String getCourseName();
-    QuestionType getType();
     Long getAttemptCount();
     Long getCorrectCount();
     Long getIncorrectCount();

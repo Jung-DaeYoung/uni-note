@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { GripVertical, Trash2, Copy, Sparkles } from 'lucide-react';
+import { GripVertical, Trash2, Copy } from 'lucide-react';
 
 const BlockHandle = ({ editor }) => {
-  const [pos, setPos] = useState({ top: -100, left: 0 });
+  const [top, setTop] = useState(-100);
   const [currentNode, setCurrentNode] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const containerRef = useRef(null);
@@ -25,12 +25,7 @@ const BlockHandle = ({ editor }) => {
           if (dom instanceof HTMLElement) {
             const rect = dom.getBoundingClientRect();
             const editorRect = view.dom.getBoundingClientRect();
-            const handleTop = rect.top - editorRect.top;
-
-            setPos({
-              top: handleTop,
-              left: 0,
-            });
+            setTop(rect.top - editorRect.top);
             setCurrentNode({ node, pos: start - 1 });
           }
         }
@@ -50,19 +45,14 @@ const BlockHandle = ({ editor }) => {
 
   // 메뉴 외부 클릭 시 닫기
   useEffect(() => {
+    if (!isMenuOpen) return;
     const handleClickOutside = (event) => {
       if (containerRef.current && !containerRef.current.contains(event.target)) {
         setIsMenuOpen(false);
       }
     };
-    if (isMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isMenuOpen]);
 
   // 드래그 시작 시 데이터 설정
@@ -109,22 +99,11 @@ const BlockHandle = ({ editor }) => {
     setIsMenuOpen(false);
   };
 
-  const handleAiAction = () => {
-    if (!currentNode || !currentNode.node) return;
-    const data = {
-      id: currentNode.node.attrs?.id,
-      type: currentNode.node.type?.name,
-      text: currentNode.node.textContent
-    };
-    alert(`블록 ID: ${data.id}\nAI 기능을 요청합니다.`);
-    setIsMenuOpen(false);
-  };
-
   return (
     <div
       ref={containerRef}
       className="absolute z-20 transition-all duration-100 group"
-      style={{ top: pos.top, left: pos.left }}
+      style={{ top, left: 0 }}
     >
       <button
         draggable="true"
@@ -145,10 +124,6 @@ const BlockHandle = ({ editor }) => {
           </button>
           <button onClick={deleteBlock} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg">
             <Trash2 size={14} /> 삭제하기
-          </button>
-          <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-1" />
-          <button onClick={handleAiAction} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-black text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg group/ai">
-            <Sparkles size={14} className="group-hover/ai:animate-pulse" /> AI 요약/질문
           </button>
         </div>
       )}

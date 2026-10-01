@@ -24,59 +24,50 @@ public class IncorrectNoteController {
 
     @GetMapping("/groups")
     public ResponseEntity<List<IncorrectNoteGroupResponse>> getMyGroups(Principal principal) {
-        Student student = getStudent(principal);
-        return ResponseEntity.ok(incorrectNoteService.getMyGroups(student));
+        return ResponseEntity.ok(incorrectNoteService.getMyGroups(getStudent(principal)));
     }
 
     @PostMapping("/add-to-group")
     public ResponseEntity<Void> addToGroup(@Valid @RequestBody AddToIncorrectRequest request, Principal principal) {
-        Student student = getStudent(principal);
-        incorrectNoteService.addToGroup(request, student);
+        incorrectNoteService.addToGroup(request, getStudent(principal));
         return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/groups/{groupId}")
     public ResponseEntity<Void> deleteGroup(@PathVariable @Positive Long groupId, Principal principal) {
-        Student student = getStudent(principal);
-        incorrectNoteService.deleteGroup(groupId, student);
+        incorrectNoteService.deleteGroup(groupId, getStudent(principal));
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/groups/{groupId}/questions/{questionId}")
     public ResponseEntity<Void> removeItem(@PathVariable @Positive Long groupId, @PathVariable @Positive Long questionId, Principal principal) {
-        Student student = getStudent(principal);
-        incorrectNoteService.removeItemFromGroup(groupId, questionId, student);
+        incorrectNoteService.removeItemFromGroup(groupId, questionId, getStudent(principal));
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/groups/{groupId}/practice")
     public ResponseEntity<QuizSetDetailResponse> getPracticeSession(@PathVariable @Positive Long groupId, Principal principal) {
-        Student student = getStudent(principal);
-        return ResponseEntity.ok(incorrectNoteService.getPracticeSession(groupId, student));
+        return ResponseEntity.ok(incorrectNoteService.getPracticeSession(groupId, getStudent(principal)));
     }
 
     @GetMapping("/summary")
     public ResponseEntity<IncorrectSummaryResponse> getSummary(Principal principal) {
-        Student student = getStudent(principal);
-        return ResponseEntity.ok(incorrectNoteService.getSummary(student));
+        return ResponseEntity.ok(incorrectNoteService.getSummary(getStudent(principal)));
     }
 
     @GetMapping("/statistics/courses")
     public ResponseEntity<List<CourseIncorrectStatResponse>> getCourseStatistics(Principal principal) {
-        Student student = getStudent(principal);
-        return ResponseEntity.ok(incorrectNoteService.getCourseStatistics(student));
+        return ResponseEntity.ok(incorrectNoteService.getCourseStatistics(getStudent(principal)));
     }
 
     @GetMapping("/statistics/types")
     public ResponseEntity<List<QuestionTypeIncorrectStatResponse>> getTypeStatistics(Principal principal) {
-        Student student = getStudent(principal);
-        return ResponseEntity.ok(incorrectNoteService.getTypeStatistics(student));
+        return ResponseEntity.ok(incorrectNoteService.getTypeStatistics(getStudent(principal)));
     }
 
     @GetMapping("/questions")
     public ResponseEntity<List<IncorrectQuestionStatResponse>> getQuestionStatistics(Principal principal) {
-        Student student = getStudent(principal);
-        return ResponseEntity.ok(incorrectNoteService.getQuestionStatistics(student));
+        return ResponseEntity.ok(incorrectNoteService.getQuestionStatistics(getStudent(principal)));
     }
 
     @GetMapping("/review-today")
@@ -84,8 +75,7 @@ public class IncorrectNoteController {
             @RequestParam(defaultValue = "10") int limit,
             @RequestParam(required = false) Long courseId,
             Principal principal) {
-        Student student = getStudent(principal);
-        return ResponseEntity.ok(incorrectNoteService.getTodayReview(student, limit, courseId));
+        return ResponseEntity.ok(incorrectNoteService.getTodayReview(getStudent(principal), limit, courseId));
     }
 
     private Student getStudent(Principal principal) {

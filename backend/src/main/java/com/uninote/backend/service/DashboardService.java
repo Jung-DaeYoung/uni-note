@@ -63,24 +63,7 @@ public class DashboardService {
                 ? List.<Post>of()
                 : postRepository.findTop5ByCourseInOrderByCreatedAtDesc(enrolledCourses))
                 .stream()
-                .map(post -> {
-                    String authorName = "익명";
-                    boolean isAuthor = false;
-                    if (post.getStudent() != null) {
-                        isAuthor = post.getStudent().getStudentNum().equals(studentNum);
-                        authorName = "익명 " + (post.getStudent().getStudId() % 100);
-                    }
-                    return PostResponse.builder()
-                        .postId(post.getPostId())
-                        .courseId(post.getCourse().getCourseId())
-                        .courseName(post.getCourse().getCourseName()) // 강의명 추가
-                        .title(post.getTitle())
-                        .content(post.getContent())
-                        .authorName(authorName)
-                        .author(isAuthor)
-                        .createdAt(post.getCreatedAt())
-                        .build();
-                })
+                .map(post -> PostService.summaryBuilder(post, studentNum).build())
                 .collect(Collectors.toList());
 
         return DashboardResponse.builder()

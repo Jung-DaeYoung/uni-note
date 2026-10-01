@@ -10,7 +10,6 @@ import java.util.List;
 
 @Repository
 public interface UserAnswerRepository extends JpaRepository<UserAnswer, Long> {
-    List<UserAnswer> findByQuizAttempt_AttemptId(Long attemptId);
 
     // 퀴즈 삭제 시 해당 퀴즈의 문제를 참조하는 답안을 먼저 지워 FK 제약 위반을 막는다.
     // 오답노트/오늘의 복습 등 가상 세션(quizAttempt.quizSet == null)의 답안도 question_id로
@@ -22,7 +21,7 @@ public interface UserAnswerRepository extends JpaRepository<UserAnswer, Long> {
     // qs.course는 없을 수 있으므로 LEFT JOIN으로 명시한다(암묵적 경로 접근은 inner join이 되어
     // 강의가 없는 문제가 결과에서 통째로 누락된다).
     @Query("SELECT q.questionId AS questionId, " +
-           "c.courseId AS courseId, c.courseName AS courseName, q.type AS type, " +
+           "c.courseId AS courseId, c.courseName AS courseName, " +
            "COUNT(ua) AS attemptCount, " +
            "SUM(CASE WHEN ua.isCorrect = true THEN 1L ELSE 0L END) AS correctCount, " +
            "SUM(CASE WHEN ua.isCorrect = false THEN 1L ELSE 0L END) AS incorrectCount, " +
@@ -30,6 +29,6 @@ public interface UserAnswerRepository extends JpaRepository<UserAnswer, Long> {
            "MAX(CASE WHEN ua.isCorrect = false THEN ua.quizAttempt.startTime ELSE NULL END) AS lastIncorrectAt " +
            "FROM UserAnswer ua JOIN ua.question q JOIN q.quizSet qs LEFT JOIN qs.course c " +
            "WHERE ua.quizAttempt.student.studId = :studId " +
-           "GROUP BY q.questionId, c.courseId, c.courseName, q.type")
+           "GROUP BY q.questionId, c.courseId, c.courseName")
     List<QuestionAnswerStat> aggregateByQuestionForStudent(@Param("studId") Long studId);
 }

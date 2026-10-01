@@ -3,7 +3,7 @@ import { useNoteTree } from '../../../context/NoteTreeContext';
 import { X, Check, BookOpen, Loader2, ChevronRight, Minus, Plus, ListTree } from 'lucide-react';
 import client from '../../../api/client';
 
-// QuizService.java의 MAX_NOTES_PER_QUIZ / MAX_QUESTIONS_PER_TYPE / MAX_TOTAL_QUESTIONS와
+// QuizService.java의 MAX_NOTES_PER_QUIZ / MAX_TOTAL_QUESTIONS, QuizRequest.java의 유형별 상한(@Max)과
 // 동일하게 유지한다(수동 미러링 - 백엔드 상수가 바뀌면 함께 갱신 필요).
 const MAX_NOTES_PER_QUIZ = 20;
 const MAX_QUESTIONS_PER_TYPE = 20;
@@ -135,15 +135,6 @@ const SummaryStrip = ({ noteCount, blockNoteCount, blockCount, typeCount, totalQ
   </div>
 );
 
-// 일부 블록만 고른 노트는 indeterminate(부분 선택)로 표시한다. indeterminate는 DOM 속성이라 ref로 설정한다.
-const ScopeCheckbox = ({ checked, indeterminate, onChange, className }) => {
-  const ref = useRef(null);
-  useEffect(() => {
-    if (ref.current) ref.current.indeterminate = indeterminate;
-  }, [indeterminate]);
-  return <input ref={ref} type="checkbox" className={className} checked={checked} onChange={onChange} />;
-};
-
 const BlockTypeBadge = ({ block }) => (
   <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
     {block.type === 'heading' ? `제목 ${block.level}` : BLOCK_TYPE_LABELS[block.type] || block.type}
@@ -235,10 +226,12 @@ const NoteTreeRow = ({ note, level, scope }) => {
           />
         </button>
         <label className="flex flex-1 min-w-0 items-center gap-2 py-1.5 cursor-pointer">
-          <ScopeCheckbox
+          {/* 일부 블록만 고른 노트는 indeterminate(부분 선택)로 표시한다. DOM 속성이라 ref로 설정한다. */}
+          <input
+            ref={el => { if (el) el.indeterminate = isPartial; }}
+            type="checkbox"
             className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 transition-all"
             checked={isWhole}
-            indeterminate={isPartial}
             onChange={() => onToggleNote(note.noteId)}
           />
           <span className={`flex-1 truncate text-xs ${isWhole || isPartial ? 'font-medium text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100'}`}>
@@ -650,23 +643,19 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
 
     // 블록 선택이 없으면 payload는 기존과 동일하다. 있으면 일부 블록 노트도 noteIds에 넣고
     // blockSelections에 노트별 blockIds를 노트 안 순서대로 담는다.
-    const payload = partialNoteIds.length === 0
-      ? {
-        noteIds: selectedIds,
-        typeCounts: counts,
-        difficulty
-      }
-      : {
-        noteIds: [...selectedIds, ...partialNoteIds],
+    const payload = {
+      noteIds: [...selectedIds, ...partialNoteIds],
+      ...(partialNoteIds.length > 0 && {
         blockSelections: partialNoteIds.map(noteId => ({
           noteId,
           blockIds: (blocksByNote[noteId]?.blocks || [])
             .map(block => block.id)
             .filter(id => blockSelections[noteId].includes(id)),
         })),
-        typeCounts: counts,
-        difficulty
-      };
+      }),
+      typeCounts: counts,
+      difficulty
+    };
 
     try {
       const response = await client.post('/quiz/generate', payload);

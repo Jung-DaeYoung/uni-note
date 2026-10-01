@@ -1,83 +1,124 @@
-# 블록 목록에서 내용 없는 블록 제외 구현 계획 (2026-09-29)
+# 과잉 구현 정리 계획 (2026-10-01)
 
-AI 문제 생성 모달(`QuizConfigModal`)의 노트별 블록 목록에서, 내용이 없는 블록(빈 줄 등)은 체크박스를 보이지 않게 한다. frontend만 변경하고 API·서버·DB는 변경하지 않는다.
+`ponytail-audit`으로 저장소 전체(backend main, frontend src, 의존성)를 훑어 찾은 과잉 구현 20건을 정리한다. 동작·API 응답·DB 저장 형식은 바꾸지 않고, 코드 양만 줄인다.
 
-## 배경
+## 범위와 원칙
 
-- 빈 문단처럼 내용이 없는 블록도 목록에 "(내용 없음)" 체크박스로 나온다.
-- 이런 블록은 선택해도 AI 입력에 아무것도 더하지 않는다. 서버는 텍스트·이미지·PDF만 추출한다(`QuizAiGenerationService.extractDataFromNode`).
-- 그런데도 "블록 N개" 수와 선택 요약에는 포함되어 혼란을 준다.
-- 이미지 블록도 텍스트가 없어 "(내용 없음)"으로 표시된다. 하지만 서버는 이미지를 AI 입력(미디어)으로 쓰므로 실제로는 내용이 있는 블록이다.
-
-## 현재 코드 기준점
-
-- `parseNoteBlocks`: 제목(`content[0]`)을 뺀 최상위 노드 중 `attrs.id`가 있는 노드를 모두 목록에 넣는다. 미리보기는 `collectText` 결과다.
-- `NoteBlockPanel`: 미리보기가 비면 "(내용 없음)"으로 표시한다.
-- `getBlockRangeIds`(heading 범위 선택), `toggleBlock`(전체 → 일부 전환), payload의 `blockIds`는 모두 이 블록 목록을 기준으로 한다.
+- 대상은 중복 코드, 쓰이지 않는 코드, 표준 라이브러리로 대체할 수 있는 코드다. 버그·보안·성능은 범위 밖이다.
+- REST 경로, 응답 필드명, 상태 코드, 오류 메시지 문구, 화면 동작은 그대로 유지한다.
+- 테스트 코드는 감사 대상이 아니었다. 정리한 코드를 검증하던 테스트만 함께 고친다.
+- 줄 수는 추정치다. 전체 약 -237줄, 의존성 -2개.
+- 단계마다 따로 커밋할 수 있게 서로 독립적으로 나눴다. 순서는 줄어드는 양이 큰 순이다.
 
 ## 구현 단계
 
-### 1. "내용 있음" 기준을 서버 추출 기준에 맞춘다
+### 1. backend: 예외 핸들러 중복 제거 (약 -45줄)
 
-- 블록 안(하위 포함)에 공백이 아닌 텍스트가 있거나, `image` 또는 `pdfBlock` 노드가 있으면 내용이 있는 블록이다.
-- `collectText`처럼 재귀로 `image`·`pdfBlock`을 찾는 헬퍼 `hasMedia(node)`를 추가한다.
+- `GlobalExceptionHandler`의 핸들러 10개가 `ErrorResponse` 생성 8줄을 그대로 반복한다.
+- `respond(HttpStatus status, String errorCode, String message)` private 헬퍼를 만들고 각 핸들러는 이를 호출한다.
+- `errorCode` 문자열, 상태 코드, 메시지, 기존 `log.error` 호출은 그대로 둔다.
 
-### 2. 내용 없는 블록은 목록에서 제외한다
+### 2. backend: AI 퀴즈 생성 정리 (약 -41줄)
 
-- `parseNoteBlocks`에서 내용 없는 블록을 목록에 넣지 않는다. 체크박스만 숨기지 않고 행 자체를 뺀다. 행을 남기면 빈 줄이 목록 사이에 끼어 목록만 길어지기 때문이다.
-- 목록에서 빼면 다음에서도 빈 블록이 자연히 빠진다.
-  - "블록 N개" 수
-  - heading 범위 선택
-  - 전체 → 일부 전환
-  - payload `blockIds`
-- 제외한 블록은 `hasUnselectable`(PDF 등 안내)에 포함하지 않는다.
-- 빈 heading도 제외된다. 그래서 heading 범위 선택은 빈 heading을 경계로 보지 않고 다음 heading까지 이어진다.
+- `QuizGenerationInput.contentHash()` 삭제. 로그 필드 하나를 위해 텍스트와 미디어 base64 전체를 SHA-256으로 해시하는데, 이 값을 읽는 코드가 없다. `GenerationContext.contentHash`와 로그의 `contentHash=`도 함께 지운다.
+- `QuizService.logGenerationResult`에서 `regenerated=`(→ `attempts > 1`로 유도 가능), `scope=`(→ `blockCount == 0`으로 유도 가능) 필드 삭제.
+- `QuizService.validateGenerationLimits`의 `typeCounts` null/empty 검사 삭제. `QuizRequest`의 `@NotEmpty`와 컨트롤러 `@Valid`가 이미 막는다.
+  - 유형별 범위 검사의 `count == null` 가드는 남긴다. `@Min`/`@Max`는 null 값을 통과시킨다.
+- `QuizService`의 `notes.isEmpty()` 가드 2곳(`saveGeneratedQuiz`, `validateSameCourse`) 삭제. `noteIds`는 `@NotEmpty`이고 `validateNoteAccess`가 개수 일치를 확인하므로 도달하지 않는다.
+- `QuizQualityValidator.validateCounts`의 총 문항 수 검사 삭제. 유형별 개수 검사와 "문제 유형이 없습니다" 오류로 이미 걸러진다.
+- `QuizQualityValidator.isBlank` 삭제, Spring `StringUtils.hasText`로 대체.
 
-### 3. 이미지 블록 미리보기
+### 3. frontend: 에디터 중복 제거 (약 -57줄)
 
-- 텍스트가 없는 이미지 블록은 "(내용 없음)" 대신 "(이미지)"로 표시한다. 유형 배지는 기존대로 "이미지"다.
+- `NotionEditor.jsx` 슬래시 명령 6개(제목 1·2, 할 일 목록, 불렛 리스트, 코드 블록, 인용구)가 같은 모양이다. `[title, icon, chain => chain.toggleX()]` 표에서 `map`으로 만든다. 명령 순서와 제목 문구는 유지한다.
+- `NotionEditor.jsx` 이미지·PDF 슬래시 명령의 `<input type="file">` 생성 코드를 `pickFile(accept, onFile)` 하나로 합친다.
+- `useNoteUploads.js`의 `handleImageUpload`와 `handlePdfUpload`를 내부 `upload(file, { endpoint, extensions, mimeTypes, label })` 하나로 합친다. 두 함수의 이름과 반환 형식(이미지는 URL 문자열, PDF는 `{ url, title }`)은 유지한다.
 
-### 4. 모든 블록이 비어 있을 때
+### 4. backend: 업로드·인증 정리 (약 -32줄)
 
-- 기존 문구 "선택할 수 있는 블록이 없습니다."를 그대로 쓴다.
+- `ImageUploadController`의 서빙 엔드포인트 3개가 파일명 검증과 인가 전처리를 반복한다. 전처리를 `serveFile(fileName, owner, sig, originalName)` 안으로 옮기고 `isValidFileName`을 지운다.
+  - 파일명 형식 오류(400)를 인가 실패(403)보다 먼저 판정하는 순서는 유지한다.
+- `ImageUploadController.startsWith` 삭제, `Arrays.equals(content, 0, n, prefix, 0, n)`으로 대체(길이 검사 포함).
+- `Files.exists` 검사 삭제. `Files.createDirectories`는 디렉터리가 이미 있어도 실패하지 않는다.
+- `JwtUtil.validateToken`과 `getStudentNum`이 같은 토큰을 두 번 파싱한다. 실패 시 null을 반환하는 `parseSubject(token)` 하나로 합치고 `JwtFilter`를 맞춘다.
+
+### 5. backend: 오답노트 서비스 정리 (약 -22줄)
+
+- `IncorrectNoteService`에서 `findById().orElseThrow()` + `validateOwnership` 조합이 4번 반복된다. `getOwnedGroup(groupId, student)`로 뽑는다.
+- `QuestionReviewStat`가 `QuestionAnswerStat`의 필드 7개를 그대로 복사한다. `stat` 참조와 파생 필드 4개(`question`, `accuracyRate`, `recentlyIncorrect`, `reviewPriority`)만 보관한다.
+- 통계 응답 DTO의 필드와 정렬 순서는 그대로다.
+
+### 6. frontend: 나머지 정리 (약 -37줄)
+
+- `useCourseBoard.js`의 댓글 작성·수정·삭제 핸들러가 "목록 재조회 후 선택 글 갱신" 5줄을 반복한다. `refreshPosts()`로 뽑는다.
+- `QuizConfigModal.jsx`의 `ScopeCheckbox` 컴포넌트 삭제, `<input>`에 콜백 ref `ref={el => { if (el) el.indeterminate = isPartial; }}`를 직접 쓴다.
+- `QuizConfigModal.jsx`의 payload 삼항 두 분기를 객체 하나와 `...(partialNoteIds.length > 0 && { blockSelections })`로 합친다. 블록 선택이 없을 때 payload에 `blockSelections` 키가 없어야 하는 점은 유지한다.
+- `CourseContext.jsx`에서 소비자가 없는 `studentName`, `isLoading`, `refreshCourses` 삭제. `/dashboard/courses` 응답은 그대로다.
+- `AuthContext.jsx`의 `decodeJwtPayload`를 `JSON.parse(atob(base64))`로 줄인다. `exp`만 읽으므로 UTF-8 복원이 필요 없다.
+- `useSourceBlockScroll.js`의 `scrollToBlockId` fallback 삭제. 호출부가 없다.
+
+### 7. frontend: 쓰지 않는 파일·의존성 삭제
+
+- 참조가 없는 템플릿 에셋 4개 삭제: `src/assets/hero.png`, `src/assets/react.svg`, `src/assets/vite.svg`, `public/icons.svg`.
+- import하지 않는 `@tiptap/extension-bubble-menu`를 `package.json`에서 제거하고 `package-lock.json`을 갱신한다.
+
+### 8. (선택) lodash.debounce 제거
+
+- `useNoteAutosave.js`의 debounce 두 개를 `setTimeout`/`clearTimeout`으로 바꾸면 의존성이 하나 준다.
+- 줄 수는 줄지 않고 자동 저장 debounce 계약(서버 2000ms, localStorage 300ms, `cancel`)을 건드리므로 우선순위가 가장 낮다. 1~7단계와 따로 판단한다.
 
 ## 수정 대상 파일
 
-- `frontend/src/components/editor/components/QuizConfigModal.jsx` (`parseNoteBlocks`, `hasMedia`, `NoteBlockPanel` 미리보기 문구)
-- `frontend/src/components/editor/components/QuizConfigModal.test.jsx`
+backend (`backend/src/main/java/com/uninote/backend/`)
+
+- `exception/GlobalExceptionHandler.java`
+- `service/QuizGenerationInput.java`, `service/QuizService.java`, `service/QuizQualityValidator.java`
+- `service/IncorrectNoteService.java`
+- `controller/ImageUploadController.java`
+- `security/JwtUtil.java`, `security/JwtFilter.java`
+
+frontend (`frontend/`)
+
+- `src/components/editor/NotionEditor.jsx`
+- `src/components/editor/hooks/useNoteUploads.js`, `useSourceBlockScroll.js`, `useNoteAutosave.js`(8단계만)
+- `src/components/editor/components/QuizConfigModal.jsx`
+- `src/hooks/useCourseBoard.js`
+- `src/context/CourseContext.jsx`, `src/context/AuthContext.jsx`
+- `package.json`, `package-lock.json`, 에셋 4개
 
 ## 테스트
 
-- 빈 문단(`content` 없음)과 공백만 있는 문단은 목록에 나오지 않는다(체크박스 없음).
-- 텍스트 없는 이미지 블록은 목록에 나오고, 미리보기가 "(이미지)"다.
-- 빈 블록 사이의 heading을 선택하면, 범위 선택과 payload `blockIds`에 빈 블록 id가 들어가지 않는다.
-- 기존 블록 선택 테스트는 모두 계속 통과한다.
+- 삭제한 코드를 직접 검증하던 테스트는 함께 지우거나 고친다.
+  - `QuizServiceTest`: `contentHash`, 로그 필드, `typeCounts` 빈 값 검사 관련
+  - `QuizAiGenerationServiceTest`: `contentHash` 관련
+  - `QuizQualityValidatorTest`: 총 문항 수 불일치 메시지를 기대하는 단정
+  - `JwtUtilTest`: `validateToken`/`getStudentNum` 호출부
+- 그 밖의 기존 테스트는 수정 없이 통과해야 한다. 특히 `GlobalExceptionHandlerTest`, `ImageUploadControllerTest`, `IncorrectNoteServiceTest`, `QuizConfigModal.test.jsx`, `AuthContext.test.jsx`가 응답 형식과 동작이 그대로임을 확인해 준다.
+- 새 테스트는 추가하지 않는다.
 
 ## 검증
 
 ```powershell
-cd frontend
+cd backend
+.\gradlew.bat test
+
+cd ..\frontend
 npm run lint
 npm run build
 npm run test
 ```
 
-backend 변경이 없으므로 backend 테스트는 생략한다.
+수동 확인
 
-수동 확인: 빈 줄이 있는 노트에서 "블록"을 펼쳤을 때 빈 줄이 목록에 없는지, 이미지 블록이 "(이미지)"로 보이는지 확인한다.
-
-## 참고
-
-- 여러 노트 블록 선택(`blockSelections`) 구현은 완료했지만 아직 커밋하지 않았다.
-
-## 이전 작업 미확인 항목
-
-- `quiz.generation` 결과 로그를 실제 Gemini 호출로 확인하지 않았다 (`e88c237`).
-- OSIV(`spring.jpa.open-in-view` 기본값 true) 상태에서 AI 호출 동안 DB 커넥션이 반환되는지 확인하지 않았다 (09-28 작업). 설정 변경은 범위 밖이다.
-- 09-28 작업의 수동 확인 4개(정상 생성 후 원문 이동, 빈 노트 alert, 출처 null 문항의 "원문 보기" 숨김, 오답노트·오늘의 복습 원문 이동)를 하지 않았다.
+- 노트에서 슬래시 명령 10개가 기존 순서대로 나오고 각각 동작하는지.
+- 이미지·PDF 업로드(슬래시 명령, 드래그 앤 드롭)와 업로드한 파일 보기·다운로드.
+- 로그인 후 새로고침해도 인증이 유지되는지, 만료 토큰이 정리되는지.
+- 게시판 댓글 작성·수정·삭제 후 목록과 상세가 갱신되는지.
+- AI 문제 생성에서 노트 전체 선택과 블록 일부 선택이 모두 되는지, 일부 블록 노트의 체크박스가 부분 선택으로 보이는지.
+- 오답노트 통계와 오늘의 복습 수치가 정리 전과 같은지.
 
 ## 완료 기준
 
-- 내용 없는 블록은 블록 목록에 체크박스로 나오지 않고, 선택 수·payload에도 들어가지 않는다.
-- 이미지 블록은 선택할 수 있고 "(이미지)"로 표시된다.
-- API·서버·DB 동작은 변경되지 않는다.
+- 1~7단계가 반영되고 backend 테스트, frontend lint·build·test가 모두 통과한다.
+- REST 경로, 응답 필드, 상태 코드, 오류 메시지, 화면 동작이 정리 전과 같다.
+- `quiz.generation` 로그에서 `contentHash`, `regenerated`, `scope` 필드만 빠진다.

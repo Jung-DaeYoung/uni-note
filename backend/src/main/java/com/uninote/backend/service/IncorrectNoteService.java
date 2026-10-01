@@ -6,14 +6,12 @@ import com.uninote.backend.exception.CourseAccessException;
 import com.uninote.backend.exception.InvalidRequestException;
 import com.uninote.backend.exception.ResourceNotFoundException;
 import com.uninote.backend.repository.*;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.Delegate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -46,9 +44,7 @@ public class IncorrectNoteService {
         IncorrectNoteGroup group;
         
         if (request.getGroupId() != null) {
-            group = groupRepository.findById(request.getGroupId())
-                .orElseThrow(() -> new ResourceNotFoundException("오답노트를 찾을 수 없습니다."));
-            validateOwnership(group, student);
+            group = getOwnedGroup(request.getGroupId(), student);
         } else if (request.getNewGroupTitle() != null && !request.getNewGroupTitle().trim().isEmpty()) {
             group = groupRepository.findByStudent_StudIdAndTitle(student.getStudId(), request.getNewGroupTitle())
                 .orElseGet(() -> {
@@ -77,20 +73,12 @@ public class IncorrectNoteService {
 
     @Transactional
     public void deleteGroup(Long groupId, Student student) {
-        IncorrectNoteGroup group = groupRepository.findById(groupId)
-            .orElseThrow(() -> new ResourceNotFoundException("오답노트를 찾을 수 없습니다."));
-
-        validateOwnership(group, student);
-
-        groupRepository.delete(group);
+        groupRepository.delete(getOwnedGroup(groupId, student));
     }
 
     @Transactional
     public void removeItemFromGroup(Long groupId, Long questionId, Student student) {
-        IncorrectNoteGroup group = groupRepository.findById(groupId)
-            .orElseThrow(() -> new ResourceNotFoundException("오답노트를 찾을 수 없습니다."));
-
-        validateOwnership(group, student);
+        getOwnedGroup(groupId, student);
 
         itemRepository.findByGroup_IdAndQuestion_QuestionId(groupId, questionId)
             .ifPresent(itemRepository::delete);
@@ -98,10 +86,7 @@ public class IncorrectNoteService {
 
     @Transactional(readOnly = true)
     public QuizSetDetailResponse getPracticeSession(Long groupId, Student student) {
-        IncorrectNoteGroup group = groupRepository.findById(groupId)
-            .orElseThrow(() -> new ResourceNotFoundException("오답노트를 찾을 수 없습니다."));
-
-        validateOwnership(group, student);
+        IncorrectNoteGroup group = getOwnedGroup(groupId, student);
 
         List<QuestionResponse> questions = group.getItems().stream()
             .map(item -> questionResponseMapper.toResponse(item.getQuestion()))
@@ -253,19 +238,8 @@ public class IncorrectNoteService {
                 double accuracyRate = stat.getAttemptCount() == 0 ? 0.0
                     : (double) stat.getCorrectCount() / stat.getAttemptCount();
 
-                return QuestionReviewStat.builder()
-                    .question(questionsById.get(stat.getQuestionId()))
-                    .courseId(stat.getCourseId())
-                    .courseName(stat.getCourseName())
-                    .attemptCount(stat.getAttemptCount())
-                    .correctCount(stat.getCorrectCount())
-                    .incorrectCount(stat.getIncorrectCount())
-                    .lastAttemptedAt(stat.getLastAttemptedAt())
-                    .lastIncorrectAt(stat.getLastIncorrectAt())
-                    .accuracyRate(accuracyRate)
-                    .recentlyIncorrect(recentlyIncorrect)
-                    .reviewPriority(classifyPriority(stat.getIncorrectCount(), accuracyRate, recentlyIncorrect))
-                    .build();
+                return new QuestionReviewStat(stat, questionsById.get(stat.getQuestionId()), accuracyRate,
+                    recentlyIncorrect, classifyPriority(stat.getIncorrectCount(), accuracyRate, recentlyIncorrect));
             })
             .sorted(PRIORITY_ORDER)
             .collect(Collectors.toList());
@@ -293,26 +267,25 @@ public class IncorrectNoteService {
         return ReviewPriority.LOW;
     }
 
+    // 집계 결과(stat)의 getter는 그대로 위임하고, 여기서는 파생 값만 보관한다.
     @Getter
-    @Builder
+    @RequiredArgsConstructor
     private static class QuestionReviewStat {
-        private Question question;
-        private Long courseId;
-        private String courseName;
-        private long attemptCount;
-        private long correctCount;
-        private long incorrectCount;
-        private LocalDateTime lastAttemptedAt;
-        private LocalDateTime lastIncorrectAt;
-        private double accuracyRate;
-        private boolean recentlyIncorrect;
-        private ReviewPriority reviewPriority;
+        @Delegate
+        private final QuestionAnswerStat stat;
+        private final Question question;
+        private final double accuracyRate;
+        private final boolean recentlyIncorrect;
+        private final ReviewPriority reviewPriority;
     }
 
-    private void validateOwnership(IncorrectNoteGroup group, Student student) {
+    private IncorrectNoteGroup getOwnedGroup(Long groupId, Student student) {
+        IncorrectNoteGroup group = groupRepository.findById(groupId)
+            .orElseThrow(() -> new ResourceNotFoundException("오답노트를 찾을 수 없습니다."));
         if (!group.getStudent().getStudId().equals(student.getStudId())) {
             throw new CourseAccessException("본인 오답노트 그룹만 접근할 수 있습니다.");
         }
+        return group;
     }
 
     // question이 요청 학생 본인의 퀴즈에 속하는지 확인한다. 이 검증이 없으면 다른 학생의

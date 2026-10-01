@@ -1,6 +1,5 @@
 package com.uninote.backend.security;
 
-import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.WeakKeyException;
@@ -41,21 +40,12 @@ public class JwtUtil {
                 .compact();
     }
 
-    public String getStudentNum(String token) {
-        return Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload()
-                .getSubject();
-    }
-
-    public boolean validateToken(String token) {
+    // 서명·만료 검증을 통과하면 토큰의 학번(subject)을, 실패하면 null을 반환한다.
+    public String parseSubject(String token) {
         try {
-            Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token);
-            return true;
+            return Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token).getPayload().getSubject();
         } catch (Exception e) {
-            return false;
+            return null;
         }
     }
 }

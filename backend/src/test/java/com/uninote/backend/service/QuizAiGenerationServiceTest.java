@@ -217,20 +217,6 @@ class QuizAiGenerationServiceTest {
     }
 
     @Test
-    void contentHashIsStableForSameInputAndChangesWithTextOrMedia() {
-        Map<String, Object> media = Map.of("inline_data", Map.of("mime_type", "image/png", "data", "AAAA"));
-        Map<String, Object> otherMedia = Map.of("inline_data", Map.of("mime_type", "image/png", "data", "BBBB"));
-        QuizGenerationInput base = new QuizGenerationInput("본문", List.of(media), Map.of());
-
-        assertThat(base.contentHash())
-                .hasSize(64)
-                .isEqualTo(new QuizGenerationInput("본문", List.of(media), Map.of()).contentHash())
-                .isNotEqualTo(new QuizGenerationInput("다른 본문", List.of(media), Map.of()).contentHash())
-                .isNotEqualTo(new QuizGenerationInput("본문", List.of(otherMedia), Map.of()).contentHash())
-                .isNotEqualTo(new QuizGenerationInput("본문", List.of(), Map.of()).contentHash());
-    }
-
-    @Test
     void prepareInputCollectsOnlyReferencedSources() throws Exception {
         String contentJson = objectMapper.writeValueAsString(Map.of(
                 "type", "doc",

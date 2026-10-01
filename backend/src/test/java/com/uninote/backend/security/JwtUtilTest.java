@@ -16,8 +16,7 @@ class JwtUtilTest {
 
         String token = jwtUtil.generateToken("20240001");
 
-        assertThat(jwtUtil.validateToken(token)).isTrue();
-        assertThat(jwtUtil.getStudentNum(token)).isEqualTo("20240001");
+        assertThat(jwtUtil.parseSubject(token)).isEqualTo("20240001");
     }
 
     @Test
@@ -27,7 +26,7 @@ class JwtUtilTest {
         String token = jwtUtil.generateToken("20240001");
         Thread.sleep(10);
 
-        assertThat(jwtUtil.validateToken(token)).isFalse();
+        assertThat(jwtUtil.parseSubject(token)).isNull();
     }
 
     @Test

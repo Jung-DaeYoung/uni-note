@@ -29,7 +29,6 @@ public class QuizService {
     // AI 요청 폭주/오남용을 막기 위한 최소한의 상한선. 실제 UI는 이보다 훨씬 적은 수를
     // 기본값으로 쓰지만, 클라이언트가 값을 임의로 조작해 보낼 수 있으므로 서버에서도 제한한다.
     private static final int MAX_NOTES_PER_QUIZ = 20;
-    private static final int MAX_QUESTIONS_PER_TYPE = 20;
     private static final int MAX_TOTAL_QUESTIONS = 30;
     // 블록 범위 선택 시 모든 노트를 합친 선택 블록 수 상한(QuizConfigModal과 동일).
     private static final int MAX_SELECTED_BLOCKS = 500;
@@ -72,8 +71,7 @@ public class QuizService {
                     : "선택한 범위에 문제를 생성할 내용이 없습니다.");
         }
 
-        GenerationContext context = new GenerationContext(input.contentHash(), clock.instant(), student.getStudId(),
-                blockScopes);
+        GenerationContext context = new GenerationContext(clock.instant(), student.getStudId(), blockScopes);
         GenerationResult result = generateValidatedQuiz(request, input, context);
 
         QuizResponse saved;
@@ -90,8 +88,7 @@ public class QuizService {
 
     // 생성 결과 로그(P0-4)에 공통으로 남기는 요청 단위 정보.
     // blockScopes는 noteId별 선택 블록이며, 비어 있으면 모든 노트를 전체로 쓴다.
-    private record GenerationContext(String contentHash, Instant start, Long studId,
-                                     Map<Long, Set<String>> blockScopes) {}
+    private record GenerationContext(Instant start, Long studId, Map<Long, Set<String>> blockScopes) {}
 
     // 노트별 블록 범위(P1-5). 블록을 고른 노트는 반드시 noteIds에 있어야 한다 — noteIds가
     // 소유권·같은 강의 검증(validateNoteAccess)의 기준이므로 이를 우회하지 못하게 한다.
@@ -160,22 +157,19 @@ public class QuizService {
     // 노트 본문·문제 텍스트·학번 같은 개인정보는 넣지 않는다(사용자는 내부 studId로만 식별).
     private void logGenerationResult(GenerationContext context, boolean success, int attempts, int unverified,
                                      String failureCode, String failureReason, Long quizSetId) {
-        log.info("quiz.generation status={} model={} promptVersion={} contentHash={} attempts={} regenerated={} "
+        log.info("quiz.generation status={} model={} promptVersion={} attempts={} "
                         + "unverified={} elapsedMs={} failureCode={} failureReason=\"{}\" quizSetId={} studId={} "
-                        + "scope={} blockCount={} blockNoteCount={}",
+                        + "blockCount={} blockNoteCount={}",
                 success ? "SUCCESS" : "FAILED",
                 QuizAiGenerationService.MODEL_NAME,
                 QuizAiGenerationService.PROMPT_VERSION,
-                context.contentHash(),
                 attempts,
-                attempts > 1,
                 unverified,
                 Duration.between(context.start(), clock.instant()).toMillis(),
                 failureCode == null ? "" : failureCode,
                 failureReason == null ? "" : failureReason.replace("\"", "'"),
                 quizSetId == null ? "" : quizSetId,
                 context.studId(),
-                context.blockScopes().isEmpty() ? "NOTE" : "BLOCK",
                 context.blockScopes().values().stream().mapToInt(Set::size).sum(),
                 context.blockScopes().size());
     }
@@ -187,10 +181,7 @@ public class QuizService {
         quizSet.setDifficulty(request.getDifficulty());
         quizSet.setSourceNotes(writeJson(request.getNoteIds()));
         quizSet.setStudent(student);
-
-        if (!notes.isEmpty()) {
-            quizSet.setCourse(notes.get(0).getCourse());
-        }
+        quizSet.setCourse(notes.get(0).getCourse());
 
         quizSetRepository.save(quizSet);
 
@@ -230,18 +221,8 @@ public class QuizService {
             throw new InvalidRequestException("한 번에 최대 " + MAX_NOTES_PER_QUIZ + "개의 노트까지 사용할 수 있습니다.");
         }
 
-        Map<QuestionType, Integer> typeCounts = request.getTypeCounts();
-        if (typeCounts == null || typeCounts.isEmpty()) {
-            throw new InvalidRequestException("생성할 문제 유형과 개수를 지정해야 합니다.");
-        }
-
-        int total = 0;
-        for (Integer count : typeCounts.values()) {
-            if (count == null || count < 1 || count > MAX_QUESTIONS_PER_TYPE) {
-                throw new InvalidRequestException("문제 유형별 개수는 1~" + MAX_QUESTIONS_PER_TYPE + " 사이여야 합니다.");
-            }
-            total += count;
-        }
+        // 유형별 개수(1~20, null 불가)는 QuizRequest의 Bean Validation이 검증한다.
+        int total = request.getTypeCounts().values().stream().mapToInt(Integer::intValue).sum();
         if (total > MAX_TOTAL_QUESTIONS) {
             throw new InvalidRequestException("한 번에 생성할 수 있는 총 문제 수는 최대 " + MAX_TOTAL_QUESTIONS + "개입니다.");
         }
@@ -472,9 +453,6 @@ public class QuizService {
     // QuizSet.course는 notes.get(0)의 강의로 설정되므로(generateQuiz), 다른 강의 노트가
     // 섞이면 그 사실이 QuizSet.course에 드러나지 않은 채 조용히 유실된다.
     private void validateSameCourse(List<Note> notes) {
-        if (notes.isEmpty()) {
-            return;
-        }
         Long firstCourseId = notes.get(0).getCourse().getCourseId();
         boolean mixedCourses = notes.stream()
                 .anyMatch(note -> !note.getCourse().getCourseId().equals(firstCourseId));

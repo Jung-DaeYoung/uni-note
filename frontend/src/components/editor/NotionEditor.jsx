@@ -122,6 +122,32 @@ const CustomParagraph = Paragraph.extend({
   },
 });
 
+// "/" 명령 중 블록 종류만 바꾸는 항목: [제목, 아이콘, 적용할 체인 명령]
+const BLOCK_COMMANDS = [
+  ['제목 1', <Heading1 size={18} />, (chain) => chain.toggleHeading({ level: 1 })],
+  ['제목 2', <Heading2 size={18} />, (chain) => chain.toggleHeading({ level: 2 })],
+  ['할 일 목록', <CheckSquare size={18} />, (chain) => chain.toggleTaskList()],
+  ['불렛 리스트', <List size={18} />, (chain) => chain.toggleBulletList()],
+  ['코드 블록', <Code size={18} />, (chain) => chain.toggleCodeBlock()],
+  ['인용구', <Quote size={18} />, (chain) => chain.toggleBlockquote()],
+];
+const blockCommandItems = BLOCK_COMMANDS.map(([title, icon, apply]) => ({
+  title,
+  icon,
+  command: ({ editor, range }) => apply(editor.chain().focus().deleteRange(range).setParagraph()).run(),
+}));
+
+// 파일 선택 창을 열고, 파일을 고르면 onFile로 넘긴다.
+const pickFile = (accept, onFile) => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = accept;
+  input.onchange = () => {
+    if (input.files?.length) onFile(input.files[0]);
+  };
+  input.click();
+};
+
 const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChange }) => {
   const navigate = useNavigate();
 
@@ -195,87 +221,30 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
                   }
                 }
               },
-              { 
-                title: '제목 1', 
-                icon: <Heading1 size={18} />, 
-                command: ({ editor, range }) => {
-                  editor.chain().focus().deleteRange(range).setParagraph().toggleHeading({ level: 1 }).run();
-                }
+              ...blockCommandItems,
+              {
+                title: '이미지 업로드',
+                icon: <ImageIcon size={18} />,
+                command: ({ editor, range }) => pickFile('image/*', async (file) => {
+                  const url = await handleImageUpload(file);
+                  if (url) {
+                    editor.chain().focus().deleteRange(range).setImage({ src: url }).run();
+                  }
+                })
               },
-              { 
-                title: '제목 2', 
-                icon: <Heading2 size={18} />, 
-                command: ({ editor, range }) => {
-                  editor.chain().focus().deleteRange(range).setParagraph().toggleHeading({ level: 2 }).run();
-                }
-              },
-              { 
-                title: '할 일 목록', 
-                icon: <CheckSquare size={18} />, 
-                command: ({ editor, range }) => {
-                  editor.chain().focus().deleteRange(range).setParagraph().toggleTaskList().run();
-                }
-              },
-              { 
-                title: '불렛 리스트', 
-                icon: <List size={18} />, 
-                command: ({ editor, range }) => {
-                  editor.chain().focus().deleteRange(range).setParagraph().toggleBulletList().run();
-                }
-              },
-              { 
-                title: '코드 블록', 
-                icon: <Code size={18} />, 
-                command: ({ editor, range }) => {
-                  editor.chain().focus().deleteRange(range).setParagraph().toggleCodeBlock().run();
-                }
-              },
-              { 
-                title: '인용구', 
-                icon: <Quote size={18} />, 
-                command: ({ editor, range }) => {
-                  editor.chain().focus().deleteRange(range).setParagraph().toggleBlockquote().run();
-                }
-              },
-              { 
-                title: '이미지 업로드', 
-                icon: <ImageIcon size={18} />, 
-                command: ({ editor, range }) => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'image/*';
-                  input.onchange = async () => {
-                    if (input.files?.length) {
-                      const url = await handleImageUpload(input.files[0]);
-                      if (url) {
-                        editor.chain().focus().deleteRange(range).setImage({ src: url }).run();
-                      }
-                    }
-                  };
-                  input.click();
-                }
-              },
-              { 
-                title: 'PDF 업로드', 
-                icon: <FileText size={18} className="text-red-500" />, 
+              {
+                title: 'PDF 업로드',
+                icon: <FileText size={18} className="text-red-500" />,
                 description: 'PDF 파일을 문서에 첨부합니다.',
-                command: ({ editor, range }) => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = '.pdf,application/pdf';
-                  input.onchange = async () => {
-                    if (input.files?.length) {
-                      const result = await handlePdfUpload(input.files[0]);
-                      if (result) {
-                        editor.chain().focus().deleteRange(range).insertContent({
-                          type: 'pdfBlock',
-                          attrs: { src: result.url, title: result.title }
-                        }).run();
-                      }
-                    }
-                  };
-                  input.click();
-                }
+                command: ({ editor, range }) => pickFile('.pdf,application/pdf', async (file) => {
+                  const result = await handlePdfUpload(file);
+                  if (result) {
+                    editor.chain().focus().deleteRange(range).insertContent({
+                      type: 'pdfBlock',
+                      attrs: { src: result.url, title: result.title }
+                    }).run();
+                  }
+                })
               },
             ].filter(item => item.title.toLowerCase().includes(query.toLowerCase()));
           },

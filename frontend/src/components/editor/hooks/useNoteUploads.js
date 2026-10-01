@@ -52,11 +52,9 @@ const useNoteUploads = () => {
     setUploadError(null);
   };
 
-  const handleImageUpload = async (file) => {
-    const validationError = validateFile(file, {
-      allowedExtensions: ALLOWED_IMAGE_EXTENSIONS,
-      allowedMimeTypes: ALLOWED_IMAGE_MIME_TYPES,
-    });
+  // 검증 → 업로드 → 서버 응답(data) 반환. 실패하면 상태에 사유를 남기고 null을 반환한다.
+  const upload = async (file, { endpoint, allowedExtensions, allowedMimeTypes, label }) => {
+    const validationError = validateFile(file, { allowedExtensions, allowedMimeTypes });
     if (validationError) {
       setUploadStatus('error');
       setUploadError(validationError);
@@ -68,45 +66,35 @@ const useNoteUploads = () => {
     setUploadStatus('uploading');
     setUploadError(null);
     try {
-      const response = await client.post('/upload/image', formData);
+      const response = await client.post(endpoint, formData);
       setUploadStatus('idle');
-      return SERVER_URL + response.data.url;
+      return response.data;
     } catch (error) {
-      console.error('이미지 업로드 실패:', error);
+      console.error(`${label} 업로드 실패:`, error);
       setUploadStatus('error');
-      setUploadError('이미지 업로드에 실패했습니다.');
+      setUploadError(`${label} 업로드에 실패했습니다.`);
       return null;
     }
   };
 
+  const handleImageUpload = async (file) => {
+    const data = await upload(file, {
+      endpoint: '/upload/image',
+      allowedExtensions: ALLOWED_IMAGE_EXTENSIONS,
+      allowedMimeTypes: ALLOWED_IMAGE_MIME_TYPES,
+      label: '이미지',
+    });
+    return data && SERVER_URL + data.url;
+  };
+
   const handlePdfUpload = async (file) => {
-    const validationError = validateFile(file, {
+    const data = await upload(file, {
+      endpoint: '/upload/file',
       allowedExtensions: ALLOWED_PDF_EXTENSIONS,
       allowedMimeTypes: ALLOWED_PDF_MIME_TYPES,
+      label: 'PDF',
     });
-    if (validationError) {
-      setUploadStatus('error');
-      setUploadError(validationError);
-      return null;
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-    setUploadStatus('uploading');
-    setUploadError(null);
-    try {
-      const response = await client.post('/upload/file', formData);
-      setUploadStatus('idle');
-      return {
-        url: SERVER_URL + response.data.url,
-        title: response.data.title,
-      };
-    } catch (error) {
-      console.error('PDF 업로드 실패:', error);
-      setUploadStatus('error');
-      setUploadError('PDF 업로드에 실패했습니다.');
-      return null;
-    }
+    return data && { url: SERVER_URL + data.url, title: data.title };
   };
 
   return { handleImageUpload, handlePdfUpload, uploadStatus, uploadError, clearUploadError };

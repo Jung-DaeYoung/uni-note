@@ -60,13 +60,7 @@ public class ImageUploadController {
             @PathVariable String fileName,
             @RequestParam(required = false) String owner,
             @RequestParam(required = false) String sig) {
-        if (!isValidFileName(fileName)) {
-            return ResponseEntity.badRequest().build();
-        }
-        if (!isAuthorized(fileName, owner, sig)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-        return serveFile(fileName, null);
+        return serveFile(fileName, owner, sig, null);
     }
 
     @GetMapping("/api/upload/download/{fileName}")
@@ -75,37 +69,14 @@ public class ImageUploadController {
             @RequestParam String originalName,
             @RequestParam(required = false) String owner,
             @RequestParam(required = false) String sig) {
-        if (!isValidFileName(fileName)) {
-            return ResponseEntity.badRequest().build();
-        }
-        if (!isAuthorized(fileName, owner, sig)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-        return serveFile(fileName, originalName);
+        return serveFile(fileName, owner, sig, originalName);
     }
 
     // P1-1 이전 "/uploads/{fileName}" 정적 경로를 대체하는 좁은 경로. Spring의 범용 정적
     // 리소스 매핑(모든 업로드 파일을 무조건 공개)과 달리, 화이트리스트에 등록된 파일만 서빙한다.
     @GetMapping("/uploads/{fileName}")
     public ResponseEntity<Resource> viewLegacyFile(@PathVariable String fileName) {
-        if (!isValidFileName(fileName)) {
-            return ResponseEntity.badRequest().build();
-        }
-        if (!isAuthorized(fileName, null, null)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-        return serveFile(fileName, null);
-    }
-
-    // 경로 조작 문자열(traversal)은 인가 여부와 무관하게 항상 먼저 거부되어야 하므로,
-    // serveFile() 내부의 검증과 별개로 인가 판단 전에 파일명 형식만 미리 검사한다.
-    private boolean isValidFileName(String fileName) {
-        try {
-            resolveWithinUploadDir(fileName);
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
+        return serveFile(fileName, null, null, null);
     }
 
     private boolean isAuthorized(String fileName, String owner, String sig) {
@@ -126,13 +97,19 @@ public class ImageUploadController {
                 .anyMatch(allowed -> allowed.equals(fileName));
     }
 
-    private ResponseEntity<Resource> serveFile(String fileName, String originalNameForDownload) {
+    // 경로 조작 문자열(traversal)은 인가 여부와 무관하게 항상 먼저 거부되어야 하므로,
+    // 파일명 형식(400)을 인가(403)보다 먼저 검사한다.
+    private ResponseEntity<Resource> serveFile(String fileName, String owner, String sig,
+                                               String originalNameForDownload) {
         Path filePath;
         try {
             filePath = resolveWithinUploadDir(fileName);
         } catch (IllegalArgumentException e) {
             log.warn("허용되지 않은 파일 경로 접근 시도: {}", fileName);
             return ResponseEntity.badRequest().build();
+        }
+        if (!isAuthorized(fileName, owner, sig)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
         try {
@@ -233,10 +210,7 @@ public class ImageUploadController {
         }
 
         try {
-            Path copyLocation = Paths.get(uploadDir);
-            if (!Files.exists(copyLocation)) {
-                Files.createDirectories(copyLocation);
-            }
+            Path copyLocation = Files.createDirectories(Paths.get(uploadDir));
 
             // 서버가 UUID + 검증된 확장자로 저장 파일명을 직접 결정한다.
             // (원본 파일명은 저장 경로에 전혀 쓰이지 않는다)
@@ -280,15 +254,8 @@ public class ImageUploadController {
     }
 
     private boolean startsWith(byte[] content, byte[] prefix) {
-        if (content.length < prefix.length) {
-            return false;
-        }
-        for (int i = 0; i < prefix.length; i++) {
-            if (content[i] != prefix[i]) {
-                return false;
-            }
-        }
-        return true;
+        return content.length >= prefix.length
+                && Arrays.equals(content, 0, prefix.length, prefix, 0, prefix.length);
     }
 
     private String extractExtension(String originalFilename) {

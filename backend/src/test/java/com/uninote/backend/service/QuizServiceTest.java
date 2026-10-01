@@ -543,8 +543,7 @@ class QuizServiceTest {
                 .contains("quiz.generation status=SUCCESS")
                 .contains("model=" + QuizAiGenerationService.MODEL_NAME)
                 .contains("promptVersion=" + QuizAiGenerationService.PROMPT_VERSION)
-                .contains("contentHash=" + textInput.contentHash())
-                .contains("attempts=1 regenerated=false unverified=0")
+                .contains("attempts=1 unverified=0")
                 .contains("studId=1")
                 // 노트 본문은 로그에 남기지 않는다.
                 .doesNotContain("[[REF:10/b1]]");
@@ -561,7 +560,7 @@ class QuizServiceTest {
         quizService.generateQuiz(requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1)), owner);
 
         assertThat(countGenerationLogLines(output)).isEqualTo(1);
-        assertThat(output.getOut()).contains("status=SUCCESS").contains("attempts=2 regenerated=true");
+        assertThat(output.getOut()).contains("status=SUCCESS").contains("attempts=2");
     }
 
     @Test
@@ -578,7 +577,7 @@ class QuizServiceTest {
         assertThat(countGenerationLogLines(output)).isEqualTo(1);
         assertThat(output.getOut())
                 .contains("status=FAILED")
-                .contains("attempts=2 regenerated=true")
+                .contains("attempts=2")
                 .contains("failureCode=" + ExternalServiceException.QUIZ_VALIDATION_FAILED)
                 .contains("failureReason=\"문항이 없습니다.\"");
     }
@@ -607,7 +606,7 @@ class QuizServiceTest {
 
         verify(quizAiGenerationService).prepareInput(eq(List.of(note1, note2, note3)), eq(owner),
                 eq(Map.of(11L, Set.of("b1", "b2", "b3"), 12L, Set.of("b1"))));
-        assertThat(output.getOut()).contains("status=SUCCESS").contains("scope=BLOCK blockCount=4 blockNoteCount=2");
+        assertThat(output.getOut()).contains("status=SUCCESS").contains("blockCount=4 blockNoteCount=2");
     }
 
     @Test
@@ -623,7 +622,7 @@ class QuizServiceTest {
         quizService.generateQuiz(request, owner);
 
         verify(quizAiGenerationService).prepareInput(eq(List.of(note)), eq(owner), eq(Map.of()));
-        assertThat(output.getOut()).contains("scope=NOTE blockCount=0 blockNoteCount=0");
+        assertThat(output.getOut()).contains("blockCount=0 blockNoteCount=0");
     }
 
     @Test
@@ -687,7 +686,7 @@ class QuizServiceTest {
         assertThat(countGenerationLogLines(output)).isEqualTo(1);
         assertThat(output.getOut())
                 .contains("status=FAILED")
-                .contains("attempts=1 regenerated=false")
+                .contains("attempts=1")
                 .contains("failureCode=" + ExternalServiceException.EXTERNAL_SERVICE_ERROR);
     }
 
@@ -707,41 +706,6 @@ class QuizServiceTest {
 
         QuizRequest request = new QuizRequest();
         request.setNoteIds(List.of(10L, 11L));
-
-        assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
-                .isInstanceOf(InvalidRequestException.class);
-
-        verifyNoInteractions(quizAiGenerationService);
-    }
-
-    @Test
-    void generateQuizRejectsWhenTypeCountsAreMissing() {
-        Note note = new Note();
-        note.setNoteId(10L);
-        note.setStudent(owner);
-        note.setCourse(course);
-        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
-
-        QuizRequest request = new QuizRequest();
-        request.setNoteIds(List.of(10L));
-
-        assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
-                .isInstanceOf(InvalidRequestException.class);
-
-        verifyNoInteractions(quizAiGenerationService);
-    }
-
-    @Test
-    void generateQuizRejectsWhenPerTypeCountExceedsLimit() {
-        Note note = new Note();
-        note.setNoteId(10L);
-        note.setStudent(owner);
-        note.setCourse(course);
-        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
-
-        QuizRequest request = new QuizRequest();
-        request.setNoteIds(List.of(10L));
-        request.setTypeCounts(Map.of(QuestionType.MULTIPLE_CHOICE, 21));
 
         assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
                 .isInstanceOf(InvalidRequestException.class);

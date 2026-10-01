@@ -78,16 +78,21 @@ const useCourseBoard = ({ courseId, searchString }) => {
     }
   };
 
+  // 댓글 변경 후 목록을 다시 불러오고, 보고 있던 글도 최신 내용으로 바꾼다.
+  const refreshPosts = async () => {
+    const postsRes = await client.get(`/posts/${courseId}`);
+    const updatedPosts = postsRes.data || [];
+    setPosts(updatedPosts);
+    const updatedPost = updatedPosts.find(p => p.postId === selectedPost.postId);
+    if (updatedPost) setSelectedPost(updatedPost);
+  };
+
   const handleSendComment = async (e) => {
     e.preventDefault();
     if (!newComment.trim() || !selectedPost) return;
     try {
       await client.post(`/posts/${selectedPost.postId}/comments`, { content: newComment });
-      const postsRes = await client.get(`/posts/${courseId}`);
-      const updatedPosts = postsRes.data || [];
-      setPosts(updatedPosts);
-      const updatedPost = updatedPosts.find(p => p.postId === selectedPost.postId);
-      if (updatedPost) setSelectedPost(updatedPost);
+      await refreshPosts();
       setNewComment('');
     } catch {
       alert("댓글 작성에 실패했습니다.");
@@ -98,11 +103,7 @@ const useCourseBoard = ({ courseId, searchString }) => {
     if (!editingCommentContent.trim()) return;
     try {
       await client.put(`/posts/comments/${commentId}`, { content: editingCommentContent });
-      const postsRes = await client.get(`/posts/${courseId}`);
-      const updatedPosts = postsRes.data || [];
-      setPosts(updatedPosts);
-      const updatedPost = updatedPosts.find(p => p.postId === selectedPost.postId);
-      if (updatedPost) setSelectedPost(updatedPost);
+      await refreshPosts();
       setEditingCommentId(null);
     } catch {
       alert("댓글 수정에 실패했습니다.");
@@ -113,11 +114,7 @@ const useCourseBoard = ({ courseId, searchString }) => {
     if (!window.confirm("댓글을 삭제하시겠습니까?")) return;
     try {
       await client.delete(`/posts/comments/${commentId}`);
-      const postsRes = await client.get(`/posts/${courseId}`);
-      const updatedPosts = postsRes.data || [];
-      setPosts(updatedPosts);
-      const updatedPost = updatedPosts.find(p => p.postId === selectedPost.postId);
-      if (updatedPost) setSelectedPost(updatedPost);
+      await refreshPosts();
     } catch {
       alert("댓글 삭제에 실패했습니다.");
     }

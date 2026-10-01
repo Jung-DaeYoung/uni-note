@@ -12,8 +12,7 @@ const useSourceBlockScroll = (editor) => {
 
   useEffect(() => {
     const state = location.state || {};
-    // sourceBlockId가 정식 명칭이며, 예전 호출부가 남아 있을 경우를 위해 scrollToBlockId를 fallback으로 읽는다.
-    const blockId = state.sourceBlockId || state.scrollToBlockId;
+    const blockId = state.sourceBlockId;
     if (!editor || !blockId) return;
 
     const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;

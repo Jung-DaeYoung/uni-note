@@ -5,6 +5,7 @@ import com.uninote.backend.dto.QuestionResponse;
 import com.uninote.backend.dto.QuizRequest;
 import com.uninote.backend.dto.QuizResponse;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -51,7 +52,7 @@ public class QuizQualityValidator {
             String label = "문항 " + (i + 1) + ": ";
             resolvedAnswers.add(resolveAnswer(q, label, errors));
 
-            if (!isBlank(q.getQuestionText()) && !seenQuestionTexts.add(normalize(q.getQuestionText()))) {
+            if (StringUtils.hasText(q.getQuestionText()) && !seenQuestionTexts.add(normalize(q.getQuestionText()))) {
                 errors.add(label + "같은 세트 안에 중복된 문항입니다.");
             }
             if (!isVerifiedSource(q, allowedSources)) {
@@ -81,11 +82,6 @@ public class QuizQualityValidator {
 
     private void validateCounts(List<QuestionResponse> questions, Map<QuestionType, Integer> typeCounts,
                                 List<String> errors) {
-        int requestedTotal = typeCounts.values().stream().mapToInt(Integer::intValue).sum();
-        if (questions.size() != requestedTotal) {
-            errors.add("문항 수 불일치: 요청 " + requestedTotal + ", 응답 " + questions.size());
-        }
-
         Map<QuestionType, Integer> actual = new EnumMap<>(QuestionType.class);
         for (QuestionResponse q : questions) {
             if (q.getType() != null) {
@@ -107,11 +103,11 @@ public class QuizQualityValidator {
             errors.add(label + "문제 유형이 없습니다.");
             return null;
         }
-        if (isBlank(q.getQuestionText())) {
+        if (!StringUtils.hasText(q.getQuestionText())) {
             errors.add(label + "문제 내용이 없습니다.");
         }
         String answer = q.getCorrectAnswer();
-        if (isBlank(answer)) {
+        if (!StringUtils.hasText(answer)) {
             errors.add(label + "정답이 없습니다.");
             return null;
         }
@@ -137,7 +133,7 @@ public class QuizQualityValidator {
 
         Set<String> normalizedOptions = new HashSet<>();
         for (String option : options) {
-            if (isBlank(option) || !normalizedOptions.add(normalize(option))) {
+            if (!StringUtils.hasText(option) || !normalizedOptions.add(normalize(option))) {
                 errors.add(label + "객관식 보기가 비어 있거나 중복됩니다.");
                 return null;
             }
@@ -171,7 +167,7 @@ public class QuizQualityValidator {
     }
 
     private String normalizeTitle(String title) {
-        if (isBlank(title)) {
+        if (!StringUtils.hasText(title)) {
             return DEFAULT_TITLE;
         }
         String trimmed = title.trim();
@@ -180,9 +176,5 @@ public class QuizQualityValidator {
 
     private static String normalize(String value) {
         return value.trim().toLowerCase();
-    }
-
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 }

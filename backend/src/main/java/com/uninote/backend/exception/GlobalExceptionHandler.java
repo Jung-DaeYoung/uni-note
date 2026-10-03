@@ -84,6 +84,15 @@ public class GlobalExceptionHandler {
     // 예기치 않은 예외는 내부 메시지를 노출하지 않고 일반화된 500으로 응답한다.
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex) {
+        // 상태 코드를 가진 Spring MVC 예외(없는 경로 404, 허용되지 않은 메서드 405 등)는 500으로 바꾸지 않고
+        // 그 상태로 응답한다. @ExceptionHandler는 인터페이스 타입을 받지 않으므로 여기서 분기한다.
+        if (ex instanceof org.springframework.web.ErrorResponse webError) {
+            HttpStatus status = HttpStatus.valueOf(webError.getStatusCode().value());
+            String message = status == HttpStatus.NOT_FOUND ? "요청한 경로를 찾을 수 없습니다."
+                    : status == HttpStatus.METHOD_NOT_ALLOWED ? "허용되지 않은 요청 메서드입니다."
+                    : "요청을 처리할 수 없습니다.";
+            return respond(status, status.name(), message);
+        }
         log.error("예기치 않은 예외가 발생했습니다.", ex);
         return respond(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "서버 내부 오류가 발생했습니다.");
     }

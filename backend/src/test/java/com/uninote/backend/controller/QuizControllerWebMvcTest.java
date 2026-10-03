@@ -28,7 +28,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -224,5 +226,19 @@ class QuizControllerWebMvcTest {
                         .header("Authorization", bearerToken()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void 없는경로는500이아닌404와NOT_FOUND를반환한다() throws Exception {
+        mockMvc.perform(get("/api/nope").header("Authorization", bearerToken()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("NOT_FOUND"));
+    }
+
+    @Test
+    void 허용되지않은메서드는500이아닌405와METHOD_NOT_ALLOWED를반환한다() throws Exception {
+        mockMvc.perform(put("/api/quiz/generate").header("Authorization", bearerToken()))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.errorCode").value("METHOD_NOT_ALLOWED"));
     }
 }

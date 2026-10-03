@@ -15,6 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -74,12 +77,16 @@ public class QuizService {
                     : "선택한 범위에 문제를 생성할 내용이 없습니다.");
         }
         if (input.text().length() > MAX_INPUT_TEXT_CHARS) {
+            // P1-1 청킹 착수 판단용 빈도 측정. 노트 본문은 남기지 않는다.
+            log.info("quiz.generation status=REJECTED_TOO_LONG textChars={} studId={}",
+                    input.text().length(), student.getStudId());
             throw new InvalidRequestException(String.format(
                     "노트 내용이 너무 깁니다(%,d자, 최대 %,d자). 노트 수를 줄이거나 블록 범위를 선택해 주세요.",
                     input.text().length(), MAX_INPUT_TEXT_CHARS));
         }
 
-        GenerationContext context = new GenerationContext(clock.instant(), student.getStudId(), blockScopes);
+        GenerationContext context = new GenerationContext(clock.instant(), student.getStudId(), blockScopes,
+                sha256Hex(input.text()), input.text().length());
         GenerationResult result = generateValidatedQuiz(request, input, context);
 
         QuizResponse saved;
@@ -96,7 +103,18 @@ public class QuizService {
 
     // 생성 결과 로그(P0-4)에 공통으로 남기는 요청 단위 정보.
     // blockScopes는 noteId별 선택 블록이며, 비어 있으면 모든 노트를 전체로 쓴다.
-    private record GenerationContext(Instant start, Long studId, Map<Long, Set<String>> blockScopes) {}
+    // contentHash는 AI에 보낸 추출 텍스트의 SHA-256으로, 본문 없이 같은 입력인지 식별한다.
+    private record GenerationContext(Instant start, Long studId, Map<Long, Set<String>> blockScopes,
+                                     String contentHash, int textChars) {}
+
+    private static String sha256Hex(String text) {
+        try {
+            return HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256을 사용할 수 없습니다.", e);
+        }
+    }
 
     // 노트별 블록 범위(P1-5). 블록을 고른 노트는 반드시 noteIds에 있어야 한다 — noteIds가
     // 소유권·같은 강의 검증(validateNoteAccess)의 기준이므로 이를 우회하지 못하게 한다.
@@ -167,7 +185,7 @@ public class QuizService {
                                      String failureCode, String failureReason, Long quizSetId) {
         log.info("quiz.generation status={} model={} promptVersion={} attempts={} "
                         + "unverified={} elapsedMs={} failureCode={} failureReason=\"{}\" quizSetId={} studId={} "
-                        + "blockCount={} blockNoteCount={}",
+                        + "blockCount={} blockNoteCount={} contentHash={} textChars={}",
                 success ? "SUCCESS" : "FAILED",
                 QuizAiGenerationService.MODEL_NAME,
                 QuizAiGenerationService.PROMPT_VERSION,
@@ -179,7 +197,9 @@ public class QuizService {
                 quizSetId == null ? "" : quizSetId,
                 context.studId(),
                 context.blockScopes().values().stream().mapToInt(Set::size).sum(),
-                context.blockScopes().size());
+                context.blockScopes().size(),
+                context.contentHash(),
+                context.textChars());
     }
 
     private QuizResponse saveGeneratedQuiz(QuizResponse quizResponse, QuizRequest request, List<Note> notes,

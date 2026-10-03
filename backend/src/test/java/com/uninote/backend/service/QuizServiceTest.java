@@ -441,7 +441,7 @@ class QuizServiceTest {
     }
 
     @Test
-    void generateQuizRejectsTooLongInputTextWithoutCallingAi() {
+    void generateQuizRejectsTooLongInputTextWithoutCallingAi(CapturedOutput output) {
         Note note = ownedNote(10L);
         when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
         when(quizAiGenerationService.prepareInput(any(), any(), any()))
@@ -452,6 +452,8 @@ class QuizServiceTest {
         assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
                 .isInstanceOf(InvalidRequestException.class)
                 .hasMessageContaining("노트 내용이 너무 깁니다");
+        assertThat(output.getOut()).contains("quiz.generation status=REJECTED_TOO_LONG textChars="
+                + (QuizService.MAX_INPUT_TEXT_CHARS + 1) + " studId=1");
         verify(quizAiGenerationService, never()).requestQuiz(any(), any());
         verify(quizSetRepository, never()).save(any());
     }
@@ -561,6 +563,7 @@ class QuizServiceTest {
                 .contains("promptVersion=" + QuizAiGenerationService.PROMPT_VERSION)
                 .contains("attempts=1 unverified=0")
                 .contains("studId=1")
+                .containsPattern("contentHash=[0-9a-f]{64} textChars=" + textInput.text().length())
                 // 노트 본문은 로그에 남기지 않는다.
                 .doesNotContain("[[REF:10/b1]]");
     }

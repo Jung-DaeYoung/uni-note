@@ -250,8 +250,6 @@ public class QuizService {
         }
     }
 
-    // AI 생성 요청 1건당 결과 한 줄을 key=value 형식으로 남긴다. 추후 품질 분석·재현에 쓰며,
-    // 노트 본문·문제 텍스트·학번 같은 개인정보는 넣지 않는다(사용자는 내부 studId로만 식별).
     private boolean canRegenerate(int attempt, GenerationContext context) {
         return attempt < MAX_AI_ATTEMPTS
                 && Duration.between(context.start(), clock.instant()).compareTo(MAX_ELAPSED_FOR_RETRY) <= 0;
@@ -280,14 +278,13 @@ public class QuizService {
     }
 
     private static int countHistoryDuplicates(QuizResponse response, Set<String> previousQuestionTexts) {
-        if (previousQuestionTexts.isEmpty()) {
-            return 0;
-        }
         return (int) response.getQuestions().stream()
                 .filter(q -> previousQuestionTexts.contains(QuizQualityValidator.normalize(q.getQuestionText())))
                 .count();
     }
 
+    // AI 생성 요청 1건당 결과 한 줄을 key=value 형식으로 남긴다. 추후 품질 분석·재현에 쓰며,
+    // 노트 본문·문제 텍스트·학번 같은 개인정보는 넣지 않는다(사용자는 내부 studId로만 식별).
     private void logGenerationResult(GenerationContext context, boolean success, int attempts, int unverified,
                                      int historyDuplicates, String failureCode, String failureReason, Long quizSetId) {
         log.info("quiz.generation status={} model={} promptVersion={} attempts={} "

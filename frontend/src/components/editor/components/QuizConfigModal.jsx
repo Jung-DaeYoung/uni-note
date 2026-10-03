@@ -111,6 +111,8 @@ const withNoteBlocks = (selections, noteId, blockIds) => (
 );
 
 // 선택 요약 칩 목록을 노트 트리 순서대로 만든다(blockCount 0 = 노트 전체).
+const collectNoteIds = (nodes) => nodes.flatMap(node => [node.noteId, ...collectNoteIds(node.children || [])]);
+
 const buildSummaryEntries = (nodes, selectedIds, blockSelections) => nodes.flatMap(node => {
   const title = node.title || '제목 없는 노트';
   const self = selectedIds.includes(node.noteId)
@@ -312,9 +314,19 @@ const SelectionSummary = ({ entries, onRemove }) => (
   )
 );
 
-const NoteScopeSection = ({ noteTree, scope, summaryEntries, onRemoveSelection }) => (
+const NoteScopeSection = ({ noteTree, scope, summaryEntries, onRemoveSelection, onSelectWeakBlocks, weakLoading }) => (
   <div>
-    <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">학습 범위</label>
+    <div className="flex items-center justify-between gap-2">
+      <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">학습 범위</label>
+      <button
+        type="button"
+        onClick={onSelectWeakBlocks}
+        disabled={weakLoading}
+        className="text-[11px] font-semibold px-2 py-1 rounded-md border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 disabled:opacity-50"
+      >
+        {weakLoading ? '불러오는 중...' : '취약 블록 선택'}
+      </button>
+    </div>
     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">노트를 체크하면 노트 전체를, "블록"을 눌러 일부 블록만 선택할 수 있습니다</p>
     <div className="mt-2 space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-slate-50/50 dark:bg-slate-800/50">
       {noteTree.map(note => (
@@ -436,6 +448,7 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
   // 노트별 블록 목록 캐시: { noteId: { status: 'loading'|'loaded'|'error', blocks, hasUnselectable, error } }
   const [blocksByNote, setBlocksByNote] = useState({});
   const [openBlockPanelIds, setOpenBlockPanelIds] = useState([]);
+  const [weakLoading, setWeakLoading] = useState(false);
   // 같은 노트의 목록을 다시 불러올 때 늦게 도착한 이전 응답이 목록을 덮어쓰지 않게 한다.
   const blockRequestSeqRef = useRef(new Map());
 
@@ -511,6 +524,35 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
       setSelectedIds(prev => prev.filter(id => id !== noteId));
     }
     setBlockSelections(prev => withNoteBlocks(prev, noteId, nextIds));
+  };
+
+  // 풀이 기록에서 취약(HIGH)한 출처 블록으로 범위를 바꾼다. 다른 강의·삭제된 노트의 블록은
+  // 현재 트리에 없으므로 빼고, 저장본에서 사라진 블록은 loadBlocks가 선택에서 뺀다.
+  const selectWeakBlocks = async () => {
+    setWeakLoading(true);
+    try {
+      const response = await client.get('/quiz/incorrect/statistics/blocks');
+      const treeNoteIds = new Set(collectNoteIds(noteTree));
+      const weakByNote = {};
+      (response.data || [])
+        .filter(stat => stat.reviewPriority === 'HIGH' && treeNoteIds.has(stat.noteId))
+        .forEach(stat => {
+          weakByNote[stat.noteId] = [...(weakByNote[stat.noteId] || []), stat.blockId];
+        });
+      const noteIds = Object.keys(weakByNote).map(Number);
+      if (noteIds.length === 0) {
+        alert('이 강의의 노트에서 자주 틀린 블록이 없습니다.');
+        return;
+      }
+      setSelectedIds([]);
+      setBlockSelections(weakByNote);
+      setOpenBlockPanelIds(noteIds);
+      noteIds.forEach(noteId => loadBlocks(noteId));
+    } catch (error) {
+      alert(error.response?.data?.message || '취약 블록을 불러오지 못했습니다.');
+    } finally {
+      setWeakLoading(false);
+    }
   };
 
   const removeSelection = (noteId) => {
@@ -727,6 +769,8 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
               }}
               summaryEntries={summaryEntries}
               onRemoveSelection={removeSelection}
+              onSelectWeakBlocks={selectWeakBlocks}
+              weakLoading={weakLoading}
             />
             <QuestionTypeSection
               activeTypes={activeTypes}

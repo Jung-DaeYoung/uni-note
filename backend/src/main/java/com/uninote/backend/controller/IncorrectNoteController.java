@@ -59,6 +59,11 @@ public class IncorrectNoteController {
         return ResponseEntity.ok(incorrectNoteService.getTypeStatistics(getStudent(principal)));
     }
 
+    @GetMapping("/statistics/blocks")
+    public ResponseEntity<List<SourceBlockStatResponse>> getBlockStatistics(Principal principal) {
+        return ResponseEntity.ok(incorrectNoteService.getBlockStatistics(getStudent(principal)));
+    }
+
     @GetMapping("/review-today")
     public ResponseEntity<List<TodayReviewQuestionResponse>> getTodayReview(
             @RequestParam(defaultValue = "10") int limit,

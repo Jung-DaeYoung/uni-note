@@ -57,6 +57,7 @@
 | GET | `/quiz/incorrect/summary` | 예 | 없음 | `IncorrectSummaryResponse` |
 | GET | `/quiz/incorrect/statistics/courses` | 예 | 없음 | `CourseIncorrectStatResponse[]` |
 | GET | `/quiz/incorrect/statistics/types` | 예 | 없음 | `QuestionTypeIncorrectStatResponse[]` |
+| GET | `/quiz/incorrect/statistics/blocks` | 예 | 없음 | `SourceBlockStatResponse[]` (출처 블록별 풀이 통계, 취약 블록 먼저) |
 | GET | `/quiz/incorrect/review-today` | 예 | query `limit`(기본 10), `courseId`(선택) | `TodayReviewQuestionResponse[]` |
 
 ## 파일

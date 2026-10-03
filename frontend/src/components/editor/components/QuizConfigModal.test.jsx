@@ -305,6 +305,53 @@ describe('QuizConfigModal', () => {
       expect(screen.getByText('블록 5개')).toBeInTheDocument();
     });
 
+    it('취약 블록 선택은 트리에 있는 노트의 HIGH 블록만, 저장본에 남은 블록만 범위로 바꾼다', async () => {
+      const user = userEvent.setup();
+      client.get.mockImplementation((url) => {
+        if (url === '/quiz/incorrect/statistics/blocks') {
+          return Promise.resolve({ data: [
+            { noteId: 1, blockId: 'p3', reviewPriority: 'HIGH' },
+            { noteId: 1, blockId: 'gone', reviewPriority: 'HIGH' }, // 저장본에서 사라진 블록
+            { noteId: 2, blockId: 'c2', reviewPriority: 'HIGH' },
+            { noteId: 2, blockId: 'p1', reviewPriority: 'LOW' },
+            { noteId: 99, blockId: 'x', reviewPriority: 'HIGH' }, // 트리에 없는 노트(다른 강의 등)
+          ] });
+        }
+        if (url === '/notes/1') return Promise.resolve({ data: parentNote });
+        if (url === '/notes/2') return Promise.resolve({ data: childNote });
+        return Promise.reject(new Error(`unexpected ${url}`));
+      });
+      client.post.mockResolvedValueOnce({ data: { quizSetId: 7 } });
+      const { onClose } = renderModal({ currentNoteId: 1 });
+
+      await user.click(screen.getByRole('button', { name: '취약 블록 선택' }));
+      const generate = screen.getByRole('button', { name: '문제 생성 시작' });
+      await waitFor(() => expect(generate).toBeEnabled());
+      await user.click(generate);
+
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(client.post.mock.calls[0][1]).toMatchObject({
+        noteIds: [1, 2],
+        blockSelections: [
+          { noteId: 1, blockIds: ['p3'] },
+          { noteId: 2, blockIds: ['c2'] },
+        ],
+      });
+    });
+
+    it('취약 블록이 없으면 안내하고 기존 선택을 유지한다', async () => {
+      const user = userEvent.setup();
+      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+      client.get.mockResolvedValueOnce({ data: [{ noteId: 1, blockId: 'p1', reviewPriority: 'LOW' }] });
+      renderModal({ currentNoteId: 1 });
+
+      await user.click(screen.getByRole('button', { name: '취약 블록 선택' }));
+
+      await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('이 강의의 노트에서 자주 틀린 블록이 없습니다.'));
+      expect(screen.getByRole('checkbox', { name: /^부모 노트$/ })).toBeChecked();
+      alertSpy.mockRestore();
+    });
+
     it('두 노트에서 고른 블록이 요약 칩과 payload에서 노트별로 나뉜다', async () => {
       const user = userEvent.setup();
       client.post.mockResolvedValueOnce({ data: { quizSetId: 7 } });

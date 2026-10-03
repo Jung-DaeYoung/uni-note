@@ -9,6 +9,7 @@ import com.uninote.backend.dto.AddToIncorrectRequest;
 import com.uninote.backend.dto.IncorrectSummaryResponse;
 import com.uninote.backend.dto.QuestionResponse;
 import com.uninote.backend.dto.ReviewPriority;
+import com.uninote.backend.dto.SourceBlockStatResponse;
 import com.uninote.backend.dto.TodayReviewQuestionResponse;
 import com.uninote.backend.exception.CourseAccessException;
 import com.uninote.backend.exception.InvalidRequestException;
@@ -315,6 +316,60 @@ class IncorrectNoteServiceTest {
         List<TodayReviewQuestionResponse> result = incorrectNoteService.getTodayReview(owner, 10, null);
 
         assertThat(result).isEmpty();
+    }
+
+    private Question questionFromBlock(Long id, Long noteId, String blockId) {
+        Question q = questionWithId(id);
+        q.setSourceNoteId(noteId);
+        q.setSourceBlockId(blockId);
+        return q;
+    }
+
+    @Test
+    void getBlockStatisticsSumsBySourceBlockAndSkipsUnverifiedQuestions() {
+        LocalDateTime now = LocalDateTime.of(2024, 1, 10, 12, 0);
+        when(userAnswerRepository.aggregateByQuestionForStudent(owner.getStudId())).thenReturn(List.of(
+                // 블록 10/a: 두 문제 합계 4회 중 1회 정답(25%) -> HIGH
+                rawStat(1L, null, null, QuestionType.SHORT_ANSWER, 2, 1, 1, now.minusDays(3), now.minusDays(4)),
+                rawStat(2L, null, null, QuestionType.SHORT_ANSWER, 2, 0, 2, now.minusDays(2), now.minusDays(2)),
+                // 블록 10/b: 4회 모두 정답 -> LOW
+                rawStat(3L, null, null, QuestionType.SHORT_ANSWER, 4, 4, 0, now, null),
+                // 출처 없음(미검증): 제외
+                rawStat(4L, null, null, QuestionType.SHORT_ANSWER, 3, 0, 3, now, now)
+        ));
+        Question unverified = questionWithId(4L);
+        when(questionRepository.findAllById(any())).thenReturn(List.of(
+                questionFromBlock(1L, 10L, "a"), questionFromBlock(2L, 10L, "a"),
+                questionFromBlock(3L, 10L, "b"), unverified));
+
+        List<SourceBlockStatResponse> result = incorrectNoteService.getBlockStatistics(owner);
+
+        assertThat(result).extracting(SourceBlockStatResponse::getBlockId).containsExactly("a", "b");
+        SourceBlockStatResponse weak = result.get(0);
+        assertThat(weak.getNoteId()).isEqualTo(10L);
+        assertThat(weak.getAttemptCount()).isEqualTo(4);
+        assertThat(weak.getCorrectCount()).isEqualTo(1);
+        assertThat(weak.getIncorrectCount()).isEqualTo(3);
+        assertThat(weak.getAccuracyRate()).isEqualTo(0.25);
+        assertThat(weak.getReviewPriority()).isEqualTo(ReviewPriority.HIGH);
+        assertThat(result.get(1).getReviewPriority()).isEqualTo(ReviewPriority.LOW);
+    }
+
+    @Test
+    void getBlockStatisticsMarksBlockHighWhenItsLatestAttemptWasIncorrect() {
+        LocalDateTime now = LocalDateTime.of(2024, 1, 10, 12, 0);
+        // 정답률 4/5(80%), 오답 1회지만 블록의 가장 최근 풀이(문제 2)가 오답이라 HIGH다.
+        when(userAnswerRepository.aggregateByQuestionForStudent(owner.getStudId())).thenReturn(List.of(
+                rawStat(1L, null, null, QuestionType.SHORT_ANSWER, 4, 4, 0, now.minusDays(1), null),
+                rawStat(2L, null, null, QuestionType.SHORT_ANSWER, 1, 0, 1, now, now)
+        ));
+        when(questionRepository.findAllById(any())).thenReturn(List.of(
+                questionFromBlock(1L, 10L, "a"), questionFromBlock(2L, 10L, "a")));
+
+        List<SourceBlockStatResponse> result = incorrectNoteService.getBlockStatistics(owner);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getReviewPriority()).isEqualTo(ReviewPriority.HIGH);
     }
 
     private Question questionWithId(Long id) {

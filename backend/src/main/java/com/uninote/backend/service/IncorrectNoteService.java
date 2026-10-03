@@ -12,9 +12,11 @@ import lombok.experimental.Delegate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -162,6 +164,41 @@ public class IncorrectNoteService {
                     .build();
             })
             .sorted(Comparator.comparingDouble(QuestionTypeIncorrectStatResponse::getAccuracyRate)) // 취약 유형 먼저
+            .collect(Collectors.toList());
+    }
+
+    // 출처 블록(noteId/blockId)별 풀이 통계. 출처가 없는(미검증) 문제는 제외하고, 취약도는
+    // 문제별 복습 우선순위와 같은 규칙(classifyPriority)으로 블록 합계에 적용한다.
+    @Transactional(readOnly = true)
+    public List<SourceBlockStatResponse> getBlockStatistics(Student student) {
+        return buildQuestionReviewStats(student).stream()
+            .filter(s -> s.getQuestion().getSourceNoteId() != null && s.getQuestion().getSourceBlockId() != null)
+            .collect(Collectors.groupingBy(s -> List.of(s.getQuestion().getSourceNoteId(), s.getQuestion().getSourceBlockId())))
+            .values().stream()
+            .map(group -> {
+                Question first = group.get(0).getQuestion();
+                long correct = group.stream().mapToLong(QuestionReviewStat::getCorrectCount).sum();
+                long incorrect = group.stream().mapToLong(QuestionReviewStat::getIncorrectCount).sum();
+                long attempts = correct + incorrect;
+                double accuracyRate = attempts == 0 ? 0.0 : (double) correct / attempts;
+                LocalDateTime lastAttemptedAt = group.stream().map(QuestionReviewStat::getLastAttemptedAt)
+                    .filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
+                LocalDateTime lastIncorrectAt = group.stream().map(QuestionReviewStat::getLastIncorrectAt)
+                    .filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
+                boolean recentlyIncorrect = lastIncorrectAt != null && lastIncorrectAt.equals(lastAttemptedAt);
+                return SourceBlockStatResponse.builder()
+                    .noteId(first.getSourceNoteId())
+                    .blockId(first.getSourceBlockId())
+                    .attemptCount(attempts)
+                    .correctCount(correct)
+                    .incorrectCount(incorrect)
+                    .accuracyRate(accuracyRate)
+                    .reviewPriority(classifyPriority(incorrect, accuracyRate, recentlyIncorrect))
+                    .build();
+            })
+            // 취약 블록 먼저: 우선순위(HIGH → LOW, enum 선언 순서) → 정답률 오름차순
+            .sorted(Comparator.comparing(SourceBlockStatResponse::getReviewPriority)
+                .thenComparingDouble(SourceBlockStatResponse::getAccuracyRate))
             .collect(Collectors.toList());
     }
 

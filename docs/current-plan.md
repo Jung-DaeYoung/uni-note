@@ -23,7 +23,7 @@
 | P1-5 2단계 | `pdfBlock`에 BlockId 부여 | 노트 저장 형식 변경, 별도 승인 필요 |
 | P2-1 | 학습 목표, `conceptTags` | |
 | P2-2 | 난이도별 생성 기준, 인지 수준 | |
-| P2-3 | 취약 지표 (유형별·출처 블록별 정답률 등) | |
+| P2-3 잔여 | 재시도 정답률, 개념별 정답률 | 출처 블록별 취약도는 이번 작업에서 완료. 개념별은 `conceptTags`(P2-1) 필요 |
 | P2-4 | 오답 기반 재생성 모드 | |
 | P2-5 | 객관식 선택지 품질 규칙 | |
 | P2-6 | 주관식 채점 개선 | 현재 trim·소문자 비교만 한다 |
@@ -36,69 +36,52 @@
 - `39ec9c5` 없는 경로 404, 허용되지 않은 메서드 405 (기존 `handleUnexpected`에서 `org.springframework.web.ErrorResponse` 분기)
 - `bdc16cb` 풀이 저장 실패 시 결과 화면으로 넘어가지 않고 서버 `message` 안내
 - `be8aaf9` AI 문제 생성 학생별 호출 제한: 동시 생성 1건, 10분에 5회, 초과 시 429 `TOO_MANY_REQUESTS`
+- `3bcb74b` 이력 대비 중복 문제 재생성(P1-4): 같은 학생·같은 강의 최근 200문제와 정규화 후 정확 일치, 1회 재생성, 남으면 저장 후 `historyDuplicates` 로그
 
-## 이번 작업: 이력 대비 중복 문제 제거 (P1-4, 2026-10-03 완료)
+## 이번 작업: 출처 블록별 취약도와 "취약 블록 선택" (P2-3 일부 + P2-4 일부, 2026-10-03 완료)
 
 ### 목표
 
-같은 학생이 같은 강의에서 이미 받은 문제와 문장이 같은 문제를 다시 만들지 않도록 한다. 현재는 같은 세트 안의 정확 일치만 검사한다(`QuizQualityValidator`).
+학생의 풀이 기록에서 자주 틀리는 출처 블록을 찾고, AI 문제 생성 모달에서 그 블록만 범위로 골라 문제를 만들 수 있게 한다. 생성 API·프롬프트는 바꾸지 않고 기존 블록 범위 선택(P1-5)을 재사용한다.
 
-### 결정 사항
-
-- 비교 범위: 같은 학생·같은 강의의 최근 문제 200개. 출처가 null(미검증)인 문제도 포함하기 위해 노트가 아닌 강의 기준으로 묶는다.
-- 판정: 기존 세트 내 중복과 같은 정규화(trim·소문자) 후 정확 일치. 유사 문항 판정은 하지 않는다.
-- 처리: 중복이 있으면 1회 재생성한다. 재생성 후에도 남으면 실패시키지 않고 저장하며 중복 수를 로그에 남긴다. 실패 처리는 짧은 노트로 반복 생성하는 사용자를 막고, 중복 문항만 빼면 요청 문항 수 일치 기준(`PLANS.md` §8)이 깨진다.
-- 프롬프트는 바꾸지 않는다. 이전 문제 목록을 프롬프트에 넣는 방식은 별도 승인 전까지 보류한다(아래 한계 참고).
+이미 있는 지표(유형별 `/statistics/types`, 강의별 `/statistics/courses`, 복습 우선순위 `/review-today`)는 그대로 둔다. 재시도 정답률은 쓰는 화면이 없어 하지 않는다.
 
 ### Backend
 
-1. `QuestionRepository`에 조회 추가 (스키마 변경 없음):
-   ```java
-   @Query("SELECT q.questionText FROM Question q WHERE q.quizSet.student.studId = :studId "
-        + "AND q.quizSet.course.courseId = :courseId ORDER BY q.quizSet.createdAt DESC, q.questionId DESC")
-   List<String> findRecentQuestionTexts(Long studId, Long courseId, Pageable pageable);
-   ```
-   호출은 `PageRequest.of(0, RECENT_QUESTION_HISTORY_SIZE)`, 상수는 `QuizService`에 `200`.
-2. `QuizQualityValidator.normalize`를 package-private static으로 열어 재사용한다. 비교 규칙이 한 곳에만 있게 한다.
-3. `QuizService.generateQuiz`: 호출 제한 통과 후, AI 호출 전에 이력 문장 집합(정규화)을 한 번 조회한다. 강의는 `notes.get(0).getCourse()`(같은 강의 검증을 이미 통과함). 트랜잭션 밖 단순 조회다.
-4. `generateValidatedQuiz`에 이력 집합을 넘긴다. `quizQualityValidator.validate`가 통과한 뒤:
-   - 이력 중복 수를 센다.
-   - 0이면 그대로 반환한다.
-   - 1 이상이고 재생성 가능(시도 < 2, 경과 ≤ 30초)하면 이 결과를 "대체 결과"로 보관하고 재생성한다.
-   - 재생성 불가면 중복이 있는 채로 반환한다.
-   - 재생성 결과가 검증 실패이거나 AI 오류(`AI_RESPONSE_INVALID`)면 보관한 대체 결과를 반환한다. 이미 쓸 수 있는 결과가 있는데 실패로 끝내지 않는다. 호출 실패·타임아웃(`EXTERNAL_SERVICE_ERROR`)도 같다.
-   - 재생성 결과에도 중복이 있으면 중복이 적은 쪽을 반환한다.
-5. `GenerationResult`에 `historyDuplicates`를 추가하고 `quiz.generation` 로그에 `historyDuplicates={}`를 남긴다. 노트 본문·문제 문장은 남기지 않는다.
-6. 기존 동작 유지: 시도 최대 2회, 30초 예산, 검증 실패 시 503 `QUIZ_VALIDATION_FAILED`, 응답 필드.
+1. `GET /api/quiz/incorrect/statistics/blocks` 추가 (`IncorrectNoteController`). 응답 `SourceBlockStatResponse[]`:
+   `noteId`, `blockId`, `attemptCount`, `correctCount`, `incorrectCount`, `accuracyRate`, `reviewPriority`
+2. `IncorrectNoteService.getBlockStatistics`: 기존 `buildQuestionReviewStats` 결과를 문제의 (`sourceNoteId`, `sourceBlockId`)로 묶는다. 새 쿼리·스키마 변경 없음.
+   - 출처가 null인 문제는 제외한다.
+   - 블록의 최근 오답 여부: 블록 안 문제들의 마지막 오답 시각 최댓값 = 마지막 풀이 시각 최댓값.
+   - 취약도는 기존 `classifyPriority`(정답률 50% 미만, 오답 2회 이상, 최근 오답 중 하나면 HIGH)를 그대로 쓴다.
+   - 정렬: 우선순위(HIGH 먼저) → 정답률 오름차순.
+3. 권한: 본인 풀이 기록만 집계하므로 추가 검증은 필요 없다. 다른 강의·삭제된 노트의 블록이 섞일 수 있으며 프론트에서 걸러낸다.
 
-### Frontend
+### Frontend (`QuizConfigModal`)
 
-변경 없음.
+- 학습 범위 영역에 "취약 블록 선택" 버튼을 둔다.
+- 누르면 `/quiz/incorrect/statistics/blocks`를 읽어 `reviewPriority === 'HIGH'`이고 현재 노트 트리에 있는 노트의 블록만 고른다.
+- 기존 선택을 이 블록들로 바꾼다: `selectedIds` 비우기, `blockSelections` 설정, 해당 노트의 블록 패널 열기, `loadBlocks` 호출.
+  - `loadBlocks`는 이미 저장본에 없는 블록을 선택에서 빼므로, 노트 수정으로 사라진 블록이 서버 400으로 이어지지 않는다.
+- 취약 블록이 없거나 조회에 실패하면 alert로 안내한다(서버 `message` 우선).
+- 생성 payload는 기존 블록 범위 모드와 같다.
 
-### 테스트 (`QuizServiceTest`, `QuizQualityValidatorTest` 영향 없음 확인)
+### 테스트
 
-- 이력 중복 없음: 1회 호출로 저장.
-- 첫 결과가 이력과 중복 → 재생성 1회, 중복 없는 두 번째 결과 저장.
-- 두 번 모두 중복 → 실패 없이 저장, AI 호출 2회, 로그 `historyDuplicates=` 확인.
-- 첫 결과 중복 + 재생성 결과 검증 실패 → 첫 결과 저장.
-- 첫 결과 중복 + 재생성 시 AI 호출 실패 → 첫 결과 저장.
-- 첫 결과 중복이지만 첫 호출이 30초 초과 → 재생성 없이 저장.
-- 비교는 정규화 후 일치(공백·대소문자만 다른 문장도 중복).
-- 이력 조회에 학생 ID·강의 ID·200개 제한이 넘어가는지 확인.
-- 기존 `generateQuiz*` 테스트는 이력 조회 mock 기본값(빈 목록)으로 그대로 통과해야 한다.
+- Backend (`IncorrectNoteServiceTest`): 블록 단위 합산, 출처 null 제외, 우선순위 분류(HIGH/LOW), 정렬.
+- Frontend (`QuizConfigModal.test.jsx`): 버튼 클릭 시 HIGH이면서 트리에 있는 노트의 블록만 payload `blockSelections`에 담김, 저장본에 없는 블록 제외, 취약 블록 없음 안내.
 
-### 한계
+### 문서
 
-AI는 이전 문제를 모르므로 같은 노트로 다시 만들면 같은 문제가 다시 나올 수 있고, 재생성은 확률적으로만 줄인다. 효과가 부족하면 프롬프트에 최근 문제 목록(최대 N개)을 "피할 문제"로 넣는 방식을 검토한다. 이 경우 `PROMPT_VERSION`을 올리고 입력 토큰이 늘며, AGENTS.md에 따라 명시적 승인이 필요하다. 로그의 `historyDuplicates` 빈도로 판단한다.
+- `docs/api.md` 오답노트 표에 엔드포인트 1행 추가.
 
 ### 검증 결과
 
-- `backend\gradlew.bat test` 통과 (255개, 신규 7개). 새 JPQL은 `BackendApplicationTests`의 컨텍스트 기동에서 함께 검증된다.
-- 로그 예: `quiz.generation status=SUCCESS ... attempts=2 unverified=0 historyDuplicates=1 ...`
-- 프론트 변경이 없어 프론트 검증은 생략했다. 실서버·실제 AI 응답으로는 확인하지 않았다.
+- `backend\gradlew.bat test` 통과 (257개, 신규 2개).
+- `npm run lint`, `npm run build`, `npm run test`(62개, 신규 2개) 통과.
+- 실서버·브라우저에서는 확인하지 않았다.
 
 ## 다음 작업 (상세 계획은 착수 시 작성)
 
-- P2-3 일부: 기존 데이터(`UserAnswer`, `sourceBlockId`)로 유형별 정답률·출처 블록별 오답률.
 - P1-4 후속: 프롬프트에 이전 문제 목록 넣기 (승인 필요, `historyDuplicates` 빈도 확인 후).
 - P1-1 노트 청킹은 보류한다. `REJECTED_TOO_LONG` 로그 빈도를 보고 결정한다.

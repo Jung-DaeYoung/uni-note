@@ -3,6 +3,7 @@ package com.uninote.backend.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uninote.backend.domain.Student;
 import com.uninote.backend.exception.ExternalServiceException;
+import com.uninote.backend.exception.TooManyRequestsException;
 import com.uninote.backend.repository.StudentRepository;
 import com.uninote.backend.security.JwtFilter;
 import com.uninote.backend.security.JwtUtil;
@@ -240,5 +241,24 @@ class QuizControllerWebMvcTest {
         mockMvc.perform(put("/api/quiz/generate").header("Authorization", bearerToken()))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(jsonPath("$.errorCode").value("METHOD_NOT_ALLOWED"));
+    }
+
+    @Test
+    void 호출제한에걸리면429와TOO_MANY_REQUESTS를반환한다() throws Exception {
+        when(quizService.generateQuiz(any(), any()))
+                .thenThrow(new TooManyRequestsException("이미 문제를 생성하고 있습니다. 완료된 뒤 다시 시도해 주세요."));
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("noteIds", java.util.List.of(1L));
+        body.put("typeCounts", Map.of("SHORT_ANSWER", 3));
+        body.put("difficulty", "NORMAL");
+
+        mockMvc.perform(post("/api/quiz/generate")
+                        .header("Authorization", bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.errorCode").value("TOO_MANY_REQUESTS"))
+                .andExpect(jsonPath("$.message").value("이미 문제를 생성하고 있습니다. 완료된 뒤 다시 시도해 주세요."));
     }
 }

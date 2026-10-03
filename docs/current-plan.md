@@ -17,7 +17,7 @@
 | 항목 | 내용 | 비고 |
 |---|---|---|
 | P1-1 | 노트 청킹, 핵심 개념 추출, 중요도 정렬 | |
-| P1-2 잔여 | idempotency, rate limit, 초과 시 자동 축약 | 텍스트 상한은 완료(위) |
+| P1-2 잔여 | 초과 시 자동 축약 | rate limit은 이번 작업에서 완료, idempotency는 동시 생성 1건 제한으로 대신한다 |
 | P1-3 | 비동기 생성 Job API | 선택·후순위 |
 | P1-4 | 이력 대비 중복 문제 제거 | 현재 같은 세트 안 정확 일치만 검사한다 |
 | P1-5 2단계 | `pdfBlock`에 BlockId 부여 | 노트 저장 형식 변경, 별도 승인 필요 |
@@ -30,39 +30,66 @@
 | P3-1~3 | RAG, 원문 Snapshot, 품질 대시보드 | |
 | §5 | 데이터 모델 확장 필드 전부 | 운영 `ddl-auto: validate`라 DDL 스크립트가 필요하다 |
 
-## 이번 작업 (2026-10-03, 완료)
+## 직전 작업 (2026-10-03, 완료)
 
-작업 1~3을 모두 반영했다. 커밋은 작업 단위로 나눈다.
+- `dec6a78` AI 생성 로그에 content hash·입력 글자 수, 200,000자 초과 거절 로그(`REJECTED_TOO_LONG`)
+- `39ec9c5` 없는 경로 404, 허용되지 않은 메서드 405 (기존 `handleUnexpected`에서 `org.springframework.web.ErrorResponse` 분기)
+- `bdc16cb` 풀이 저장 실패 시 결과 화면으로 넘어가지 않고 서버 `message` 안내
 
-### 작업 1. P0-4 마무리: content hash·입력 길이 로그
+## 이번 작업: AI 문제 생성 호출 제한 (P1-2 잔여, 2026-10-03 완료)
 
-- `QuizService.generateQuiz`에서 `input.text()`의 SHA-256 hex를 한 번 계산해 `GenerationContext`에 `contentHash` 필드로 넣는다.
-  - `HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(UTF_8)))`. 표준 라이브러리만 쓴다.
-- `logGenerationResult`에 `contentHash={} textChars={}`를 추가한다. 성공·실패 로그 모두에 남는다.
-- 200,000자 초과로 거절할 때 `quiz.generation status=REJECTED_TOO_LONG textChars={} studId={}` 한 줄을 남긴다. P1-1 착수 여부를 판단할 빈도 측정용이다.
-- 테스트: `generateQuizLogsOneSuccessLineWithGenerationMetadata`에 `contentHash=` 단언을 추가하고, `generateQuizRejectsTooLongInputTextWithoutCallingAi`에 로그 단언을 추가한다.
+### 목표
 
-### 작업 2. 잘못된 경로·메서드가 500으로 응답되는 문제
+`POST /api/quiz/generate`의 학생별 AI 호출을 제한해 비용과 중복 생성을 막는다. 현재는 노트 20개·총 30문항 상한만 있고 호출 빈도 제한이 없다. 프론트는 생성 중 버튼을 막지만(`QuizConfigModal`의 `loading`) 여러 탭이나 API 직접 호출은 막지 못한다.
 
-- 원인: `GlobalExceptionHandler.handleUnexpected(Exception)`이 `NoResourceFoundException`(404), `HttpRequestMethodNotSupportedException`(405)까지 잡는다.
-- 수정: `handleUnexpected`에서 예외가 `org.springframework.web.ErrorResponse`(Spring이 상태 코드를 가진 웹 예외에 붙이는 인터페이스)이면 그 `getStatusCode()`로 응답한다. `@ExceptionHandler`는 인터페이스 타입을 받지 않아 별도 핸들러 대신 분기로 처리했다. 프로젝트의 `ErrorResponse` DTO와 이름이 겹치므로 FQN으로 쓴다.
-  - errorCode는 `HttpStatus.name()`(예: `NOT_FOUND`, `METHOD_NOT_ALLOWED`), message는 고정 한국어 문구다.
-  - 기존 전용 핸들러(`MethodArgumentNotValidException`, `MaxUploadSizeExceededException`)는 더 구체적인 타입이라 그대로 우선한다.
-- 테스트: 기존 WebMvc 테스트 방식(`QuizControllerWebMvcTest`)으로 없는 경로 → 404, 잘못된 메서드 → 405를 확인한다.
+### 상한 값
 
-### 작업 3. 풀이 저장 실패가 제출 완료로 보이는 문제
+| 제한 | 값 | 근거 |
+|---|---|---|
+| 동시 생성 | 학생당 1건 | 한 번의 생성은 최대 약 90초(AI 호출 2회)다. 같은 학생이 동시에 둘을 돌릴 이유가 없고, 중복 제출·여러 탭에 의한 중복 생성을 막는다. idempotency key는 이것으로 대신한다. |
+| 호출 빈도 | 학생당 10분에 5회 | 정상 사용(생성 → 풀이 → 다시 생성)은 한 번에 수 분이 걸려 5회에 닿기 어렵다. 반복 호출만 막는다. |
 
-- `CBTPlayer.handleSubmit`의 catch에서 `setSubmitted(true)`를 지우고, 서버 `message`(없으면 "풀이 결과를 저장하지 못했습니다. 다시 시도해 주세요.")를 alert로 보여준다. 답안은 유지되므로 다시 제출할 수 있다.
-- 화면 동작 변경이다(`PLANS.md` §8의 별도 과제). 401은 `client.js` 인터셉터 처리를 그대로 따른다.
-- 테스트: `CBTPlayer.test.jsx`에 저장 실패 시 결과 화면으로 넘어가지 않는 케이스를 추가한다.
+- 상수: `MAX_GENERATIONS_PER_WINDOW = 5`, `GENERATION_WINDOW = Duration.ofMinutes(10)`. 동시 생성 1건은 "진행 중 학생 집합"으로 표현하므로 상수가 없다.
+- 강의별 제한은 두지 않는다. 학생별 제한으로 강의별 호출도 함께 묶인다.
+
+### Backend
+
+1. `exception/TooManyRequestsException` 추가 (`InvalidRequestException`과 같은 형태의 RuntimeException).
+2. `GlobalExceptionHandler`에 핸들러 추가: 429, errorCode `TOO_MANY_REQUESTS`, message는 예외 메시지.
+3. `QuizService`에 메모리 상태 2개를 둔다. 초기화된 `final` 필드라 `@RequiredArgsConstructor` 생성자와 `QuizServiceTest`의 생성자 호출은 바뀌지 않는다.
+   - `Set<Long> generatingStudents = ConcurrentHashMap.newKeySet()`
+   - `Map<Long, Deque<Instant>> recentGenerations = new ConcurrentHashMap<>()`
+4. 적용 위치: `generateQuiz`에서 입력 검증(노트 접근·상한·블록 범위·빈 입력·200,000자)을 모두 통과한 뒤, AI 호출 직전에 검사한다. 입력 오류는 횟수를 쓰지 않는다.
+   - 진행 중 집합에 `add` 실패 → 429 "이미 문제를 생성하고 있습니다. 완료된 뒤 다시 시도해 주세요."
+   - 빈도 검사: 해당 학생의 deque에서 `clock.instant()` 기준 10분이 지난 항목을 지우고, 남은 개수가 5 이상이면 진행 중 집합에서 빼고 429 "문제 생성은 10분에 5회까지 할 수 있습니다. N분 후 다시 시도해 주세요." (N은 가장 오래된 항목 기준, 올림, 최소 1)
+   - 통과하면 현재 시각을 deque에 추가한다. AI 호출이 실패해도 비용이 들었으므로 횟수에 포함한다.
+   - 빈도 검사·추가는 학생별 deque에 `synchronized`로 묶는다.
+   - AI 호출·검증·저장 전체를 `try/finally`로 감싸 진행 중 집합에서 반드시 뺀다.
+5. 거절 시 로그 `quiz.generation status=RATE_LIMITED reason=CONCURRENT|WINDOW studId={}` 한 줄. 노트 본문은 남기지 않는다.
+6. 한계는 `ponytail:` 주석으로 남긴다: 서버 1대 메모리 기준이며 재시작 시 초기화된다. 서버를 여러 대로 늘리면 Redis 등 공유 저장소로 옮긴다. 학생 수만큼 deque가 남지만 항목은 학생당 최대 5개다.
+
+### Frontend
+
+변경 없음. `QuizConfigModal`은 실패 시 서버 `message`를 alert로 보여주고, `client.js` 인터셉터는 401·403만 특별 처리한다.
+
+### 테스트 (`QuizServiceTest`, `QuizControllerWebMvcTest`)
+
+- 같은 학생 5회 성공 후 6번째 → `TooManyRequestsException`, AI 호출 없음.
+- `clock`을 10분 뒤로 옮기면 다시 허용.
+- 다른 학생은 영향 없음.
+- 입력 오류(빈 노트 등)로 거절된 요청은 횟수에 포함되지 않음.
+- AI 호출 실패(503)도 횟수에 포함되고, 실패 후 진행 중 상태가 풀려 다음 요청이 동시 생성 제한에 걸리지 않음.
+- 동시 생성: 첫 요청의 `requestQuiz` mock 안에서 같은 학생으로 `generateQuiz`를 다시 호출 → 429. (스레드 없이 재진입으로 검증)
+- WebMvc: `TooManyRequestsException` → 429, errorCode `TOO_MANY_REQUESTS`.
 
 ### 검증 결과
 
-- 작업 1·2: `backend\gradlew.bat test` 통과 (242개).
-- 작업 3: `npm run lint`, `npm run build`, `npm run test`(60개) 통과.
-- 실서버·브라우저에서는 확인하지 않았다.
+- `backend\gradlew.bat test` 통과 (248개, 신규 6개).
+- 계획과 다른 점: 생성 시작 시각(`GenerationContext.start`)을 별도 `clock.instant()` 호출 대신 호출 제한 검사 시각으로 재사용한다. `clock` 호출 순서에 의존하는 기존 시간 예산 테스트를 그대로 유지하기 위해서다.
+- 프론트 변경이 없어 프론트 검증은 생략했다. 실서버에서는 확인하지 않았다.
 
 ## 다음 작업 (상세 계획은 착수 시 작성)
 
-- `PLANS.md` §6 8번: P1-2 rate limit, P1-4 이력 대비 중복 제거.
-- P1-1 노트 청킹은 보류한다. 200,000자 상한과 블록 범위 선택으로 입력 크기는 막혀 있다. 작업 1의 `REJECTED_TOO_LONG` 빈도를 보고 결정한다.
+- P1-4 이력 대비 중복 문제 제거. 결정 필요: 비교 범위(같은 노트 / 학생 전체 이력), 재생성 후에도 중복이 남을 때 실패 처리할지 해당 문항만 빼고 저장할지. 프롬프트에 기존 문제 목록을 넣는 방식은 프롬프트 변경이라 별도 승인이 필요하다.
+- P2-3 일부: 기존 데이터(`UserAnswer`, `sourceBlockId`)로 유형별 정답률·출처 블록별 오답률.
+- P1-1 노트 청킹은 보류한다. `REJECTED_TOO_LONG` 로그 빈도를 보고 결정한다.

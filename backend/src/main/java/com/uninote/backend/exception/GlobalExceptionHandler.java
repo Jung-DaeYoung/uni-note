@@ -41,6 +41,12 @@ public class GlobalExceptionHandler {
         return respond(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", ex.getMessage());
     }
 
+    // 학생별 AI 호출 제한(동시 생성·호출 빈도)에 걸렸을 때
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException ex) {
+        return respond(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS", ex.getMessage());
+    }
+
     // @Valid로 걸린 요청 DTO의 Bean Validation 실패 (필드별 오류를 하나의 메시지로 합쳐 반환한다)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {

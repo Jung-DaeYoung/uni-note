@@ -18,6 +18,7 @@ import com.uninote.backend.dto.QuizResponse;
 import com.uninote.backend.exception.CourseAccessException;
 import com.uninote.backend.exception.ExternalServiceException;
 import com.uninote.backend.exception.InvalidRequestException;
+import com.uninote.backend.exception.TooManyRequestsException;
 import com.uninote.backend.exception.ResourceNotFoundException;
 import com.uninote.backend.repository.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -456,6 +457,88 @@ class QuizServiceTest {
                 + (QuizService.MAX_INPUT_TEXT_CHARS + 1) + " studId=1");
         verify(quizAiGenerationService, never()).requestQuiz(any(), any());
         verify(quizSetRepository, never()).save(any());
+    }
+
+    // AI 호출이 실패하도록 두고(저장 경로 없이) 같은 학생으로 호출 제한만 확인한다.
+    private QuizRequest stubFailingAiCallFor(Student student, long noteId) {
+        Note note = ownedNote(noteId);
+        note.setStudent(student);
+        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any(), any())).thenReturn(textInput);
+        // 다시 스텁해도 기존 스텁이 실행되지 않도록 doThrow 형태로 쓴다.
+        doThrow(new ExternalServiceException("AI 퀴즈 생성 서비스에 연결할 수 없습니다."))
+                .when(quizAiGenerationService).requestQuiz(any(), any());
+        return requestFor(List.of(noteId), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+    }
+
+    private void generateUntilFailure(QuizRequest request, Student student, int times) {
+        for (int i = 0; i < times; i++) {
+            assertThatThrownBy(() -> quizService.generateQuiz(request, student))
+                    .isInstanceOf(ExternalServiceException.class);
+        }
+    }
+
+    @Test
+    void generateQuizRejectsSixthCallInWindowWithoutCallingAi(CapturedOutput output) {
+        QuizRequest request = stubFailingAiCallFor(owner, 10L);
+        // AI 호출 실패도 횟수에 포함되고, 실패 후 진행 중 상태가 풀려 다음 요청이 동시 생성 제한에 걸리지 않는다.
+        generateUntilFailure(request, owner, QuizService.MAX_GENERATIONS_PER_WINDOW);
+
+        assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
+                .isInstanceOf(TooManyRequestsException.class)
+                .hasMessage("문제 생성은 10분에 5회까지 할 수 있습니다. 10분 후 다시 시도해 주세요.");
+        verify(quizAiGenerationService, times(QuizService.MAX_GENERATIONS_PER_WINDOW)).requestQuiz(any(), any());
+        assertThat(output.getOut()).contains("quiz.generation status=RATE_LIMITED reason=WINDOW studId=1");
+    }
+
+    @Test
+    void generateQuizAllowsAgainAfterWindowPasses() {
+        QuizRequest request = stubFailingAiCallFor(owner, 10L);
+        generateUntilFailure(request, owner, QuizService.MAX_GENERATIONS_PER_WINDOW);
+
+        when(clock.instant()).thenReturn(Instant.EPOCH.plus(QuizService.GENERATION_WINDOW));
+
+        generateUntilFailure(request, owner, 1);
+    }
+
+    @Test
+    void generateQuizRateLimitIsPerStudent() {
+        QuizRequest ownerRequest = stubFailingAiCallFor(owner, 10L);
+        generateUntilFailure(ownerRequest, owner, QuizService.MAX_GENERATIONS_PER_WINDOW);
+
+        QuizRequest otherRequest = stubFailingAiCallFor(other, 11L);
+        generateUntilFailure(otherRequest, other, 1);
+    }
+
+    @Test
+    void generateQuizInputErrorsDoNotCountTowardRateLimit() {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any(), any()))
+                .thenReturn(new QuizGenerationInput("  ", List.of(), Map.of()));
+        QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+        for (int i = 0; i <= QuizService.MAX_GENERATIONS_PER_WINDOW; i++) {
+            assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
+                    .isInstanceOf(InvalidRequestException.class);
+        }
+
+        generateUntilFailure(stubFailingAiCallFor(owner, 10L), owner, 1);
+    }
+
+    @Test
+    void generateQuizRejectsConcurrentGenerationForSameStudent(CapturedOutput output) {
+        QuizRequest request = stubFailingAiCallFor(owner, 10L);
+        // 첫 생성이 AI 응답을 기다리는 동안 같은 학생이 다시 요청하는 상황을 재진입으로 만든다.
+        doAnswer(inv -> {
+            assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
+                    .isInstanceOf(TooManyRequestsException.class)
+                    .hasMessage("이미 문제를 생성하고 있습니다. 완료된 뒤 다시 시도해 주세요.");
+            throw new ExternalServiceException("AI 퀴즈 생성 서비스에 연결할 수 없습니다.");
+        }).when(quizAiGenerationService).requestQuiz(any(), any());
+
+        generateUntilFailure(request, owner, 1);
+        verify(quizAiGenerationService, times(1)).requestQuiz(any(), any());
+        assertThat(output.getOut()).contains("quiz.generation status=RATE_LIMITED reason=CONCURRENT studId=1");
     }
 
     @Test

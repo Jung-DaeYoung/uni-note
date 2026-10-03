@@ -8,6 +8,7 @@ import com.uninote.backend.exception.CourseAccessException;
 import com.uninote.backend.exception.ExternalServiceException;
 import com.uninote.backend.exception.InvalidRequestException;
 import com.uninote.backend.exception.ResourceNotFoundException;
+import com.uninote.backend.exception.TooManyRequestsException;
 import com.uninote.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -47,6 +49,13 @@ public class QuizService {
             "요청한 조건에 맞는 문제를 생성하지 못했습니다. 범위나 문항 수를 조정해 주세요.";
     // 생성 결과 로그 전용 실패 코드. 저장 단계 예외는 기존 GlobalExceptionHandler 응답을 그대로 따른다.
     private static final String STORAGE_ERROR = "STORAGE_ERROR";
+    // 학생별 AI 호출 제한(P1-2). 동시 생성은 학생당 1건, 호출 빈도는 10분에 5회.
+    // ponytail: 서버 1대 메모리 기준이며 재시작 시 초기화된다. 서버를 여러 대로 늘리면 Redis 등 공유 저장소로 옮긴다.
+    // 학생 수만큼 deque가 남지만 항목은 학생당 최대 MAX_GENERATIONS_PER_WINDOW개다.
+    static final int MAX_GENERATIONS_PER_WINDOW = 5;
+    static final Duration GENERATION_WINDOW = Duration.ofMinutes(10);
+    private final Set<Long> generatingStudents = ConcurrentHashMap.newKeySet();
+    private final Map<Long, Deque<Instant>> recentGenerations = new ConcurrentHashMap<>();
 
     private final NoteRepository noteRepository;
     private final QuizSetRepository quizSetRepository;
@@ -85,20 +94,54 @@ public class QuizService {
                     input.text().length(), MAX_INPUT_TEXT_CHARS));
         }
 
-        GenerationContext context = new GenerationContext(clock.instant(), student.getStudId(), blockScopes,
-                sha256Hex(input.text()), input.text().length());
-        GenerationResult result = generateValidatedQuiz(request, input, context);
-
-        QuizResponse saved;
+        // 입력 검증을 모두 통과한 요청만 호출 제한에 센다(입력 오류는 횟수를 쓰지 않는다).
+        Instant start = acquireGenerationSlot(student.getStudId());
         try {
-            saved = transactionTemplate.execute(status -> saveGeneratedQuiz(result.response(), request, notes, student));
-        } catch (RuntimeException e) {
-            logGenerationResult(context, false, result.attempts(), result.unverifiedCount(),
-                    STORAGE_ERROR, e.getMessage(), null);
-            throw e;
+            GenerationContext context = new GenerationContext(start, student.getStudId(), blockScopes,
+                    sha256Hex(input.text()), input.text().length());
+            GenerationResult result = generateValidatedQuiz(request, input, context);
+
+            QuizResponse saved;
+            try {
+                saved = transactionTemplate.execute(status -> saveGeneratedQuiz(result.response(), request, notes, student));
+            } catch (RuntimeException e) {
+                logGenerationResult(context, false, result.attempts(), result.unverifiedCount(),
+                        STORAGE_ERROR, e.getMessage(), null);
+                throw e;
+            }
+            logGenerationResult(context, true, result.attempts(), result.unverifiedCount(), null, null, saved.getQuizSetId());
+            return saved;
+        } finally {
+            generatingStudents.remove(student.getStudId());
         }
-        logGenerationResult(context, true, result.attempts(), result.unverifiedCount(), null, null, saved.getQuizSetId());
-        return saved;
+    }
+
+    // 동시 생성·호출 빈도 제한을 확인하고 이번 호출을 기록한다. 반환값은 생성 시작 시각이다.
+    // AI 호출이 실패해도 비용이 들었으므로 횟수에 포함한다.
+    private Instant acquireGenerationSlot(Long studId) {
+        if (!generatingStudents.add(studId)) {
+            log.info("quiz.generation status=RATE_LIMITED reason=CONCURRENT studId={}", studId);
+            throw new TooManyRequestsException("이미 문제를 생성하고 있습니다. 완료된 뒤 다시 시도해 주세요.");
+        }
+        Instant now = clock.instant();
+        Deque<Instant> recent = recentGenerations.computeIfAbsent(studId, k -> new ArrayDeque<>());
+        synchronized (recent) {
+            Instant windowStart = now.minus(GENERATION_WINDOW);
+            while (!recent.isEmpty() && !recent.peekFirst().isAfter(windowStart)) {
+                recent.pollFirst();
+            }
+            if (recent.size() >= MAX_GENERATIONS_PER_WINDOW) {
+                generatingStudents.remove(studId);
+                long waitSeconds = Duration.between(windowStart, recent.peekFirst()).toSeconds();
+                long waitMinutes = Math.max(1, (waitSeconds + 59) / 60);
+                log.info("quiz.generation status=RATE_LIMITED reason=WINDOW studId={}", studId);
+                throw new TooManyRequestsException(String.format(
+                        "문제 생성은 %d분에 %d회까지 할 수 있습니다. %d분 후 다시 시도해 주세요.",
+                        GENERATION_WINDOW.toMinutes(), MAX_GENERATIONS_PER_WINDOW, waitMinutes));
+            }
+            recent.addLast(now);
+        }
+        return now;
     }
 
     // 생성 결과 로그(P0-4)에 공통으로 남기는 요청 단위 정보.

@@ -223,6 +223,8 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
                   type="text"
                   className="w-full p-4 rounded-xl border-2 border-slate-100 dark:border-slate-700 dark:bg-slate-800 focus:border-blue-500 focus:bg-blue-50/30 dark:focus:bg-blue-500/10 outline-none text-sm font-bold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all"
                   placeholder="정답을 입력하세요..."
+                  // user_answers.submitted_answer(VARCHAR 255)와 QuizAttemptRequest의 @Size와 같다.
+                  maxLength={255}
                   value={answers[currentIdx] || ''}
                   onChange={(e) => handleSelect(e.target.value)}
                 />

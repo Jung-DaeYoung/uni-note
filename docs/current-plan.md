@@ -133,6 +133,22 @@
 - 작업 B: `backend\gradlew.bat test` 259개 통과. 테스트 픽스처(`QuizAiGenerationServiceTest.simpleRequest`)가 `difficulty`를 비워 두고 있어 실제 요청처럼 NORMAL을 채웠다(`QuizRequest.difficulty`는 `@NotNull`).
 - 실서버·실제 AI 응답으로는 확인하지 않았다. 난이도별 수동 확인(위)이 남아 있다.
 
+### 수동 테스트와 후속 수정 (2026-10-03)
+
+로컬 서버(`local` 프로필)와 실제 Gemini로 확인했다. 테스트 노트·퀴즈·풀이 기록은 모두 지웠다.
+
+- 난이도 기준: 같은 노트로 EASY는 용어 회상(정답 "FIFO", "스래싱"), HARD는 사례 추론 문제가 나왔다. 로그 `promptVersion=2026-10-03.1`.
+- 채점: "스 래 싱."과 "스래싱", "O P T 알 고 리 즘."과 "OPT 알고리즘"이 정답으로 채점됐다(4/4). 틀린 답 대조군은 0점이었다.
+- 404: `/api/nope` → 404 `NOT_FOUND`.
+- 발견 1: HARD 주관식 정답이 2~3문장 서술형으로 나와 정확 일치 채점으로는 맞힐 수 없었다.
+  - 수정: 프롬프트 준수 사항 5번 "주관식 정답은 하나의 단어나 짧은 구(20자 이내)" 추가, `PROMPT_VERSION` `2026-10-03.2`.
+  - 재확인: HARD 주관식 3문항 정답이 "LRU"(3자), "미래 참조 예측 불가능"(12자), "워킹 셋 모델"(7자)로 나왔다.
+  - 남은 한계: "미래 참조 예측 불가능" 같은 구는 표현이 조금만 달라도 오답이다. 동의어·키워드 채점(P2-6 2·3차)이 필요하다.
+- 발견 2: 255자를 넘는 답안은 `user_answers.submitted_answer`(VARCHAR 255) 초과로 409 "다른 데이터와 연결되어 있어…"가 났다(기존 문제).
+  - 수정: `QuizAttemptRequest.UserAnswerRequest.submittedAnswer`에 `@Size(max = 255)` → 400 `VALIDATION_FAILED` "답안은 255자 이하로 입력해 주세요.", `CBTPlayer` 주관식 입력에 `maxLength={255}`.
+  - 재확인: 256자 제출 → 400.
+- 검증: `backend\gradlew.bat test` 260개, `npm run lint`·`build`·`test`(63개) 통과. 브라우저 화면은 확인하지 않았다.
+
 ## 다음 작업 (상세 계획은 착수 시 작성)
 
 - P1-4 후속: 프롬프트에 이전 문제 목록 넣기 (승인 필요, `historyDuplicates` 빈도 확인 후).

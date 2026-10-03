@@ -94,6 +94,25 @@ class QuizControllerWebMvcTest {
     }
 
     @Test
+    void 답안이255자를넘으면400과VALIDATION_FAILED를반환한다() throws Exception {
+        Map<String, Object> answer = new LinkedHashMap<>();
+        answer.put("questionId", 1L);
+        answer.put("submittedAnswer", "가".repeat(256));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("quizSetId", 1L);
+        body.put("userAnswers", java.util.List.of(answer));
+
+        mockMvc.perform(post("/api/quiz/attempts")
+                        .header("Authorization", bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("255자 이하")));
+        verify(quizService, never()).saveAttempt(any(), any());
+    }
+
+    @Test
     void noteIds에음수ID가있으면400을반환한다() throws Exception {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("noteIds", java.util.List.of(-1L));

@@ -75,6 +75,8 @@ class QuizAiGenerationServiceTest {
         // requestQuiz()는 QuizService에서 이미 유효성 검증을 마친 typeCounts가
         // 전달된다고 가정한다. 여기서는 그 전제를 재현하기 위한 최소값만 채운다.
         request.setTypeCounts(Map.of(QuestionType.MULTIPLE_CHOICE, 5));
+        // difficulty는 QuizRequest에서 @NotNull이므로 실제 요청과 같이 채운다.
+        request.setDifficulty(QuizDifficulty.NORMAL);
         return request;
     }
 
@@ -205,7 +207,7 @@ class QuizAiGenerationServiceTest {
                 "강의 내용(텍스트, 이미지, PDF)을 기반으로 퀴즈를 생성하라.\n" +
                 "텍스트 내용에는 [[REF:noteId/blockId]] 형태의 출처 메타데이터가 포함되어 있다.\n" +
                 "모든 문항(question)은 반드시 제공된 출처 중 하나를 근거로 생성해야 하며, 해당 문항의 근거가 된 noteId와 blockId를 'sourceNoteId'와 'sourceBlockId' 필드에 정확히 기입하라.\n" +
-                "난이도: NORMAL.\n" +
+                "난이도: NORMAL. 문항은 개념을 설명하거나 두 개념을 비교하는 문제로 출제하라.\n" +
                 "유형별 문제 수 배분: MULTIPLE_CHOICE 5문제.\n" +
                 "응답 구조: { \"title\": \"제목\", \"difficulty\": \"NORMAL\", \"questions\": [ { \"type\": \"유형\", \"questionText\": \"내용\", \"options\": [\"A\", \"B\"], \"correctAnswer\": \"정답\", \"explanation\": \"해설\", \"sourceNoteId\": 1, \"sourceBlockId\": \"b1\" } ] }.\n" +
                 "--- 엄격 준수 사항 ---\n" +
@@ -214,6 +216,23 @@ class QuizAiGenerationServiceTest {
                 "3. 텍스트 중심의 간결하고 명확한 설명을 제공하라.\n" +
                 "4. 반드시 마크다운 없이 오직 JSON 객체로만 응답하라.\n" +
                 "텍스트 내용: [[REF:1/b1]] 페이지 교체 ");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void requestQuizPromptIncludesGuideForRequestedDifficulty() throws Exception {
+        when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
+
+        QuizRequest request = simpleRequest(List.of(1L));
+        request.setDifficulty(QuizDifficulty.HARD);
+        service.requestQuiz(request, textInput());
+
+        List<Map<String, Object>> contents = (List<Map<String, Object>>) lastRequestBody().get("contents");
+        String prompt = (String) ((List<Map<String, Object>>) contents.get(0).get("parts")).get(0).get("text");
+        assertThat(prompt).contains("난이도: HARD. 문항은 "
+                + "사례에 개념을 적용하거나, 오류를 찾거나, 여러 개념을 엮어 추론하는 문제로 출제하라.");
+        assertThat(QuizAiGenerationService.difficultyGuide(QuizDifficulty.EASY)).contains("정의");
+        assertThat(QuizAiGenerationService.difficultyGuide(QuizDifficulty.HARD)).contains("추론");
     }
 
     @Test

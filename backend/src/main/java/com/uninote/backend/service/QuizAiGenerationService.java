@@ -48,7 +48,7 @@ public class QuizAiGenerationService {
     public static final String MODEL_NAME = "gemini-2.5-flash";
     // 생성 결과 로그(quiz.generation)에 남는 prompt·response schema 버전.
     // requestQuiz의 prompt 문자열이나 schema를 바꿀 때마다 올린다.
-    public static final String PROMPT_VERSION = "2026-09-29.1";
+    public static final String PROMPT_VERSION = "2026-10-03.1";
 
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
@@ -108,6 +108,15 @@ public class QuizAiGenerationService {
         }
     }
 
+    // 난이도별 출제 기준(P2-2). 문구를 바꾸면 PROMPT_VERSION을 올린다.
+    static String difficultyGuide(QuizDifficulty difficulty) {
+        return switch (difficulty) {
+            case EASY -> "핵심 용어의 정의나 사실을 떠올리는 문제";
+            case NORMAL -> "개념을 설명하거나 두 개념을 비교하는 문제";
+            case HARD -> "사례에 개념을 적용하거나, 오류를 찾거나, 여러 개념을 엮어 추론하는 문제";
+        };
+    }
+
     public QuizResponse requestQuiz(QuizRequest request, QuizGenerationInput input) {
         String typeInstruction = request.getTypeCounts().entrySet().stream()
             .map(e -> e.getKey() + " " + e.getValue() + "문제")
@@ -117,7 +126,7 @@ public class QuizAiGenerationService {
             "강의 내용(텍스트, 이미지, PDF)을 기반으로 퀴즈를 생성하라.\n" +
             "텍스트 내용에는 [[REF:noteId/blockId]] 형태의 출처 메타데이터가 포함되어 있다.\n" +
             "모든 문항(question)은 반드시 제공된 출처 중 하나를 근거로 생성해야 하며, 해당 문항의 근거가 된 noteId와 blockId를 'sourceNoteId'와 'sourceBlockId' 필드에 정확히 기입하라.\n" +
-            "난이도: %s.\n" +
+            "난이도: %s. 문항은 %s로 출제하라.\n" +
             "유형별 문제 수 배분: %s.\n" +
             "응답 구조: { \"title\": \"제목\", \"difficulty\": \"%s\", \"questions\": [ { \"type\": \"유형\", \"questionText\": \"내용\", \"options\": [\"A\", \"B\"], \"correctAnswer\": \"정답\", \"explanation\": \"해설\", \"sourceNoteId\": 1, \"sourceBlockId\": \"b1\" } ] }.\n" +
             "--- 엄격 준수 사항 ---\n" +
@@ -126,7 +135,8 @@ public class QuizAiGenerationService {
             "3. 텍스트 중심의 간결하고 명확한 설명을 제공하라.\n" +
             "4. 반드시 마크다운 없이 오직 JSON 객체로만 응답하라.\n" +
             "텍스트 내용: %s",
-            request.getDifficulty(), typeInstruction, request.getDifficulty(), input.text()
+            request.getDifficulty(), difficultyGuide(request.getDifficulty()), typeInstruction,
+            request.getDifficulty(), input.text()
         );
 
         List<Map<String, Object>> parts = new ArrayList<>();

@@ -22,11 +22,11 @@
 | P1-4 후속 | 프롬프트에 이전 문제 목록 넣기 | 이력 대비 정확 일치 검사·1회 재생성은 이번 작업에서 완료. 프롬프트 변경은 승인 필요 |
 | P1-5 2단계 | `pdfBlock`에 BlockId 부여 | 노트 저장 형식 변경, 별도 승인 필요 |
 | P2-1 | 학습 목표, `conceptTags` | |
-| P2-2 | 난이도별 생성 기준, 인지 수준 | |
+| P2-2 잔여 | 인지 수준 저장 | 난이도별 프롬프트 기준은 이번 작업 B에서 완료. 인지 수준 저장은 DB 변경이라 보류 |
 | P2-3 잔여 | 재시도 정답률, 개념별 정답률 | 출처 블록별 취약도는 이번 작업에서 완료. 개념별은 `conceptTags`(P2-1) 필요 |
 | P2-4 | 오답 기반 재생성 모드 | |
 | P2-5 | 객관식 선택지 품질 규칙 | |
-| P2-6 | 주관식 채점 개선 | 현재 trim·소문자 비교만 한다 |
+| P2-6 잔여 | 동의어·허용 답안, 키워드, LLM 보조 채점 | 1차 정규화는 이번 작업 A에서 완료 |
 | P3-1~3 | RAG, 원문 Snapshot, 품질 대시보드 | |
 | §5 | 데이터 모델 확장 필드 전부 | 운영 `ddl-auto: validate`라 DDL 스크립트가 필요하다 |
 
@@ -37,49 +37,101 @@
 - `bdc16cb` 풀이 저장 실패 시 결과 화면으로 넘어가지 않고 서버 `message` 안내
 - `be8aaf9` AI 문제 생성 학생별 호출 제한: 동시 생성 1건, 10분에 5회, 초과 시 429 `TOO_MANY_REQUESTS`
 - `3bcb74b` 이력 대비 중복 문제 재생성(P1-4): 같은 학생·같은 강의 최근 200문제와 정규화 후 정확 일치, 1회 재생성, 남으면 저장 후 `historyDuplicates` 로그
+- `fef098c` 출처 블록별 취약도 API(`/api/quiz/incorrect/statistics/blocks`)와 `QuizConfigModal` "취약 블록 선택"
+- `cfc85e6` 과잉 구현 리뷰 반영(이력 중복 계산의 빈 집합 분기 제거, 로그 메서드 주석 위치 복원)
 
-## 이번 작업: 출처 블록별 취약도와 "취약 블록 선택" (P2-3 일부 + P2-4 일부, 2026-10-03 완료)
+## 이번 작업 (2026-10-03 완료)
 
-### 목표
+작업 A와 B는 서로 독립이다. 각각 커밋한다.
 
-학생의 풀이 기록에서 자주 틀리는 출처 블록을 찾고, AI 문제 생성 모달에서 그 블록만 범위로 골라 문제를 만들 수 있게 한다. 생성 API·프롬프트는 바꾸지 않고 기존 블록 범위 선택(P1-5)을 재사용한다.
+### 작업 A. 주관식 채점 정규화 (P2-6 1차)
 
-이미 있는 지표(유형별 `/statistics/types`, 강의별 `/statistics/courses`, 복습 우선순위 `/review-today`)는 그대로 둔다. 재시도 정답률은 쓰는 화면이 없어 하지 않는다.
+#### 현재
 
-### Backend
+- 서버 `QuizService.isAnswerCorrect(submitted, correct)`와 프론트 `CBTPlayer.isCorrectAt(q, idx)`가 같은 규칙(trim + 소문자)으로 비교한다. 문제 유형은 구분하지 않는다.
+- 프론트는 `isCorrectAt` 하나로 점수(`score`)와 결과 화면의 정답·오답 표시를 모두 판정한다. 저장되는 `UserAnswer.isCorrect`는 서버가 다시 채점한 값이다.
+- 그래서 "운영 체제"와 "운영체제", "LRU."와 "LRU"가 오답으로 처리된다.
 
-1. `GET /api/quiz/incorrect/statistics/blocks` 추가 (`IncorrectNoteController`). 응답 `SourceBlockStatResponse[]`:
-   `noteId`, `blockId`, `attemptCount`, `correctCount`, `incorrectCount`, `accuracyRate`, `reviewPriority`
-2. `IncorrectNoteService.getBlockStatistics`: 기존 `buildQuestionReviewStats` 결과를 문제의 (`sourceNoteId`, `sourceBlockId`)로 묶는다. 새 쿼리·스키마 변경 없음.
-   - 출처가 null인 문제는 제외한다.
-   - 블록의 최근 오답 여부: 블록 안 문제들의 마지막 오답 시각 최댓값 = 마지막 풀이 시각 최댓값.
-   - 취약도는 기존 `classifyPriority`(정답률 50% 미만, 오답 2회 이상, 최근 오답 중 하나면 HIGH)를 그대로 쓴다.
-   - 정렬: 우선순위(HIGH 먼저) → 정답률 오름차순.
-3. 권한: 본인 풀이 기록만 집계하므로 추가 검증은 필요 없다. 다른 강의·삭제된 노트의 블록이 섞일 수 있으며 프론트에서 걸러낸다.
+#### 규칙
 
-### Frontend (`QuizConfigModal`)
+주관식(`SHORT_ANSWER`)만 다음 순서로 정규화한 뒤 같으면 정답이다.
 
-- 학습 범위 영역에 "취약 블록 선택" 버튼을 둔다.
-- 누르면 `/quiz/incorrect/statistics/blocks`를 읽어 `reviewPriority === 'HIGH'`이고 현재 노트 트리에 있는 노트의 블록만 고른다.
-- 기존 선택을 이 블록들로 바꾼다: `selectedIds` 비우기, `blockSelections` 설정, 해당 노트의 블록 패널 열기, `loadBlocks` 호출.
-  - `loadBlocks`는 이미 저장본에 없는 블록을 선택에서 빼므로, 노트 수정으로 사라진 블록이 서버 400으로 이어지지 않는다.
-- 취약 블록이 없거나 조회에 실패하면 alert로 안내한다(서버 `message` 우선).
-- 생성 payload는 기존 블록 범위 모드와 같다.
+1. 소문자로 바꾼다.
+2. 모든 공백 문자를 지운다.
+3. 앞뒤 문장부호를 지운다: `. , ! ? ; : ' " “ ” ‘ ’ 。`
 
-### 테스트
+예: "운영 체제." = "운영체제", "  LRU! " = "lru". "C++"의 `+`나 "f(x)"의 괄호는 지우지 않는다.
 
-- Backend (`IncorrectNoteServiceTest`): 블록 단위 합산, 출처 null 제외, 우선순위 분류(HIGH/LOW), 정렬.
-- Frontend (`QuizConfigModal.test.jsx`): 버튼 클릭 시 HIGH이면서 트리에 있는 노트의 블록만 payload `blockSelections`에 담김, 저장본에 없는 블록 제외, 취약 블록 없음 안내.
+객관식·OX는 기존 trim + 소문자를 유지한다. 보기 원문을 그대로 제출하므로 넓힐 이유가 없고, 넓히면 서로 다른 보기가 같아질 수 있다.
 
-### 문서
+#### Backend
 
-- `docs/api.md` 오답노트 표에 엔드포인트 1행 추가.
+- `QuizService.isAnswerCorrect(QuestionType type, String submitted, String correct)`로 바꾸고 `saveAttempt`에서 `question.getType()`을 넘긴다.
+- 정규화는 `isAnswerCorrect` 안의 private static 메서드 하나로 둔다. 다른 곳에서 쓰지 않으므로 별도 클래스를 만들지 않는다.
+- `QuizQualityValidator`의 주석("비교 정규화는 채점 규칙과 같은 trim + 소문자 비교")을 "객관식 정답 매칭은 객관식 채점 규칙과 같은 trim + 소문자"로 고친다. 검증기의 동작은 바꾸지 않는다.
+
+#### Frontend
+
+- `CBTPlayer.isCorrectAt`에 같은 규칙을 넣는다(`q.type === 'SHORT_ANSWER'`일 때만). 서버 규칙과 함께 바꿔야 한다는 주석을 양쪽에 둔다.
+- 결과 화면의 객관식 표시(`opt === q.correctAnswer`)는 그대로다.
+
+#### 영향
+
+- 이미 저장된 풀이 기록(`UserAnswer.isCorrect`)은 다시 채점하지 않는다. 오답 통계·복습 우선순위·취약 블록은 새 풀이부터 바뀐 규칙이 반영된다.
+- 풀이 기록 다시 보기(`mode === 'report'`)는 서버가 저장한 `isCorrect`를 쓰므로 영향이 없다.
+- API 요청·응답 형식은 바뀌지 않는다.
+
+#### 한계
+
+- 공백을 모두 지우므로 영어 "a b"와 "ab"가 같아진다. 주관식 정답은 대부분 짧은 용어라 허용한다.
+- 동의어·허용 답안(2차), 키워드 포함(3차), LLM 보조 채점(4차)은 하지 않는다. 2차부터는 프론트가 서버 규칙을 복제할 수 없어 `POST /api/quiz/attempts` 응답 확장이 필요하다(`PLANS.md` P2-6).
+
+#### 테스트
+
+- `QuizServiceTest`
+  - 주관식: 공백·대소문자·앞뒤 마침표만 다른 답은 정답
+  - 주관식: 글자가 다른 답은 오답, 미응답(null)은 오답
+  - 객관식: 공백이 섞인 보기 문자열은 기존처럼 trim + 소문자로만 비교
+- `CBTPlayer.test.jsx`: 주관식에 "운영 체제."를 입력해 제출하면 결과 화면에서 정답으로 표시
+
+### 작업 B. 난이도 기준 프롬프트 (P2-2)
+
+프롬프트 변경이다. 사용자가 이 작업을 선택했으므로 명시적 요구로 보고 진행한다(AGENTS.md 외부 AI 연동 규칙).
+
+#### 현재
+
+- 프롬프트에는 `난이도: NORMAL.` 한 줄만 있고, 난이도별로 어떤 문제를 내야 하는지 기준이 없다.
+- 저장되는 `QuizSet.difficulty`는 이미 요청값을 쓴다(`QuizQualityValidator`가 응답 difficulty를 요청값으로 덮어쓴다).
+
+#### 변경
+
+- `QuizAiGenerationService`에 `difficultyGuide(QuizDifficulty)` switch를 둔다. 모든 enum 값을 다루는 switch 식이라 값이 추가되면 컴파일 오류로 드러난다.
+
+| 난이도 | 기준 문구 |
+|---|---|
+| EASY | 핵심 용어의 정의나 사실을 떠올리는 문제 |
+| NORMAL | 개념을 설명하거나 두 개념을 비교하는 문제 |
+| HARD | 사례에 개념을 적용하거나, 오류를 찾거나, 여러 개념을 엮어 추론하는 문제 |
+
+- 프롬프트의 `"난이도: %s.\n"`을 `"난이도: %s. 문항은 %s로 출제하라.\n"`으로 바꾼다. 나머지 문구, 응답 schema, 응답 처리는 그대로다.
+- `PROMPT_VERSION`을 `"2026-09-29.1"`에서 `"2026-10-03.1"`로 올린다. 생성 로그(`quiz.generation promptVersion=`)로 변경 전후 결과를 구분할 수 있다.
+- 인지 수준(`REMEMBER`·`UNDERSTAND`·`APPLY`·`ANALYZE`) 저장은 `Question` 컬럼 추가와 운영 DDL이 필요해 하지 않는다(`PLANS.md` §5).
+
+#### 테스트
+
+- `QuizAiGenerationServiceTest.requestQuizPromptIsUnchanged`의 기대 문자열을 새 문구로 갱신한다. 이 테스트는 프롬프트가 의도치 않게 바뀌는 것을 막는 고정 테스트다.
+- EASY·HARD 요청의 프롬프트에 각 기준 문구가 들어가는지 확인한다.
+
+#### 수동 확인 (권장)
+
+- 로컬 서버에서 같은 노트로 EASY·HARD를 한 번씩 생성해, 문항 성격이 기준대로 달라지는지 본다(Gemini API 키 필요).
+- 단위 테스트는 프롬프트 문자열만 확인하며, 실제 AI 응답 품질은 확인하지 못한다.
 
 ### 검증 결과
 
-- `backend\gradlew.bat test` 통과 (257개, 신규 2개).
-- `npm run lint`, `npm run build`, `npm run test`(62개, 신규 2개) 통과.
-- 실서버·브라우저에서는 확인하지 않았다.
+- 작업 A (`eaf58e9`): `backend\gradlew.bat test` 258개, `npm run lint`·`build`·`test`(63개) 통과.
+- 작업 B: `backend\gradlew.bat test` 259개 통과. 테스트 픽스처(`QuizAiGenerationServiceTest.simpleRequest`)가 `difficulty`를 비워 두고 있어 실제 요청처럼 NORMAL을 채웠다(`QuizRequest.difficulty`는 `@NotNull`).
+- 실서버·실제 AI 응답으로는 확인하지 않았다. 난이도별 수동 확인(위)이 남아 있다.
 
 ## 다음 작업 (상세 계획은 착수 시 작성)
 

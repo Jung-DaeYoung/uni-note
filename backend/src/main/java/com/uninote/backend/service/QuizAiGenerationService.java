@@ -48,7 +48,7 @@ public class QuizAiGenerationService {
     public static final String MODEL_NAME = "gemini-2.5-flash";
     // 생성 결과 로그(quiz.generation)에 남는 prompt·response schema 버전.
     // requestQuiz의 prompt 문자열이나 schema를 바꿀 때마다 올린다.
-    public static final String PROMPT_VERSION = "2026-10-03.1";
+    public static final String PROMPT_VERSION = "2026-10-03.2";
 
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
@@ -134,6 +134,8 @@ public class QuizAiGenerationService {
             "2. 설명(explanation)이나 정답(correctAnswer)에 불필요하게 긴 숫자 나열, 복잡한 수식, 또는 로우 데이터(raw data)를 포함하지 마라.\n" +
             "3. 텍스트 중심의 간결하고 명확한 설명을 제공하라.\n" +
             "4. 반드시 마크다운 없이 오직 JSON 객체로만 응답하라.\n" +
+            // 주관식 채점은 정규화 후 정확 일치라 서술형 정답은 맞힐 수 없다(P2-6 1차).
+            "5. 주관식(SHORT_ANSWER) 정답(correctAnswer)은 하나의 단어나 짧은 구(20자 이내)로 하고, 설명이나 서술을 요구하지 마라. 난이도가 높아도 사고 과정은 문제에 담고 정답은 짧게 하라.\n" +
             "텍스트 내용: %s",
             request.getDifficulty(), difficultyGuide(request.getDifficulty()), typeInstruction,
             request.getDifficulty(), input.text()

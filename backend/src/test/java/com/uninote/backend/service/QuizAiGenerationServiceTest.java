@@ -215,6 +215,7 @@ class QuizAiGenerationServiceTest {
                 "2. 설명(explanation)이나 정답(correctAnswer)에 불필요하게 긴 숫자 나열, 복잡한 수식, 또는 로우 데이터(raw data)를 포함하지 마라.\n" +
                 "3. 텍스트 중심의 간결하고 명확한 설명을 제공하라.\n" +
                 "4. 반드시 마크다운 없이 오직 JSON 객체로만 응답하라.\n" +
+                "5. 주관식(SHORT_ANSWER) 정답(correctAnswer)은 하나의 단어나 짧은 구(20자 이내)로 하고, 설명이나 서술을 요구하지 마라. 난이도가 높아도 사고 과정은 문제에 담고 정답은 짧게 하라.\n" +
                 "텍스트 내용: [[REF:1/b1]] 페이지 교체 ");
     }
 

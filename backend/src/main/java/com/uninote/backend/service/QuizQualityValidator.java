@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.Set;
 
 // AI가 반환한 퀴즈를 저장 전에 검증하고, 통과하면 저장 가능한 형태로 정규화한다.
-// 비교 정규화는 채점 규칙(QuizService.isAnswerCorrect, CBTPlayer.jsx)과 같은 trim + 소문자 비교다.
+// 비교 정규화는 객관식 채점 규칙(QuizService.isAnswerCorrect, CBTPlayer.jsx)과 같은 trim + 소문자 비교다.
 @Component
 public class QuizQualityValidator {
     // 미검증(출처 null) 문항이 이 비율을 넘으면 생성 결과 전체를 실패로 본다.

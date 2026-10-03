@@ -66,4 +66,22 @@ describe('CBTPlayer 제출', () => {
     expect(screen.getByText('제출하고 채점하기')).toBeInTheDocument();
     alertSpy.mockRestore();
   });
+
+  it('주관식은 공백·앞뒤 문장부호만 다른 답을 정답으로 표시한다', async () => {
+    const user = userEvent.setup();
+    const shortAnswerQuiz = {
+      ...quizData,
+      questions: [{ questionId: 2, type: 'SHORT_ANSWER', questionText: 'Q2', correctAnswer: '운영체제', explanation: '설명' }],
+    };
+    render(
+      <MemoryRouter>
+        <CBTPlayer quizData={shortAnswerQuiz} onClose={() => {}} courseId={1} />
+      </MemoryRouter>
+    );
+
+    await user.type(screen.getByRole('textbox'), '운영 체제.');
+    await user.click(screen.getByText('제출하고 채점하기'));
+
+    expect(await screen.findByText('1 / 1 점')).toBeInTheDocument();
+  });
 });

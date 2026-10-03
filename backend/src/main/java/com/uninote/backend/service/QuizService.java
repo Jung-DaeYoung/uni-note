@@ -443,7 +443,7 @@ public class QuizService {
                 validateOwnership(question.getQuizSet().getStudent(), student, "본인 문제만 풀이할 수 있습니다.");
             }
 
-            boolean isCorrect = isAnswerCorrect(uar.getSubmittedAnswer(), question.getCorrectAnswer());
+            boolean isCorrect = isAnswerCorrect(question.getType(), uar.getSubmittedAnswer(), question.getCorrectAnswer());
             if (isCorrect) {
                 correctCount++;
             }
@@ -471,11 +471,20 @@ public class QuizService {
         }
     }
 
-    // 프론트(CBTPlayer.jsx)와 동일한 대소문자 무시·공백 제거 비교로 정답 여부를 판정한다.
-    private boolean isAnswerCorrect(String submittedAnswer, String correctAnswer) {
-        String submitted = submittedAnswer == null ? "" : submittedAnswer.trim().toLowerCase();
-        String correct = correctAnswer == null ? "" : correctAnswer.trim().toLowerCase();
-        return submitted.equals(correct);
+    // 채점 규칙. 프론트 CBTPlayer.isCorrectAt과 같은 규칙이므로 바꿀 때 함께 수정한다.
+    // 객관식·OX는 trim + 소문자, 주관식은 추가로 모든 공백과 앞뒤 문장부호를 무시한다(P2-6 1차).
+    private static boolean isAnswerCorrect(QuestionType type, String submittedAnswer, String correctAnswer) {
+        return normalizeAnswer(type, submittedAnswer).equals(normalizeAnswer(type, correctAnswer));
+    }
+
+    private static String normalizeAnswer(QuestionType type, String answer) {
+        String value = answer == null ? "" : answer.trim().toLowerCase();
+        if (type != QuestionType.SHORT_ANSWER) {
+            return value;
+        }
+        // (?U): JS의 \s처럼 유니코드 공백(전각 공백 등)까지 지운다.
+        return value.replaceAll("(?U)\\s+", "")
+                .replaceAll("^[.,!?;:'\"“”‘’。]+|[.,!?;:'\"“”‘’。]+$", "");
     }
 
     @Transactional(readOnly = true)

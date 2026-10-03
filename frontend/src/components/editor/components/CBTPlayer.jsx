@@ -35,9 +35,15 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
     setAnswers({ ...answers, [currentIdx]: option });
   };
 
-  // 서버 채점(QuizService.isAnswerCorrect)과 같은 trim + 소문자 비교.
-  const isCorrectAt = (q, idx) =>
-    String(answers[idx] || '').trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase();
+  // 서버 채점(QuizService.isAnswerCorrect)과 같은 규칙이므로 바꿀 때 함께 수정한다.
+  // 객관식·OX는 trim + 소문자, 주관식은 추가로 모든 공백과 앞뒤 문장부호를 무시한다.
+  const normalizeAnswer = (type, value) => {
+    const base = String(value ?? '').trim().toLowerCase();
+    return type === 'SHORT_ANSWER'
+      ? base.replace(/\s+/g, '').replace(/^[.,!?;:'"“”‘’。]+|[.,!?;:'"“”‘’。]+$/g, '')
+      : base;
+  };
+  const isCorrectAt = (q, idx) => normalizeAnswer(q.type, answers[idx]) === normalizeAnswer(q.type, q.correctAnswer);
 
   const handleSubmit = async () => {
     if (isSaving) return;

@@ -180,6 +180,48 @@ class QuizServiceTest {
     }
 
     @Test
+    void saveAttemptNormalizesShortAnswerSpacesAndEdgePunctuationOnly() {
+        // [유형, 정답, 제출, 기대 정답 여부]
+        Object[][] cases = {
+                {QuestionType.SHORT_ANSWER, "운영체제", "운영 체제.", true},
+                {QuestionType.SHORT_ANSWER, "LRU", "  \"lru!\" ", true},
+                {QuestionType.SHORT_ANSWER, "C++", "c++", true},
+                {QuestionType.SHORT_ANSWER, "C++", "C", false},
+                {QuestionType.SHORT_ANSWER, "페이지 폴트", "페이지 교체", false},
+                {QuestionType.SHORT_ANSWER, "LRU", null, false},
+                // 객관식은 기존 trim + 소문자만: 안쪽 공백이 다르면 다른 보기다.
+                {QuestionType.MULTIPLE_CHOICE, "Least Recently Used", " least recently used ", true},
+                {QuestionType.MULTIPLE_CHOICE, "Least Recently Used", "LeastRecentlyUsed", false},
+        };
+        when(quizSetRepository.findById(50L)).thenReturn(Optional.of(quizSet));
+        List<QuizAttemptRequest.UserAnswerRequest> answers = new java.util.ArrayList<>();
+        for (int i = 0; i < cases.length; i++) {
+            long id = i + 1;
+            Question q = new Question();
+            q.setQuestionId(id);
+            q.setQuizSet(quizSet);
+            q.setType((QuestionType) cases[i][0]);
+            q.setCorrectAnswer((String) cases[i][1]);
+            when(questionRepository.findById(id)).thenReturn(Optional.of(q));
+            QuizAttemptRequest.UserAnswerRequest answer = new QuizAttemptRequest.UserAnswerRequest();
+            answer.setQuestionId(id);
+            answer.setSubmittedAnswer((String) cases[i][2]);
+            answers.add(answer);
+        }
+        QuizAttemptRequest request = new QuizAttemptRequest();
+        request.setQuizSetId(50L);
+        request.setUserAnswers(answers);
+
+        quizService.saveAttempt(request, owner);
+
+        ArgumentCaptor<UserAnswer> captor = ArgumentCaptor.forClass(UserAnswer.class);
+        verify(userAnswerRepository, times(cases.length)).save(captor.capture());
+        for (int i = 0; i < cases.length; i++) {
+            assertThat(captor.getAllValues().get(i).getIsCorrect()).as("case %d", i).isEqualTo(cases[i][3]);
+        }
+    }
+
+    @Test
     void saveAttemptGradesServerSideFromActualAnswers() {
         // QuizAttemptRequest에는 score/isCorrect 입력 필드 자체가 없다(API 계약에서 제거됨).
         // 서버는 오직 submittedAnswer와 문제의 correctAnswer만으로 정답 여부와 점수를 계산한다.

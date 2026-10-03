@@ -22,6 +22,7 @@ const QuizLibraryPage = () => {
     handleViewAttempt,
     handleOpenAttempts,
     handleDelete,
+    handleDeleteAttempt,
   } = useQuizLibrary(activeTab);
 
   return (
@@ -89,6 +90,7 @@ const QuizLibraryPage = () => {
             attempts={attempts}
             isLoading={isLoading}
             onViewAttempt={handleViewAttempt}
+            onDelete={handleDeleteAttempt}
           />
         )}
       </div>

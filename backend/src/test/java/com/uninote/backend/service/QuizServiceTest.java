@@ -1019,6 +1019,32 @@ class QuizServiceTest {
     }
 
     @Test
+    void ownerCanDeleteOwnAttempt() {
+        when(quizAttemptRepository.findById(70L)).thenReturn(Optional.of(attempt));
+
+        quizService.deleteAttempt(70L, owner);
+
+        verify(quizAttemptRepository).delete(attempt);
+    }
+
+    @Test
+    void otherStudentCannotDeleteSomeoneElsesAttempt() {
+        when(quizAttemptRepository.findById(70L)).thenReturn(Optional.of(attempt));
+
+        assertThatThrownBy(() -> quizService.deleteAttempt(70L, other))
+                .isInstanceOf(CourseAccessException.class);
+        verify(quizAttemptRepository, never()).delete(any());
+    }
+
+    @Test
+    void deletingMissingAttemptIsNotFound() {
+        when(quizAttemptRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> quizService.deleteAttempt(999L, owner))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
     void deletingMissingQuizIsNotFound() {
         when(quizSetRepository.findById(999L)).thenReturn(Optional.empty());
 

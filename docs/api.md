@@ -39,9 +39,10 @@
 | GET | `/quiz/my` | 예 | 없음 | `QuizSetResponse[]` |
 | GET | `/quiz/{quizSetId}` | 예 | 없음 | `QuizSetDetailResponse` |
 | DELETE | `/quiz/{quizSetId}` | 예 | 없음 | 빈 응답 |
-| POST | `/quiz/attempts` | 예 | `{ quizSetId, score, userAnswers[] }` | 빈 응답 |
+| POST | `/quiz/attempts` | 예 | `{ quizSetId, userAnswers[] }` | 빈 응답 |
 | GET | `/quiz/attempts/my` | 예 | 없음 | `QuizAttemptResponse[]` |
 | GET | `/quiz/attempts/{attemptId}` | 예 | 없음 | `QuizAttemptDetailResponse` |
+| DELETE | `/quiz/attempts/{attemptId}` | 예 | 없음 | 빈 응답(204). 답안도 함께 삭제되어 오답 통계에서 빠진다 |
 | GET | `/quiz/{quizSetId}/attempts` | 예 | 없음 | `QuizAttemptResponse[]` |
 
 `userAnswers[]`의 항목은 `questionId`, `submittedAnswer`, `isCorrect`를 가진다.

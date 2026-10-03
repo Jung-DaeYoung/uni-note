@@ -39,115 +39,79 @@
 - `3bcb74b` 이력 대비 중복 문제 재생성(P1-4): 같은 학생·같은 강의 최근 200문제와 정규화 후 정확 일치, 1회 재생성, 남으면 저장 후 `historyDuplicates` 로그
 - `fef098c` 출처 블록별 취약도 API(`/api/quiz/incorrect/statistics/blocks`)와 `QuizConfigModal` "취약 블록 선택"
 - `cfc85e6` 과잉 구현 리뷰 반영(이력 중복 계산의 빈 집합 분기 제거, 로그 메서드 주석 위치 복원)
+- `eaf58e9` 주관식 채점 정규화(P2-6 1차): 주관식만 공백·앞뒤 문장부호 무시, 서버·`CBTPlayer` 같은 규칙
+- `c65909e` 난이도별 출제 기준 프롬프트(P2-2), `PROMPT_VERSION` `2026-10-03.1`
+- `4e20a3a` 주관식 정답을 짧은 단어·구로 제한하는 프롬프트 조건, `PROMPT_VERSION` `2026-10-03.2`
+- `a49ec5d` 255자 초과 답안을 409 대신 400으로 안내(`@Size(max = 255)`, 입력 `maxLength`)
+- 세부 내용과 수동 테스트 결과는 `docs/1003.md` 8~10번에 있다.
 
-## 이번 작업 (2026-10-03 완료)
+## 이번 작업: 풀이 기록 삭제 (2026-10-03 완료)
 
-작업 A와 B는 서로 독립이다. 각각 커밋한다.
+### 목표
 
-### 작업 A. 주관식 채점 정규화 (P2-6 1차)
+학습 보관함 "풀이 이력"의 기록을 하나씩 지울 수 있게 한다. 지금은 퀴즈 세트 삭제(`DELETE /api/quiz/{quizSetId}`)만 있고, 풀이 기록은 쌓이기만 한다. 수동 테스트 중 필요성이 제기됐다.
 
-#### 현재
+### 현재 구조
 
-- 서버 `QuizService.isAnswerCorrect(submitted, correct)`와 프론트 `CBTPlayer.isCorrectAt(q, idx)`가 같은 규칙(trim + 소문자)으로 비교한다. 문제 유형은 구분하지 않는다.
-- 프론트는 `isCorrectAt` 하나로 점수(`score`)와 결과 화면의 정답·오답 표시를 모두 판정한다. 저장되는 `UserAnswer.isCorrect`는 서버가 다시 채점한 값이다.
-- 그래서 "운영 체제"와 "운영체제", "LRU."와 "LRU"가 오답으로 처리된다.
+- `QuizAttempt`(`quiz_attempts`)의 `userAnswers`는 `cascade = ALL, orphanRemoval = true`다. 기록을 지우면 답안(`user_answers`)도 함께 지워진다.
+- `IncorrectNoteItem`은 `Question`만 참조하고 기록·답안은 참조하지 않는다. 오답노트 그룹 항목에 영향이 없고 FK 문제도 없다.
+- 가상 세션(오답노트 다시 풀기·오늘의 복습, `quizSet == null`)도 `/attempts/my`에 나오며 같은 방식으로 지울 수 있다.
+- 소유권 검증은 `QuizService.validateOwnership`(→ `CourseAccessException` 403), 없는 ID는 `ResourceNotFoundException`(404)이다. `deleteQuiz`와 같은 패턴을 쓴다.
+- 화면: `QuizHistoryPanel`(학습 보관함 > 풀이 이력, `/attempts/my`), `QuizAttemptsModal`(퀴즈별 이력). 퀴즈 삭제는 `useQuizLibrary.handleDelete`(confirm → delete → 목록에서 제거, 실패 시 alert)다.
 
-#### 규칙
+### Backend
 
-주관식(`SHORT_ANSWER`)만 다음 순서로 정규화한 뒤 같으면 정답이다.
+- `QuizController`: `DELETE /api/quiz/attempts/{attemptId}` (`@Positive`) → 204.
+- `QuizService.deleteAttempt(Long attemptId, Student student)` `@Transactional`
+  1. `quizAttemptRepository.findById` → 없으면 404 "기록을 찾을 수 없습니다."
+  2. `validateOwnership(attempt.getStudent(), student, "본인 풀이 기록만 삭제할 수 있습니다.")` → 403
+  3. `quizAttemptRepository.delete(attempt)` (답안은 cascade로 함께 삭제)
+- 새 쿼리·스키마 변경은 없다.
 
-1. 소문자로 바꾼다.
-2. 모든 공백 문자를 지운다.
-3. 앞뒤 문장부호를 지운다: `. , ! ? ; : ' " “ ” ‘ ’ 。`
+### 영향
 
-예: "운영 체제." = "운영체제", "  LRU! " = "lru". "C++"의 `+`나 "f(x)"의 괄호는 지우지 않는다.
+- 오답 통계·오늘의 복습·취약 블록은 `user_answers` 집계라, 기록을 지우면 그 풀이의 정답·오답도 통계에서 빠진다. 기록 삭제의 자연스러운 의미로 보고 그대로 둔다. 확인 문구로 사용자에게 알린다.
+- 오답노트 그룹에 직접 담은 문제는 남는다.
+- 퀴즈 세트는 남아 다시 풀 수 있다.
 
-객관식·OX는 기존 trim + 소문자를 유지한다. 보기 원문을 그대로 제출하므로 넓힐 이유가 없고, 넓히면 서로 다른 보기가 같아질 수 있다.
+### Frontend
 
-#### Backend
+- `QuizHistoryPanel`: 각 행에 휴지통 버튼을 둔다(`QuizListPanel`의 삭제 버튼과 같은 모양). `onDelete(e, attemptId)`를 호출한다.
+- `useQuizLibrary.handleDeleteAttempt(e, attemptId)`
+  1. `e.stopPropagation()` (행 클릭의 상세 보기를 막는다)
+  2. `window.confirm('이 풀이 기록을 삭제할까요? 오답 통계에서도 빠집니다.')`
+  3. `client.delete(`/quiz/attempts/${attemptId}`)` → `attempts`에서 제거
+  4. 실패하면 서버 `message`(없으면 "풀이 기록을 삭제하지 못했습니다.")를 alert
+- `QuizLibraryPage`에서 `QuizHistoryPanel`에 `onDelete`를 넘긴다.
+- `QuizAttemptsModal`(퀴즈별 이력)에는 넣지 않는다. 같은 기록을 풀이 이력 탭에서 지울 수 있다. 필요하면 추가한다.
 
-- `QuizService.isAnswerCorrect(QuestionType type, String submitted, String correct)`로 바꾸고 `saveAttempt`에서 `question.getType()`을 넘긴다.
-- 정규화는 `isAnswerCorrect` 안의 private static 메서드 하나로 둔다. 다른 곳에서 쓰지 않으므로 별도 클래스를 만들지 않는다.
-- `QuizQualityValidator`의 주석("비교 정규화는 채점 규칙과 같은 trim + 소문자 비교")을 "객관식 정답 매칭은 객관식 채점 규칙과 같은 trim + 소문자"로 고친다. 검증기의 동작은 바꾸지 않는다.
+### 하지 않는 것
 
-#### Frontend
+- 일괄·전체 삭제, 삭제 취소(soft delete). 필요해지면 추가한다.
 
-- `CBTPlayer.isCorrectAt`에 같은 규칙을 넣는다(`q.type === 'SHORT_ANSWER'`일 때만). 서버 규칙과 함께 바꿔야 한다는 주석을 양쪽에 둔다.
-- 결과 화면의 객관식 표시(`opt === q.correctAnswer`)는 그대로다.
+### 문서
 
-#### 영향
+- `docs/api.md` 퀴즈 표에 `DELETE /quiz/attempts/{attemptId}`를 추가한다.
+- 같은 표의 `POST /quiz/attempts` 요청에 남아 있는 `score`(이미 제거된 필드)를 `{ quizSetId, userAnswers[] }`로 정정한다.
 
-- 이미 저장된 풀이 기록(`UserAnswer.isCorrect`)은 다시 채점하지 않는다. 오답 통계·복습 우선순위·취약 블록은 새 풀이부터 바뀐 규칙이 반영된다.
-- 풀이 기록 다시 보기(`mode === 'report'`)는 서버가 저장한 `isCorrect`를 쓰므로 영향이 없다.
-- API 요청·응답 형식은 바뀌지 않는다.
-
-#### 한계
-
-- 공백을 모두 지우므로 영어 "a b"와 "ab"가 같아진다. 주관식 정답은 대부분 짧은 용어라 허용한다.
-- 동의어·허용 답안(2차), 키워드 포함(3차), LLM 보조 채점(4차)은 하지 않는다. 2차부터는 프론트가 서버 규칙을 복제할 수 없어 `POST /api/quiz/attempts` 응답 확장이 필요하다(`PLANS.md` P2-6).
-
-#### 테스트
+### 테스트
 
 - `QuizServiceTest`
-  - 주관식: 공백·대소문자·앞뒤 마침표만 다른 답은 정답
-  - 주관식: 글자가 다른 답은 오답, 미응답(null)은 오답
-  - 객관식: 공백이 섞인 보기 문자열은 기존처럼 trim + 소문자로만 비교
-- `CBTPlayer.test.jsx`: 주관식에 "운영 체제."를 입력해 제출하면 결과 화면에서 정답으로 표시
-
-### 작업 B. 난이도 기준 프롬프트 (P2-2)
-
-프롬프트 변경이다. 사용자가 이 작업을 선택했으므로 명시적 요구로 보고 진행한다(AGENTS.md 외부 AI 연동 규칙).
-
-#### 현재
-
-- 프롬프트에는 `난이도: NORMAL.` 한 줄만 있고, 난이도별로 어떤 문제를 내야 하는지 기준이 없다.
-- 저장되는 `QuizSet.difficulty`는 이미 요청값을 쓴다(`QuizQualityValidator`가 응답 difficulty를 요청값으로 덮어쓴다).
-
-#### 변경
-
-- `QuizAiGenerationService`에 `difficultyGuide(QuizDifficulty)` switch를 둔다. 모든 enum 값을 다루는 switch 식이라 값이 추가되면 컴파일 오류로 드러난다.
-
-| 난이도 | 기준 문구 |
-|---|---|
-| EASY | 핵심 용어의 정의나 사실을 떠올리는 문제 |
-| NORMAL | 개념을 설명하거나 두 개념을 비교하는 문제 |
-| HARD | 사례에 개념을 적용하거나, 오류를 찾거나, 여러 개념을 엮어 추론하는 문제 |
-
-- 프롬프트의 `"난이도: %s.\n"`을 `"난이도: %s. 문항은 %s로 출제하라.\n"`으로 바꾼다. 나머지 문구, 응답 schema, 응답 처리는 그대로다.
-- `PROMPT_VERSION`을 `"2026-09-29.1"`에서 `"2026-10-03.1"`로 올린다. 생성 로그(`quiz.generation promptVersion=`)로 변경 전후 결과를 구분할 수 있다.
-- 인지 수준(`REMEMBER`·`UNDERSTAND`·`APPLY`·`ANALYZE`) 저장은 `Question` 컬럼 추가와 운영 DDL이 필요해 하지 않는다(`PLANS.md` §5).
-
-#### 테스트
-
-- `QuizAiGenerationServiceTest.requestQuizPromptIsUnchanged`의 기대 문자열을 새 문구로 갱신한다. 이 테스트는 프롬프트가 의도치 않게 바뀌는 것을 막는 고정 테스트다.
-- EASY·HARD 요청의 프롬프트에 각 기준 문구가 들어가는지 확인한다.
-
-#### 수동 확인 (권장)
-
-- 로컬 서버에서 같은 노트로 EASY·HARD를 한 번씩 생성해, 문항 성격이 기준대로 달라지는지 본다(Gemini API 키 필요).
-- 단위 테스트는 프롬프트 문자열만 확인하며, 실제 AI 응답 품질은 확인하지 못한다.
+  - 본인 기록 삭제 → `quizAttemptRepository.delete` 호출
+  - 다른 학생의 기록 → `CourseAccessException`, delete 호출 없음
+  - 없는 ID → `ResourceNotFoundException`
+- `QuizControllerWebMvcTest`: `DELETE /api/quiz/attempts/1` → 204
+- 프론트: `QuizHistoryPanel`의 삭제 버튼을 누르면 `onDelete`가 호출되고 `onViewAttempt`는 호출되지 않는다.
 
 ### 검증 결과
 
-- 작업 A (`eaf58e9`): `backend\gradlew.bat test` 258개, `npm run lint`·`build`·`test`(63개) 통과.
-- 작업 B: `backend\gradlew.bat test` 259개 통과. 테스트 픽스처(`QuizAiGenerationServiceTest.simpleRequest`)가 `difficulty`를 비워 두고 있어 실제 요청처럼 NORMAL을 채웠다(`QuizRequest.difficulty`는 `@NotNull`).
-- 실서버·실제 AI 응답으로는 확인하지 않았다. 난이도별 수동 확인(위)이 남아 있다.
-
-### 수동 테스트와 후속 수정 (2026-10-03)
-
-로컬 서버(`local` 프로필)와 실제 Gemini로 확인했다. 테스트 노트·퀴즈·풀이 기록은 모두 지웠다.
-
-- 난이도 기준: 같은 노트로 EASY는 용어 회상(정답 "FIFO", "스래싱"), HARD는 사례 추론 문제가 나왔다. 로그 `promptVersion=2026-10-03.1`.
-- 채점: "스 래 싱."과 "스래싱", "O P T 알 고 리 즘."과 "OPT 알고리즘"이 정답으로 채점됐다(4/4). 틀린 답 대조군은 0점이었다.
-- 404: `/api/nope` → 404 `NOT_FOUND`.
-- 발견 1: HARD 주관식 정답이 2~3문장 서술형으로 나와 정확 일치 채점으로는 맞힐 수 없었다.
-  - 수정: 프롬프트 준수 사항 5번 "주관식 정답은 하나의 단어나 짧은 구(20자 이내)" 추가, `PROMPT_VERSION` `2026-10-03.2`.
-  - 재확인: HARD 주관식 3문항 정답이 "LRU"(3자), "미래 참조 예측 불가능"(12자), "워킹 셋 모델"(7자)로 나왔다.
-  - 남은 한계: "미래 참조 예측 불가능" 같은 구는 표현이 조금만 달라도 오답이다. 동의어·키워드 채점(P2-6 2·3차)이 필요하다.
-- 발견 2: 255자를 넘는 답안은 `user_answers.submitted_answer`(VARCHAR 255) 초과로 409 "다른 데이터와 연결되어 있어…"가 났다(기존 문제).
-  - 수정: `QuizAttemptRequest.UserAnswerRequest.submittedAnswer`에 `@Size(max = 255)` → 400 `VALIDATION_FAILED` "답안은 255자 이하로 입력해 주세요.", `CBTPlayer` 주관식 입력에 `maxLength={255}`.
-  - 재확인: 256자 제출 → 400.
-- 검증: `backend\gradlew.bat test` 260개, `npm run lint`·`build`·`test`(63개) 통과. 브라우저 화면은 확인하지 않았다.
+- `backend\gradlew.bat test` 264개(신규 4개), `npm run lint`·`build`·`test`(64개, 신규 1개) 통과.
+- 실서버(`local` 프로필, 실제 DB)에서 확인했다. 테스트 노트·퀴즈는 지웠다.
+  - OX 2문항을 모두 틀리게 풀이 → 오답 요약 시도 2·오답 2, 풀이 이력 1건
+  - 없는 ID 삭제 → 404, 본인 기록 삭제 → 204, 삭제한 기록 상세 → 404
+  - 삭제 후 오답 요약 시도 0·오답 0, 풀이 이력 0건, 퀴즈 세트는 남음(200)
+- 다른 학생의 기록 삭제(403)는 단위 테스트로만 확인했다. 브라우저 화면은 확인하지 않았다.
+- 확인 중 Gemini 호출이 한 번 `EXTERNAL_SERVICE_ERROR`로 실패했고, 다시 시도하자 성공했다. 이번 변경과는 관계없다.
 
 ## 다음 작업 (상세 계획은 착수 시 작성)
 

@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -279,5 +280,12 @@ class QuizControllerWebMvcTest {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.errorCode").value("TOO_MANY_REQUESTS"))
                 .andExpect(jsonPath("$.message").value("이미 문제를 생성하고 있습니다. 완료된 뒤 다시 시도해 주세요."));
+    }
+
+    @Test
+    void 풀이기록삭제는204를반환한다() throws Exception {
+        mockMvc.perform(delete("/api/quiz/attempts/1").header("Authorization", bearerToken()))
+                .andExpect(status().isNoContent());
+        verify(quizService).deleteAttempt(org.mockito.ArgumentMatchers.eq(1L), any());
     }
 }

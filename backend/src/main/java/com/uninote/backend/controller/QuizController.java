@@ -53,6 +53,12 @@ public class QuizController {
         return ResponseEntity.ok(quizService.getMyAttempts(getStudent(principal)));
     }
 
+    @DeleteMapping("/attempts/{attemptId}")
+    public ResponseEntity<Void> deleteAttempt(@PathVariable @Positive Long attemptId, Principal principal) {
+        quizService.deleteAttempt(attemptId, getStudent(principal));
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/attempts/{attemptId}")
     public ResponseEntity<QuizAttemptDetailResponse> getAttemptDetail(@PathVariable @Positive Long attemptId, Principal principal) {
         return ResponseEntity.ok(quizService.getAttemptDetail(attemptId, getStudent(principal)));

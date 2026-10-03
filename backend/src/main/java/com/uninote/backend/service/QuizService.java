@@ -487,6 +487,16 @@ public class QuizService {
                 .replaceAll("^[.,!?;:'\"“”‘’。]+|[.,!?;:'\"“”‘’。]+$", "");
     }
 
+    // 풀이 기록 1건 삭제. 답안(user_answers)은 QuizAttempt.userAnswers cascade로 함께 지워지므로
+    // 오답 통계·오늘의 복습·취약 블록 집계에서도 빠진다. 오답노트 항목은 문제만 참조해 영향이 없다.
+    @Transactional
+    public void deleteAttempt(Long attemptId, Student student) {
+        QuizAttempt attempt = quizAttemptRepository.findById(attemptId)
+            .orElseThrow(() -> new ResourceNotFoundException("기록을 찾을 수 없습니다."));
+        validateOwnership(attempt.getStudent(), student, "본인 풀이 기록만 삭제할 수 있습니다.");
+        quizAttemptRepository.delete(attempt);
+    }
+
     @Transactional(readOnly = true)
     public List<QuizAttemptResponse> getMyAttempts(Student student) {
         return convertToAttemptResponses(quizAttemptRepository.findByStudent_StudId(student.getStudId()));

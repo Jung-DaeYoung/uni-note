@@ -77,6 +77,17 @@ const useQuizLibrary = (activeTab) => {
     }
   };
 
+  const handleDeleteAttempt = async (e, attemptId) => {
+    e.stopPropagation();
+    if (!window.confirm('이 풀이 기록을 삭제할까요? 오답 통계에서도 빠집니다.')) return;
+    try {
+      await client.delete(`/quiz/attempts/${attemptId}`);
+      setAttempts(prev => prev.filter(a => a.attemptId !== attemptId));
+    } catch (err) {
+      alert(err.response?.data?.message || '풀이 기록을 삭제하지 못했습니다.');
+    }
+  };
+
   return {
     quizzes,
     attempts,
@@ -89,6 +100,7 @@ const useQuizLibrary = (activeTab) => {
     handleViewAttempt,
     handleOpenAttempts,
     handleDelete,
+    handleDeleteAttempt,
   };
 };
 

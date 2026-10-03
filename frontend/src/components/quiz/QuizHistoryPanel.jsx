@@ -1,7 +1,7 @@
 import React from 'react';
-import { CheckCircle2, ChevronRight, History } from 'lucide-react';
+import { CheckCircle2, ChevronRight, History, Trash2 } from 'lucide-react';
 
-const QuizHistoryPanel = ({ attempts, isLoading, onViewAttempt }) => {
+const QuizHistoryPanel = ({ attempts, isLoading, onViewAttempt, onDelete }) => {
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -44,7 +44,16 @@ const QuizHistoryPanel = ({ attempts, isLoading, onViewAttempt }) => {
               </p>
             </div>
           </div>
-          <ChevronRight size={18} className="text-slate-300 dark:text-slate-600 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all group-hover:translate-x-1" />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={(e) => onDelete(e, attempt.attemptId)}
+              aria-label={`${attempt.quizTitle} 풀이 기록 삭제`}
+              className="text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+            >
+              <Trash2 size={16} />
+            </button>
+            <ChevronRight size={18} className="text-slate-300 dark:text-slate-600 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all group-hover:translate-x-1" />
+          </div>
         </div>
       ))}
     </div>

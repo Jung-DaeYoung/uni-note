@@ -19,7 +19,7 @@
 | P1-1 | 노트 청킹, 핵심 개념 추출, 중요도 정렬 | |
 | P1-2 잔여 | 초과 시 자동 축약 | rate limit은 이번 작업에서 완료, idempotency는 동시 생성 1건 제한으로 대신한다 |
 | P1-3 | 비동기 생성 Job API | 선택·후순위 |
-| P1-4 | 이력 대비 중복 문제 제거 | 현재 같은 세트 안 정확 일치만 검사한다 |
+| P1-4 후속 | 프롬프트에 이전 문제 목록 넣기 | 이력 대비 정확 일치 검사·1회 재생성은 이번 작업에서 완료. 프롬프트 변경은 승인 필요 |
 | P1-5 2단계 | `pdfBlock`에 BlockId 부여 | 노트 저장 형식 변경, 별도 승인 필요 |
 | P2-1 | 학습 목표, `conceptTags` | |
 | P2-2 | 난이도별 생성 기준, 인지 수준 | |
@@ -35,61 +35,70 @@
 - `dec6a78` AI 생성 로그에 content hash·입력 글자 수, 200,000자 초과 거절 로그(`REJECTED_TOO_LONG`)
 - `39ec9c5` 없는 경로 404, 허용되지 않은 메서드 405 (기존 `handleUnexpected`에서 `org.springframework.web.ErrorResponse` 분기)
 - `bdc16cb` 풀이 저장 실패 시 결과 화면으로 넘어가지 않고 서버 `message` 안내
+- `be8aaf9` AI 문제 생성 학생별 호출 제한: 동시 생성 1건, 10분에 5회, 초과 시 429 `TOO_MANY_REQUESTS`
 
-## 이번 작업: AI 문제 생성 호출 제한 (P1-2 잔여, 2026-10-03 완료)
+## 이번 작업: 이력 대비 중복 문제 제거 (P1-4, 2026-10-03 완료)
 
 ### 목표
 
-`POST /api/quiz/generate`의 학생별 AI 호출을 제한해 비용과 중복 생성을 막는다. 현재는 노트 20개·총 30문항 상한만 있고 호출 빈도 제한이 없다. 프론트는 생성 중 버튼을 막지만(`QuizConfigModal`의 `loading`) 여러 탭이나 API 직접 호출은 막지 못한다.
+같은 학생이 같은 강의에서 이미 받은 문제와 문장이 같은 문제를 다시 만들지 않도록 한다. 현재는 같은 세트 안의 정확 일치만 검사한다(`QuizQualityValidator`).
 
-### 상한 값
+### 결정 사항
 
-| 제한 | 값 | 근거 |
-|---|---|---|
-| 동시 생성 | 학생당 1건 | 한 번의 생성은 최대 약 90초(AI 호출 2회)다. 같은 학생이 동시에 둘을 돌릴 이유가 없고, 중복 제출·여러 탭에 의한 중복 생성을 막는다. idempotency key는 이것으로 대신한다. |
-| 호출 빈도 | 학생당 10분에 5회 | 정상 사용(생성 → 풀이 → 다시 생성)은 한 번에 수 분이 걸려 5회에 닿기 어렵다. 반복 호출만 막는다. |
-
-- 상수: `MAX_GENERATIONS_PER_WINDOW = 5`, `GENERATION_WINDOW = Duration.ofMinutes(10)`. 동시 생성 1건은 "진행 중 학생 집합"으로 표현하므로 상수가 없다.
-- 강의별 제한은 두지 않는다. 학생별 제한으로 강의별 호출도 함께 묶인다.
+- 비교 범위: 같은 학생·같은 강의의 최근 문제 200개. 출처가 null(미검증)인 문제도 포함하기 위해 노트가 아닌 강의 기준으로 묶는다.
+- 판정: 기존 세트 내 중복과 같은 정규화(trim·소문자) 후 정확 일치. 유사 문항 판정은 하지 않는다.
+- 처리: 중복이 있으면 1회 재생성한다. 재생성 후에도 남으면 실패시키지 않고 저장하며 중복 수를 로그에 남긴다. 실패 처리는 짧은 노트로 반복 생성하는 사용자를 막고, 중복 문항만 빼면 요청 문항 수 일치 기준(`PLANS.md` §8)이 깨진다.
+- 프롬프트는 바꾸지 않는다. 이전 문제 목록을 프롬프트에 넣는 방식은 별도 승인 전까지 보류한다(아래 한계 참고).
 
 ### Backend
 
-1. `exception/TooManyRequestsException` 추가 (`InvalidRequestException`과 같은 형태의 RuntimeException).
-2. `GlobalExceptionHandler`에 핸들러 추가: 429, errorCode `TOO_MANY_REQUESTS`, message는 예외 메시지.
-3. `QuizService`에 메모리 상태 2개를 둔다. 초기화된 `final` 필드라 `@RequiredArgsConstructor` 생성자와 `QuizServiceTest`의 생성자 호출은 바뀌지 않는다.
-   - `Set<Long> generatingStudents = ConcurrentHashMap.newKeySet()`
-   - `Map<Long, Deque<Instant>> recentGenerations = new ConcurrentHashMap<>()`
-4. 적용 위치: `generateQuiz`에서 입력 검증(노트 접근·상한·블록 범위·빈 입력·200,000자)을 모두 통과한 뒤, AI 호출 직전에 검사한다. 입력 오류는 횟수를 쓰지 않는다.
-   - 진행 중 집합에 `add` 실패 → 429 "이미 문제를 생성하고 있습니다. 완료된 뒤 다시 시도해 주세요."
-   - 빈도 검사: 해당 학생의 deque에서 `clock.instant()` 기준 10분이 지난 항목을 지우고, 남은 개수가 5 이상이면 진행 중 집합에서 빼고 429 "문제 생성은 10분에 5회까지 할 수 있습니다. N분 후 다시 시도해 주세요." (N은 가장 오래된 항목 기준, 올림, 최소 1)
-   - 통과하면 현재 시각을 deque에 추가한다. AI 호출이 실패해도 비용이 들었으므로 횟수에 포함한다.
-   - 빈도 검사·추가는 학생별 deque에 `synchronized`로 묶는다.
-   - AI 호출·검증·저장 전체를 `try/finally`로 감싸 진행 중 집합에서 반드시 뺀다.
-5. 거절 시 로그 `quiz.generation status=RATE_LIMITED reason=CONCURRENT|WINDOW studId={}` 한 줄. 노트 본문은 남기지 않는다.
-6. 한계는 `ponytail:` 주석으로 남긴다: 서버 1대 메모리 기준이며 재시작 시 초기화된다. 서버를 여러 대로 늘리면 Redis 등 공유 저장소로 옮긴다. 학생 수만큼 deque가 남지만 항목은 학생당 최대 5개다.
+1. `QuestionRepository`에 조회 추가 (스키마 변경 없음):
+   ```java
+   @Query("SELECT q.questionText FROM Question q WHERE q.quizSet.student.studId = :studId "
+        + "AND q.quizSet.course.courseId = :courseId ORDER BY q.quizSet.createdAt DESC, q.questionId DESC")
+   List<String> findRecentQuestionTexts(Long studId, Long courseId, Pageable pageable);
+   ```
+   호출은 `PageRequest.of(0, RECENT_QUESTION_HISTORY_SIZE)`, 상수는 `QuizService`에 `200`.
+2. `QuizQualityValidator.normalize`를 package-private static으로 열어 재사용한다. 비교 규칙이 한 곳에만 있게 한다.
+3. `QuizService.generateQuiz`: 호출 제한 통과 후, AI 호출 전에 이력 문장 집합(정규화)을 한 번 조회한다. 강의는 `notes.get(0).getCourse()`(같은 강의 검증을 이미 통과함). 트랜잭션 밖 단순 조회다.
+4. `generateValidatedQuiz`에 이력 집합을 넘긴다. `quizQualityValidator.validate`가 통과한 뒤:
+   - 이력 중복 수를 센다.
+   - 0이면 그대로 반환한다.
+   - 1 이상이고 재생성 가능(시도 < 2, 경과 ≤ 30초)하면 이 결과를 "대체 결과"로 보관하고 재생성한다.
+   - 재생성 불가면 중복이 있는 채로 반환한다.
+   - 재생성 결과가 검증 실패이거나 AI 오류(`AI_RESPONSE_INVALID`)면 보관한 대체 결과를 반환한다. 이미 쓸 수 있는 결과가 있는데 실패로 끝내지 않는다. 호출 실패·타임아웃(`EXTERNAL_SERVICE_ERROR`)도 같다.
+   - 재생성 결과에도 중복이 있으면 중복이 적은 쪽을 반환한다.
+5. `GenerationResult`에 `historyDuplicates`를 추가하고 `quiz.generation` 로그에 `historyDuplicates={}`를 남긴다. 노트 본문·문제 문장은 남기지 않는다.
+6. 기존 동작 유지: 시도 최대 2회, 30초 예산, 검증 실패 시 503 `QUIZ_VALIDATION_FAILED`, 응답 필드.
 
 ### Frontend
 
-변경 없음. `QuizConfigModal`은 실패 시 서버 `message`를 alert로 보여주고, `client.js` 인터셉터는 401·403만 특별 처리한다.
+변경 없음.
 
-### 테스트 (`QuizServiceTest`, `QuizControllerWebMvcTest`)
+### 테스트 (`QuizServiceTest`, `QuizQualityValidatorTest` 영향 없음 확인)
 
-- 같은 학생 5회 성공 후 6번째 → `TooManyRequestsException`, AI 호출 없음.
-- `clock`을 10분 뒤로 옮기면 다시 허용.
-- 다른 학생은 영향 없음.
-- 입력 오류(빈 노트 등)로 거절된 요청은 횟수에 포함되지 않음.
-- AI 호출 실패(503)도 횟수에 포함되고, 실패 후 진행 중 상태가 풀려 다음 요청이 동시 생성 제한에 걸리지 않음.
-- 동시 생성: 첫 요청의 `requestQuiz` mock 안에서 같은 학생으로 `generateQuiz`를 다시 호출 → 429. (스레드 없이 재진입으로 검증)
-- WebMvc: `TooManyRequestsException` → 429, errorCode `TOO_MANY_REQUESTS`.
+- 이력 중복 없음: 1회 호출로 저장.
+- 첫 결과가 이력과 중복 → 재생성 1회, 중복 없는 두 번째 결과 저장.
+- 두 번 모두 중복 → 실패 없이 저장, AI 호출 2회, 로그 `historyDuplicates=` 확인.
+- 첫 결과 중복 + 재생성 결과 검증 실패 → 첫 결과 저장.
+- 첫 결과 중복 + 재생성 시 AI 호출 실패 → 첫 결과 저장.
+- 첫 결과 중복이지만 첫 호출이 30초 초과 → 재생성 없이 저장.
+- 비교는 정규화 후 일치(공백·대소문자만 다른 문장도 중복).
+- 이력 조회에 학생 ID·강의 ID·200개 제한이 넘어가는지 확인.
+- 기존 `generateQuiz*` 테스트는 이력 조회 mock 기본값(빈 목록)으로 그대로 통과해야 한다.
+
+### 한계
+
+AI는 이전 문제를 모르므로 같은 노트로 다시 만들면 같은 문제가 다시 나올 수 있고, 재생성은 확률적으로만 줄인다. 효과가 부족하면 프롬프트에 최근 문제 목록(최대 N개)을 "피할 문제"로 넣는 방식을 검토한다. 이 경우 `PROMPT_VERSION`을 올리고 입력 토큰이 늘며, AGENTS.md에 따라 명시적 승인이 필요하다. 로그의 `historyDuplicates` 빈도로 판단한다.
 
 ### 검증 결과
 
-- `backend\gradlew.bat test` 통과 (248개, 신규 6개).
-- 계획과 다른 점: 생성 시작 시각(`GenerationContext.start`)을 별도 `clock.instant()` 호출 대신 호출 제한 검사 시각으로 재사용한다. `clock` 호출 순서에 의존하는 기존 시간 예산 테스트를 그대로 유지하기 위해서다.
-- 프론트 변경이 없어 프론트 검증은 생략했다. 실서버에서는 확인하지 않았다.
+- `backend\gradlew.bat test` 통과 (255개, 신규 7개). 새 JPQL은 `BackendApplicationTests`의 컨텍스트 기동에서 함께 검증된다.
+- 로그 예: `quiz.generation status=SUCCESS ... attempts=2 unverified=0 historyDuplicates=1 ...`
+- 프론트 변경이 없어 프론트 검증은 생략했다. 실서버·실제 AI 응답으로는 확인하지 않았다.
 
 ## 다음 작업 (상세 계획은 착수 시 작성)
 
-- P1-4 이력 대비 중복 문제 제거. 결정 필요: 비교 범위(같은 노트 / 학생 전체 이력), 재생성 후에도 중복이 남을 때 실패 처리할지 해당 문항만 빼고 저장할지. 프롬프트에 기존 문제 목록을 넣는 방식은 프롬프트 변경이라 별도 승인이 필요하다.
 - P2-3 일부: 기존 데이터(`UserAnswer`, `sourceBlockId`)로 유형별 정답률·출처 블록별 오답률.
+- P1-4 후속: 프롬프트에 이전 문제 목록 넣기 (승인 필요, `historyDuplicates` 빈도 확인 후).
 - P1-1 노트 청킹은 보류한다. `REJECTED_TOO_LONG` 로그 빈도를 보고 결정한다.

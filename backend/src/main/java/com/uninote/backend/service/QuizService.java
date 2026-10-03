@@ -12,6 +12,7 @@ import com.uninote.backend.exception.TooManyRequestsException;
 import com.uninote.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -54,6 +55,8 @@ public class QuizService {
     // 학생 수만큼 deque가 남지만 항목은 학생당 최대 MAX_GENERATIONS_PER_WINDOW개다.
     static final int MAX_GENERATIONS_PER_WINDOW = 5;
     static final Duration GENERATION_WINDOW = Duration.ofMinutes(10);
+    // 이력 대비 중복 검사(P1-4)에 쓰는 같은 학생·같은 강의의 최근 문제 수.
+    static final int RECENT_QUESTION_HISTORY_SIZE = 200;
     private final Set<Long> generatingStudents = ConcurrentHashMap.newKeySet();
     private final Map<Long, Deque<Instant>> recentGenerations = new ConcurrentHashMap<>();
 
@@ -99,17 +102,19 @@ public class QuizService {
         try {
             GenerationContext context = new GenerationContext(start, student.getStudId(), blockScopes,
                     sha256Hex(input.text()), input.text().length());
-            GenerationResult result = generateValidatedQuiz(request, input, context);
+            Set<String> previousQuestionTexts = loadPreviousQuestionTexts(student.getStudId(), notes.get(0).getCourse());
+            GenerationResult result = generateValidatedQuiz(request, input, context, previousQuestionTexts);
 
             QuizResponse saved;
             try {
                 saved = transactionTemplate.execute(status -> saveGeneratedQuiz(result.response(), request, notes, student));
             } catch (RuntimeException e) {
                 logGenerationResult(context, false, result.attempts(), result.unverifiedCount(),
-                        STORAGE_ERROR, e.getMessage(), null);
+                        result.historyDuplicates(), STORAGE_ERROR, e.getMessage(), null);
                 throw e;
             }
-            logGenerationResult(context, true, result.attempts(), result.unverifiedCount(), null, null, saved.getQuizSetId());
+            logGenerationResult(context, true, result.attempts(), result.unverifiedCount(),
+                    result.historyDuplicates(), null, null, saved.getQuizSetId());
             return saved;
         } finally {
             generatingStudents.remove(student.getStudId());
@@ -181,11 +186,19 @@ public class QuizService {
         return scopes;
     }
 
-    private record GenerationResult(QuizResponse response, int attempts, int unverifiedCount) {}
+    // historyDuplicates는 같은 학생·같은 강의의 이전 문제와 문장이 같은 문항 수다(P1-4).
+    private record GenerationResult(QuizResponse response, int attempts, int unverifiedCount, int historyDuplicates) {
+        GenerationResult withAttempts(int totalAttempts) {
+            return new GenerationResult(response, totalAttempts, unverifiedCount, historyDuplicates);
+        }
+    }
 
+    // 검증 통과 결과에 이전 문제와 같은 문항이 있으면 1회 재생성한다. 재생성이 검증 실패·AI 오류로
+    // 끝나면 이미 쓸 수 있는 앞선 결과를 저장하고, 둘 다 중복이면 중복이 적은 쪽을 쓴다(실패시키지 않음).
     private GenerationResult generateValidatedQuiz(QuizRequest request, QuizGenerationInput input,
-                                                   GenerationContext context) {
+                                                   GenerationContext context, Set<String> previousQuestionTexts) {
         int lastUnverified = 0;
+        GenerationResult duplicateFallback = null;
         for (int attempt = 1; ; attempt++) {
             String failure;
             try {
@@ -193,28 +206,43 @@ public class QuizService {
                 QuizQualityValidator.Result result =
                         quizQualityValidator.validate(response, request, input.allowedSources());
                 if (result.valid()) {
-                    if (result.unverifiedCount() > 0) {
-                        log.info("출처를 확인할 수 없는 문항 {}개는 출처 없이 저장합니다.", result.unverifiedCount());
+                    GenerationResult current = new GenerationResult(response, attempt, result.unverifiedCount(),
+                            countHistoryDuplicates(response, previousQuestionTexts));
+                    if (duplicateFallback != null && duplicateFallback.historyDuplicates() <= current.historyDuplicates()) {
+                        current = duplicateFallback.withAttempts(attempt);
                     }
-                    return new GenerationResult(response, attempt, result.unverifiedCount());
+                    if (current.historyDuplicates() > 0 && canRegenerate(attempt, context)) {
+                        log.info("이전 문제와 같은 문항 {}개가 있어 재생성합니다.", current.historyDuplicates());
+                        duplicateFallback = current;
+                        continue;
+                    }
+                    return accept(current);
                 }
                 lastUnverified = result.unverifiedCount();
                 failure = String.join(" / ", result.errors());
             } catch (ExternalServiceException e) {
                 // 호출 실패·타임아웃은 재생성해도 같은 결과일 가능성이 높고 시간 예산만 소모하므로 그대로 전파한다.
                 if (!ExternalServiceException.AI_RESPONSE_INVALID.equals(e.getErrorCode())) {
-                    logGenerationResult(context, false, attempt, 0, e.getErrorCode(), e.getMessage(), null);
+                    if (duplicateFallback != null) {
+                        log.warn("중복 재생성 중 AI 호출 실패, 앞선 결과를 저장합니다: {}", e.getMessage());
+                        return accept(duplicateFallback.withAttempts(attempt));
+                    }
+                    logGenerationResult(context, false, attempt, 0, 0, e.getErrorCode(), e.getMessage(), null);
                     throw e;
                 }
                 lastUnverified = 0;
                 failure = e.getMessage();
             }
 
+            if (duplicateFallback != null) {
+                log.warn("중복 재생성 결과 검증 실패, 앞선 결과를 저장합니다: {}", failure);
+                return accept(duplicateFallback.withAttempts(attempt));
+            }
             Duration elapsed = Duration.between(context.start(), clock.instant());
             log.warn("AI 퀴즈 생성 결과 검증 실패 (시도 {}/{}, 경과 {}초): {}",
                     attempt, MAX_AI_ATTEMPTS, elapsed.toSeconds(), failure);
             if (attempt >= MAX_AI_ATTEMPTS || elapsed.compareTo(MAX_ELAPSED_FOR_RETRY) > 0) {
-                logGenerationResult(context, false, attempt, lastUnverified,
+                logGenerationResult(context, false, attempt, lastUnverified, 0,
                         ExternalServiceException.QUIZ_VALIDATION_FAILED, failure, null);
                 throw new ExternalServiceException(ExternalServiceException.QUIZ_VALIDATION_FAILED,
                         VALIDATION_FAILED_MESSAGE);
@@ -224,16 +252,53 @@ public class QuizService {
 
     // AI 생성 요청 1건당 결과 한 줄을 key=value 형식으로 남긴다. 추후 품질 분석·재현에 쓰며,
     // 노트 본문·문제 텍스트·학번 같은 개인정보는 넣지 않는다(사용자는 내부 studId로만 식별).
+    private boolean canRegenerate(int attempt, GenerationContext context) {
+        return attempt < MAX_AI_ATTEMPTS
+                && Duration.between(context.start(), clock.instant()).compareTo(MAX_ELAPSED_FOR_RETRY) <= 0;
+    }
+
+    private GenerationResult accept(GenerationResult result) {
+        if (result.unverifiedCount() > 0) {
+            log.info("출처를 확인할 수 없는 문항 {}개는 출처 없이 저장합니다.", result.unverifiedCount());
+        }
+        if (result.historyDuplicates() > 0) {
+            log.info("이전 문제와 같은 문항 {}개를 그대로 저장합니다.", result.historyDuplicates());
+        }
+        return result;
+    }
+
+    // 같은 학생·같은 강의의 최근 문제 문장(정규화). 강의가 없으면 비교하지 않는다.
+    private Set<String> loadPreviousQuestionTexts(Long studId, Course course) {
+        if (course == null) {
+            return Set.of();
+        }
+        return questionRepository.findRecentQuestionTexts(studId, course.getCourseId(),
+                        PageRequest.of(0, RECENT_QUESTION_HISTORY_SIZE)).stream()
+                .filter(Objects::nonNull)
+                .map(QuizQualityValidator::normalize)
+                .collect(Collectors.toSet());
+    }
+
+    private static int countHistoryDuplicates(QuizResponse response, Set<String> previousQuestionTexts) {
+        if (previousQuestionTexts.isEmpty()) {
+            return 0;
+        }
+        return (int) response.getQuestions().stream()
+                .filter(q -> previousQuestionTexts.contains(QuizQualityValidator.normalize(q.getQuestionText())))
+                .count();
+    }
+
     private void logGenerationResult(GenerationContext context, boolean success, int attempts, int unverified,
-                                     String failureCode, String failureReason, Long quizSetId) {
+                                     int historyDuplicates, String failureCode, String failureReason, Long quizSetId) {
         log.info("quiz.generation status={} model={} promptVersion={} attempts={} "
-                        + "unverified={} elapsedMs={} failureCode={} failureReason=\"{}\" quizSetId={} studId={} "
+                        + "unverified={} historyDuplicates={} elapsedMs={} failureCode={} failureReason=\"{}\" quizSetId={} studId={} "
                         + "blockCount={} blockNoteCount={} contentHash={} textChars={}",
                 success ? "SUCCESS" : "FAILED",
                 QuizAiGenerationService.MODEL_NAME,
                 QuizAiGenerationService.PROMPT_VERSION,
                 attempts,
                 unverified,
+                historyDuplicates,
                 Duration.between(context.start(), clock.instant()).toMillis(),
                 failureCode == null ? "" : failureCode,
                 failureReason == null ? "" : failureReason.replace("\"", "'"),

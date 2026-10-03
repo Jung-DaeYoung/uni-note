@@ -174,7 +174,8 @@ public class QuizQualityValidator {
         return trimmed.length() > MAX_COLUMN_LENGTH ? trimmed.substring(0, MAX_COLUMN_LENGTH) : trimmed;
     }
 
-    private static String normalize(String value) {
+    // 문항·보기 비교 정규화. 이력 대비 중복 검사(QuizService)도 같은 규칙을 쓴다.
+    static String normalize(String value) {
         return value.trim().toLowerCase();
     }
 }

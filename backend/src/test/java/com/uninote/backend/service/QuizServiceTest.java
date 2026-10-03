@@ -541,6 +541,99 @@ class QuizServiceTest {
         assertThat(output.getOut()).contains("quiz.generation status=RATE_LIMITED reason=CONCURRENT studId=1");
     }
 
+    // 이력 대비 중복(P1-4): 같은 학생·같은 강의(courseId 10)의 이전 문제 문장을 돌려준다.
+    private QuizRequest stubHistory(String... previousQuestionTexts) {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any(), any())).thenReturn(textInput);
+        when(questionRepository.findRecentQuestionTexts(eq(1L), eq(10L), any()))
+                .thenReturn(List.of(previousQuestionTexts));
+        return requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+    }
+
+    @Test
+    void generateQuizSavesWithoutRegenerationWhenNoHistoryDuplicate(CapturedOutput output) {
+        QuizRequest request = stubHistory("이전 문제");
+        QuizResponse fresh = aiResponseWith(multipleChoice("페이지 교체 알고리즘은?", "LRU"));
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(fresh);
+
+        assertThat(quizService.generateQuiz(request, owner)).isSameAs(fresh);
+        verify(quizAiGenerationService, times(1)).requestQuiz(any(), any());
+        assertThat(output.getOut()).contains("historyDuplicates=0");
+    }
+
+    @Test
+    void generateQuizQueriesRecentHistoryOfSameStudentAndCourse() {
+        QuizRequest request = stubHistory();
+        when(quizAiGenerationService.requestQuiz(any(), any()))
+                .thenReturn(aiResponseWith(multipleChoice("페이지 교체 알고리즘은?", "LRU")));
+
+        quizService.generateQuiz(request, owner);
+
+        verify(questionRepository).findRecentQuestionTexts(1L, 10L,
+                org.springframework.data.domain.PageRequest.of(0, QuizService.RECENT_QUESTION_HISTORY_SIZE));
+    }
+
+    @Test
+    void generateQuizRegeneratesOnceWhenResultDuplicatesHistory() {
+        // 공백·대소문자만 다른 문장도 중복으로 본다.
+        QuizRequest request = stubHistory("  LRU란? ");
+        QuizResponse duplicate = aiResponseWith(multipleChoice("lru란?", "LRU"));
+        QuizResponse fresh = aiResponseWith(multipleChoice("FIFO란?", "FIFO"));
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(duplicate, fresh);
+
+        assertThat(quizService.generateQuiz(request, owner)).isSameAs(fresh);
+        verify(quizAiGenerationService, times(2)).requestQuiz(any(), any());
+    }
+
+    @Test
+    void generateQuizSavesDuplicateWhenRegeneratedResultAlsoDuplicates(CapturedOutput output) {
+        QuizRequest request = stubHistory("LRU란?", "FIFO란?");
+        QuizResponse first = aiResponseWith(multipleChoice("LRU란?", "LRU"));
+        QuizResponse second = aiResponseWith(multipleChoice("FIFO란?", "FIFO"));
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(first, second);
+
+        // 중복 수가 같으면 앞선 결과를 쓴다. 실패시키지 않는다.
+        assertThat(quizService.generateQuiz(request, owner)).isSameAs(first);
+        verify(quizAiGenerationService, times(2)).requestQuiz(any(), any());
+        assertThat(output.getOut())
+                .contains("quiz.generation status=SUCCESS")
+                .contains("attempts=2 unverified=0 historyDuplicates=1");
+    }
+
+    @Test
+    void generateQuizKeepsFirstResultWhenRegeneratedResultFailsValidation() {
+        QuizRequest request = stubHistory("LRU란?");
+        QuizResponse first = aiResponseWith(multipleChoice("LRU란?", "LRU"));
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(first, aiResponseWith());
+
+        assertThat(quizService.generateQuiz(request, owner)).isSameAs(first);
+        verify(quizAiGenerationService, times(2)).requestQuiz(any(), any());
+    }
+
+    @Test
+    void generateQuizKeepsFirstResultWhenRegenerationAiCallFails() {
+        QuizRequest request = stubHistory("LRU란?");
+        QuizResponse first = aiResponseWith(multipleChoice("LRU란?", "LRU"));
+        when(quizAiGenerationService.requestQuiz(any(), any()))
+                .thenReturn(first)
+                .thenThrow(new ExternalServiceException("AI 퀴즈 생성 서비스에 연결할 수 없습니다."));
+
+        assertThat(quizService.generateQuiz(request, owner)).isSameAs(first);
+        verify(quizAiGenerationService, times(2)).requestQuiz(any(), any());
+    }
+
+    @Test
+    void generateQuizDoesNotRegenerateDuplicateWhenTimeBudgetExceeded() {
+        QuizRequest request = stubHistory("LRU란?");
+        QuizResponse first = aiResponseWith(multipleChoice("LRU란?", "LRU"));
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(first);
+        when(clock.instant()).thenReturn(Instant.EPOCH, Instant.EPOCH.plusSeconds(31));
+
+        assertThat(quizService.generateQuiz(request, owner)).isSameAs(first);
+        verify(quizAiGenerationService, times(1)).requestQuiz(any(), any());
+    }
+
     @Test
     void generateQuizRegeneratesOnceWhenFirstResponseFailsValidation() {
         Note note = ownedNote(10L);

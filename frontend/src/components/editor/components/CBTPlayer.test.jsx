@@ -48,4 +48,22 @@ describe('CBTPlayer 제출', () => {
       userAnswers: [{ questionId: 1, submittedAnswer: 'O' }],
     });
   });
+
+  it('저장에 실패하면 서버 메시지를 알리고 결과 화면으로 넘어가지 않는다', async () => {
+    const user = userEvent.setup();
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    client.post.mockRejectedValueOnce({ response: { status: 500, data: { message: '서버 내부 오류가 발생했습니다.' } } });
+    render(
+      <MemoryRouter>
+        <CBTPlayer quizData={quizData} onClose={() => {}} courseId={1} />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByText('O'));
+    await user.click(screen.getByText('제출하고 채점하기'));
+
+    expect(alertSpy).toHaveBeenCalledWith('서버 내부 오류가 발생했습니다.');
+    expect(screen.getByText('제출하고 채점하기')).toBeInTheDocument();
+    alertSpy.mockRestore();
+  });
 });

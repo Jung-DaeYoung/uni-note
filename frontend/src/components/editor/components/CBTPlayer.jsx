@@ -59,8 +59,9 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
 
       setSubmitted(true);
     } catch (error) {
+      // 저장에 실패하면 결과 화면으로 넘기지 않는다. 답안이 남아 있어 다시 제출할 수 있다.
       console.error("결과 저장 실패:", error);
-      setSubmitted(true);
+      alert(error.response?.data?.message || '풀이 결과를 저장하지 못했습니다. 다시 시도해 주세요.');
     } finally {
       setIsSaving(false);
     }

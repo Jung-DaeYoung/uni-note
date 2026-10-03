@@ -32,6 +32,9 @@ public class QuizService {
     private static final int MAX_TOTAL_QUESTIONS = 30;
     // 블록 범위 선택 시 모든 노트를 합친 선택 블록 수 상한(QuizConfigModal과 동일).
     private static final int MAX_SELECTED_BLOCKS = 500;
+    // AI에 보낼 추출 텍스트(REF 태그 포함) 글자 수 상한(P1-2). 토큰 초과·비용·지연을 막는다.
+    // ponytail: 글자 수 근사치, 토큰 단위 제한이 필요하면 Gemini countTokens로 바꾼다.
+    static final int MAX_INPUT_TEXT_CHARS = 200_000;
     // AI 생성 결과 검증 실패 시 재생성은 1회만 한다(요청당 AI 호출 최대 2회).
     private static final int MAX_AI_ATTEMPTS = 2;
     // 전체 시간 예산 90초 - Gemini read timeout 60초(RestClientConfig). 첫 호출이 이보다 오래
@@ -69,6 +72,11 @@ public class QuizService {
             throw new InvalidRequestException(blockScopes.isEmpty()
                     ? "문제를 생성할 노트 내용이 없습니다."
                     : "선택한 범위에 문제를 생성할 내용이 없습니다.");
+        }
+        if (input.text().length() > MAX_INPUT_TEXT_CHARS) {
+            throw new InvalidRequestException(String.format(
+                    "노트 내용이 너무 깁니다(%,d자, 최대 %,d자). 노트 수를 줄이거나 블록 범위를 선택해 주세요.",
+                    input.text().length(), MAX_INPUT_TEXT_CHARS));
         }
 
         GenerationContext context = new GenerationContext(clock.instant(), student.getStudId(), blockScopes);

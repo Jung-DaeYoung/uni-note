@@ -441,6 +441,22 @@ class QuizServiceTest {
     }
 
     @Test
+    void generateQuizRejectsTooLongInputTextWithoutCallingAi() {
+        Note note = ownedNote(10L);
+        when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));
+        when(quizAiGenerationService.prepareInput(any(), any(), any()))
+                .thenReturn(new QuizGenerationInput("가".repeat(QuizService.MAX_INPUT_TEXT_CHARS + 1), List.of(), Map.of()));
+
+        QuizRequest request = requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+
+        assertThatThrownBy(() -> quizService.generateQuiz(request, owner))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessageContaining("노트 내용이 너무 깁니다");
+        verify(quizAiGenerationService, never()).requestQuiz(any(), any());
+        verify(quizSetRepository, never()).save(any());
+    }
+
+    @Test
     void generateQuizRegeneratesOnceWhenFirstResponseFailsValidation() {
         Note note = ownedNote(10L);
         when(noteRepository.findAllById(List.of(10L))).thenReturn(List.of(note));

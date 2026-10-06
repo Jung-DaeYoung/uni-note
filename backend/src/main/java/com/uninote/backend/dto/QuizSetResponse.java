@@ -14,4 +14,5 @@ public class QuizSetResponse {
     private String courseName;
     private QuizDifficulty difficulty;
     private LocalDateTime createdAt;
+    private boolean shared; // CBT 시험 공유게시판에 올렸는지
 }

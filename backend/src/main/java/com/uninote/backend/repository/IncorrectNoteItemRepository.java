@@ -9,4 +9,7 @@ public interface IncorrectNoteItemRepository extends JpaRepository<IncorrectNote
 
     // 퀴즈 삭제 시 해당 퀴즈의 문제를 참조하는 오답노트 항목을 먼저 지워 FK 제약 위반을 막는다.
     void deleteByQuestion_QuizSet_QuizSetId(Long quizSetId);
+
+    // 내 오답노트에 담긴 공유 문제는 글이 삭제된 뒤에도 재풀이할 수 있게 한다.
+    boolean existsByGroup_Student_StudIdAndQuestion_QuestionId(Long studId, Long questionId);
 }

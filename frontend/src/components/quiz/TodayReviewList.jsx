@@ -70,13 +70,16 @@ const TodayReviewList = ({
                 </p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  onClick={() => onViewSource(item)}
-                  className="p-2 rounded-md text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-                  title="원문 보기"
-                >
-                  <ExternalLink size={14} />
-                </button>
+                {/* 공유게시판 문제처럼 출처가 없는 문제는 원문 보기를 숨긴다(CBTPlayer와 동일). */}
+                {item.question.sourceBlockId && (
+                  <button
+                    onClick={() => onViewSource(item)}
+                    className="p-2 rounded-md text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                    title="원문 보기"
+                  >
+                    <ExternalLink size={14} />
+                  </button>
+                )}
                 <button
                   onClick={() => onPracticeOne(item)}
                   className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold bg-slate-900 dark:bg-slate-700 text-white hover:bg-blue-600 dark:hover:bg-blue-600 transition-colors"

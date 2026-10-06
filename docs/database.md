@@ -30,6 +30,46 @@ Entity는 JPA로 관리되며 기본 키는 자동 증가 ID다. 실제 테이�
 | `QuizAttempt` / `quiz_attempts` | `attemptId` PK, `score`, `status`, `startTime`, `endTime` | `QuizSet` N:1, `Student` N:1, `UserAnswer` 1:N |
 | `UserAnswer` / `user_answers` | `userAnswerId` PK, `submittedAnswer`, `isCorrect` | `QuizAttempt` N:1, `Question` N:1 |
 
+## CBT 시험 공유게시판
+
+| Entity / 테이블 | 주요 필드 | 관계 |
+|---|---|---|
+| `SharedQuiz` / `shared_quizzes` | `sharedQuizId` PK, `sourceQuizSetId`(원본 ID, FK 아님, unique), `likeCount`, `viewCount`, 생성 시각 | `QuizSet`(스냅샷) 1:1 unique, `Student`(작성자) N:1, `Course` N:1, `SharedQuizLike` 1:N |
+| `SharedQuizLike` / `shared_quiz_likes` | `id` PK | `SharedQuiz` N:1, `Student` N:1; 글·학생 unique |
+
+공유 시 원본 `QuizSet`·`Question`을 복사한 스냅샷을 저장한다. 스냅샷 `QuizSet.student`는 null(소유자 없음)이고 `Question`의 출처 필드는 비운다. 글을 삭제해도 스냅샷은 남아 다른 학생의 풀이 기록·오답노트가 계속 참조한다.
+
+운영(`ddl-auto: validate`) 배포 전 실행할 DDL:
+
+```sql
+CREATE TABLE shared_quizzes (
+    shared_quiz_id BIGINT NOT NULL AUTO_INCREMENT,
+    created_at DATETIME(6),
+    like_count INTEGER NOT NULL,
+    source_quiz_set_id BIGINT NOT NULL,
+    view_count INTEGER NOT NULL,
+    course_id BIGINT NOT NULL,
+    quiz_set_id BIGINT NOT NULL,
+    stud_id BIGINT NOT NULL,
+    PRIMARY KEY (shared_quiz_id),
+    UNIQUE (source_quiz_set_id),
+    UNIQUE (quiz_set_id),
+    FOREIGN KEY (course_id) REFERENCES courses (course_id),
+    FOREIGN KEY (quiz_set_id) REFERENCES quiz_sets (quiz_set_id),
+    FOREIGN KEY (stud_id) REFERENCES students (stud_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE shared_quiz_likes (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    shared_quiz_id BIGINT NOT NULL,
+    stud_id BIGINT NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE (shared_quiz_id, stud_id),
+    FOREIGN KEY (shared_quiz_id) REFERENCES shared_quizzes (shared_quiz_id),
+    FOREIGN KEY (stud_id) REFERENCES students (stud_id)
+) ENGINE=InnoDB;
+```
+
 ## 오답노트
 
 | Entity / 테이블 | 주요 필드 | 관계 |

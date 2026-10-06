@@ -72,6 +72,7 @@ public class QuizService {
     private final QuizQualityValidator quizQualityValidator;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
+    private final SharedQuizService sharedQuizService;
 
     // AI 호출·검증은 트랜잭션 밖에서 하고(재생성 시 DB 트랜잭션을 오래 잡지 않도록), 검증을 통과한
     // 결과만 저장 트랜잭션으로 묶는다. 같은 클래스 내부 호출은 @Transactional 프록시를 타지 않으므로
@@ -379,7 +380,10 @@ public class QuizService {
 
     @Transactional(readOnly = true)
     public List<QuizSetResponse> getMyQuizzes(Student student) {
-        return quizSetRepository.findByStudent_StudId(student.getStudId()).stream()
+        List<QuizSet> quizSets = quizSetRepository.findByStudent_StudId(student.getStudId());
+        Set<Long> sharedIds = sharedQuizService.findSharedSourceQuizSetIds(
+            quizSets.stream().map(QuizSet::getQuizSetId).collect(Collectors.toList()));
+        return quizSets.stream()
             .map(qs -> QuizSetResponse.builder()
                 .quizSetId(qs.getQuizSetId())
                 .courseId(qs.getCourse() != null ? qs.getCourse().getCourseId() : null)
@@ -387,6 +391,7 @@ public class QuizService {
                 .courseName(qs.getCourse() != null ? qs.getCourse().getCourseName() : "Unknown Course")
                 .difficulty(qs.getDifficulty())
                 .createdAt(qs.getCreatedAt())
+                .shared(sharedIds.contains(qs.getQuizSetId()))
                 .build())
             .collect(Collectors.toList());
     }
@@ -424,7 +429,10 @@ public class QuizService {
         if (!isVirtualSession) {
             quizSet = quizSetRepository.findById(requestedQuizSetId)
                 .orElseThrow(() -> new ResourceNotFoundException("퀴즈를 찾을 수 없습니다."));
-            validateOwnership(quizSet.getStudent(), student, "본인 퀴즈만 풀이할 수 있습니다.");
+            // 공유게시판의 스냅샷(소유자 없음)은 게시 중이고 수강 중이면 풀 수 있다.
+            if (!isOwner(quizSet.getStudent(), student) && !sharedQuizService.canSolve(quizSet, student)) {
+                throw new CourseAccessException("본인 퀴즈만 풀이할 수 있습니다.");
+            }
         }
 
         // 제출된 답안을 서버가 직접 채점한다. 클라이언트가 보낸 score/isCorrect는 신뢰하지 않는다.
@@ -440,7 +448,11 @@ public class QuizService {
                 }
             } else {
                 // 가상 세션은 단일 quizSet이 없으므로 문제 단위로 소유권을 검증한다.
-                validateOwnership(question.getQuizSet().getStudent(), student, "본인 문제만 풀이할 수 있습니다.");
+                // 공유 문제는 게시 중이거나, 이미 풀었거나 오답노트에 담은 경우에도 허용한다.
+                if (!isOwner(question.getQuizSet().getStudent(), student)
+                        && !sharedQuizService.canAccessQuestion(question, student)) {
+                    throw new CourseAccessException("본인 문제만 풀이할 수 있습니다.");
+                }
             }
 
             boolean isCorrect = isAnswerCorrect(question.getType(), uar.getSubmittedAnswer(), question.getCorrectAnswer());
@@ -584,9 +596,14 @@ public class QuizService {
     }
 
     private void validateOwnership(Student owner, Student requester, String message) {
-        if (!owner.getStudId().equals(requester.getStudId())) {
+        if (!isOwner(owner, requester)) {
             throw new CourseAccessException(message);
         }
+    }
+
+    // 공유 스냅샷 QuizSet은 소유자가 없다(null). 이 경우 누구의 소유도 아니다.
+    private static boolean isOwner(Student owner, Student requester) {
+        return owner != null && owner.getStudId().equals(requester.getStudId());
     }
 
     // AI 퀴즈 생성에 사용할 노트가 전부 존재하고 요청 학생 본인 소유인지 확인한다.

@@ -66,9 +66,25 @@ const useQuizLibrary = (activeTab) => {
     setIsAttemptsModalOpen(true);
   };
 
+  // 공유하면 서버가 스냅샷을 복사해 게시판에 올린다. 원본을 지워도 게시판 글은 남는다.
+  const handleShare = async (e, quiz) => {
+    e.stopPropagation();
+    if (!window.confirm(`'${quiz.title}'을(를) CBT 시험 공유게시판에 공유할까요?\n같은 강의 수강생이 풀 수 있고, 원문 보기는 제공되지 않습니다.`)) return;
+    try {
+      await client.post('/shared-quizzes', { quizSetId: quiz.quizSetId });
+      setQuizzes(prev => prev.map(q => (q.quizSetId === quiz.quizSetId ? { ...q, shared: true } : q)));
+    } catch (err) {
+      alert(err.response?.data?.message || '공유하지 못했습니다.');
+    }
+  };
+
   const handleDelete = async (e, quizSetId) => {
     e.stopPropagation();
-    if (!window.confirm('정말 삭제하시겠습니까?')) return;
+    const shared = quizzes.find(q => q.quizSetId === quizSetId)?.shared;
+    const message = shared
+      ? '정말 삭제하시겠습니까?\n공유게시판에 올린 글은 유지됩니다. 글을 내리려면 게시판에서 삭제하세요.'
+      : '정말 삭제하시겠습니까?';
+    if (!window.confirm(message)) return;
     try {
       await client.delete(`/quiz/${quizSetId}`);
       setQuizzes(quizzes.filter(q => q.quizSetId !== quizSetId));
@@ -101,6 +117,7 @@ const useQuizLibrary = (activeTab) => {
     handleOpenAttempts,
     handleDelete,
     handleDeleteAttempt,
+    handleShare,
   };
 };
 

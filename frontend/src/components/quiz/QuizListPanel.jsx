@@ -1,7 +1,7 @@
 import React from 'react';
-import { BrainCircuit, Calendar, Search, Trash2 } from 'lucide-react';
+import { BrainCircuit, Calendar, Search, Share2, Trash2 } from 'lucide-react';
 
-const QuizListPanel = ({ quizzes, onRetake, onOpenAttempts, onDelete }) => {
+const QuizListPanel = ({ quizzes, onRetake, onOpenAttempts, onDelete, onShare }) => {
   if (quizzes.length === 0) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -26,6 +26,17 @@ const QuizListPanel = ({ quizzes, onRetake, onOpenAttempts, onDelete }) => {
             <h3 className="font-semibold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{quiz.title}</h3>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-md">{quiz.difficulty}</span>
+              {quiz.shared ? (
+                <span className="text-[11px] font-semibold px-2 py-0.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-md">공유됨</span>
+              ) : (
+                <button
+                  onClick={(e) => onShare(e, quiz)}
+                  title="CBT 시험 공유게시판에 공유"
+                  className="text-slate-300 dark:text-slate-600 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                >
+                  <Share2 size={16} />
+                </button>
+              )}
               <button onClick={(e) => onDelete(e, quiz.quizSetId)} className="text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
                 <Trash2 size={16} />
               </button>

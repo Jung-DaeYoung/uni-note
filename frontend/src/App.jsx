@@ -8,6 +8,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const CourseDetailPage = lazy(() => import('./pages/CourseDetailPage'));
 const QuizLibraryPage = lazy(() => import('./pages/QuizLibraryPage'));
 const IncorrectNotesPage = lazy(() => import('./pages/IncorrectNotesPage'));
+const SharedQuizBoardPage = lazy(() => import('./pages/SharedQuizBoardPage'));
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -24,6 +25,7 @@ function App() {
             <Route path="/course/:courseId" element={<CourseDetailPage />} />
             <Route path="/course/:courseId/note/:noteId" element={<CourseDetailPage />} />
             <Route path="/quizzes" element={<QuizLibraryPage />} />
+            <Route path="/shared-quizzes" element={<SharedQuizBoardPage />} />
             <Route path="/incorrect-notes" element={<IncorrectNotesPage />} />
             <Route path="/incorrect-notes/groups" element={<IncorrectNotesPage />} />
           </Route>

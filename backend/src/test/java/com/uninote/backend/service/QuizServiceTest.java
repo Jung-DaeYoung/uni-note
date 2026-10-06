@@ -63,10 +63,12 @@ class QuizServiceTest {
     private final TransactionTemplate transactionTemplate = new TransactionTemplate(mock(PlatformTransactionManager.class));
     private final Clock clock = mock(Clock.class);
 
+    private final SharedQuizService sharedQuizService = mock(SharedQuizService.class);
+
     private final QuizService quizService = new QuizService(
             noteRepository, quizSetRepository, quizAttemptRepository, userAnswerRepository,
             questionRepository, objectMapper, quizAiGenerationService, questionResponseMapper,
-            incorrectNoteItemRepository, quizQualityValidator, transactionTemplate, clock);
+            incorrectNoteItemRepository, quizQualityValidator, transactionTemplate, clock, sharedQuizService);
 
     // note 10L의 블록 b1에서 추출된 입력 (출처 허용 집합: 10L -> {b1})
     private final QuizGenerationInput textInput =
@@ -152,6 +154,76 @@ class QuizServiceTest {
         var response = quizService.getQuizDetail(50L, owner);
 
         assertThat(response.getQuizSetId()).isEqualTo(50L);
+    }
+
+    @Test
+    void ownerlessSharedSnapshotCannotBeOpenedOrDeletedThroughQuizApi() {
+        QuizSet snapshot = new QuizSet();
+        snapshot.setQuizSetId(80L);
+        snapshot.setQuestions(Collections.emptyList());
+        when(quizSetRepository.findById(80L)).thenReturn(Optional.of(snapshot));
+
+        assertThatThrownBy(() -> quizService.getQuizDetail(80L, owner))
+                .isInstanceOf(CourseAccessException.class);
+        assertThatThrownBy(() -> quizService.deleteQuiz(80L, owner))
+                .isInstanceOf(CourseAccessException.class);
+        verify(quizSetRepository, never()).delete(any());
+    }
+
+    @Test
+    void saveAttemptAllowsPostedSharedSnapshot() {
+        QuizSet snapshot = new QuizSet();
+        snapshot.setQuizSetId(80L);
+        Question copied = new Question();
+        copied.setQuestionId(8L);
+        copied.setQuizSet(snapshot);
+        copied.setType(QuestionType.OX);
+        copied.setCorrectAnswer("O");
+        when(quizSetRepository.findById(80L)).thenReturn(Optional.of(snapshot));
+        when(sharedQuizService.canSolve(snapshot, other)).thenReturn(true);
+        when(questionRepository.findById(8L)).thenReturn(Optional.of(copied));
+
+        QuizAttemptRequest.UserAnswerRequest answer = new QuizAttemptRequest.UserAnswerRequest();
+        answer.setQuestionId(8L);
+        answer.setSubmittedAnswer("O");
+        QuizAttemptRequest request = new QuizAttemptRequest();
+        request.setQuizSetId(80L);
+        request.setUserAnswers(List.of(answer));
+
+        quizService.saveAttempt(request, other);
+
+        verify(quizAttemptRepository).save(any());
+    }
+
+    @Test
+    void saveAttemptAllowsVirtualSessionWithAccessibleSharedQuestion() {
+        Question copied = new Question();
+        copied.setQuestionId(8L);
+        copied.setQuizSet(new QuizSet()); // 소유자 없는 스냅샷
+        copied.setType(QuestionType.OX);
+        copied.setCorrectAnswer("O");
+        when(questionRepository.findById(8L)).thenReturn(Optional.of(copied));
+        when(sharedQuizService.canAccessQuestion(copied, other)).thenReturn(true);
+
+        QuizAttemptRequest.UserAnswerRequest answer = new QuizAttemptRequest.UserAnswerRequest();
+        answer.setQuestionId(8L);
+        answer.setSubmittedAnswer("O");
+        QuizAttemptRequest request = new QuizAttemptRequest();
+        request.setQuizSetId(-1L);
+        request.setUserAnswers(List.of(answer));
+
+        quizService.saveAttempt(request, other);
+
+        verify(quizAttemptRepository).save(any());
+    }
+
+    @Test
+    void getMyQuizzesMarksSharedOriginals() {
+        when(quizSetRepository.findByStudent_StudId(1L)).thenReturn(List.of(quizSet));
+        when(sharedQuizService.findSharedSourceQuizSetIds(List.of(50L))).thenReturn(Set.of(50L));
+
+        assertThat(quizService.getMyQuizzes(owner)).singleElement()
+                .satisfies(r -> assertThat(r.isShared()).isTrue());
     }
 
     @Test

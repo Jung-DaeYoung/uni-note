@@ -28,6 +28,7 @@ public class IncorrectNoteService {
     private final QuestionRepository questionRepository;
     private final UserAnswerRepository userAnswerRepository;
     private final QuestionResponseMapper questionResponseMapper;
+    private final SharedQuizService sharedQuizService;
 
     @Transactional(readOnly = true)
     public List<IncorrectNoteGroupResponse> getMyGroups(Student student) {
@@ -296,11 +297,13 @@ public class IncorrectNoteService {
     }
 
     // question이 요청 학생 본인의 퀴즈에 속하는지 확인한다. 이 검증이 없으면 다른 학생의
-    // 문제 ID를 알아내 자신의 오답노트 그룹에 추가할 수 있었다.
+    // 문제 ID를 알아내 자신의 오답노트 그룹에 추가할 수 있었다. 공유게시판 문제는
+    // SharedQuizService의 접근 규칙(게시 중·이미 풂·이미 담음)을 통과하면 허용한다.
     private void validateQuestionOwnership(Question question, Student student) {
         QuizSet quizSet = question.getQuizSet();
-        if (quizSet == null || quizSet.getStudent() == null
-                || !quizSet.getStudent().getStudId().equals(student.getStudId())) {
+        boolean owner = quizSet != null && quizSet.getStudent() != null
+                && quizSet.getStudent().getStudId().equals(student.getStudId());
+        if (!owner && !sharedQuizService.canAccessQuestion(question, student)) {
             throw new CourseAccessException("본인 퀴즈의 문제만 오답노트에 추가할 수 있습니다.");
         }
     }

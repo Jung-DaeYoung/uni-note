@@ -40,8 +40,11 @@ class IncorrectNoteServiceTest {
     private final UserAnswerRepository userAnswerRepository = mock(UserAnswerRepository.class);
     private final QuestionResponseMapper questionResponseMapper = mock(QuestionResponseMapper.class);
 
+    private final SharedQuizService sharedQuizService = mock(SharedQuizService.class);
+
     private final IncorrectNoteService incorrectNoteService = new IncorrectNoteService(
-            groupRepository, itemRepository, questionRepository, userAnswerRepository, questionResponseMapper);
+            groupRepository, itemRepository, questionRepository, userAnswerRepository, questionResponseMapper,
+            sharedQuizService);
 
     private Student owner;
     private Student other;
@@ -159,6 +162,26 @@ class IncorrectNoteServiceTest {
                 .isInstanceOf(CourseAccessException.class);
 
         verify(itemRepository, never()).save(any());
+    }
+
+    @Test
+    void accessibleSharedQuestionCanBeAddedToOwnGroup() {
+        QuizSet snapshot = new QuizSet(); // 공유 스냅샷은 소유자가 없다
+        snapshot.setQuizSetId(60L);
+        question.setQuizSet(snapshot);
+
+        when(groupRepository.findById(30L)).thenReturn(Optional.of(group));
+        when(questionRepository.findById(40L)).thenReturn(Optional.of(question));
+        when(sharedQuizService.canAccessQuestion(question, owner)).thenReturn(true);
+        when(itemRepository.findByGroup_IdAndQuestion_QuestionId(30L, 40L)).thenReturn(Optional.empty());
+
+        AddToIncorrectRequest request = new AddToIncorrectRequest();
+        request.setGroupId(30L);
+        request.setQuestionId(40L);
+
+        incorrectNoteService.addToGroup(request, owner);
+
+        verify(itemRepository).save(any());
     }
 
     @Test

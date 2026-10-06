@@ -128,7 +128,8 @@ public class PostService {
                 && author.getStudentNum().trim().equals(studentNum.trim());
     }
 
-    private static String anonymousName(Student author) {
+    // 공유게시판(SharedQuizService)도 같은 익명 표기 규칙을 쓴다.
+    static String anonymousName(Student author) {
         return author == null ? "익명" : "익명 " + (author.getStudId() % 100);
     }
 

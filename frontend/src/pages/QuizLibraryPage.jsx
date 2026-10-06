@@ -23,6 +23,7 @@ const QuizLibraryPage = () => {
     handleOpenAttempts,
     handleDelete,
     handleDeleteAttempt,
+    handleShare,
   } = useQuizLibrary(activeTab);
 
   return (
@@ -84,6 +85,7 @@ const QuizLibraryPage = () => {
             onRetake={handleRetake}
             onOpenAttempts={handleOpenAttempts}
             onDelete={handleDelete}
+            onShare={handleShare}
           />
         ) : (
           <QuizHistoryPanel

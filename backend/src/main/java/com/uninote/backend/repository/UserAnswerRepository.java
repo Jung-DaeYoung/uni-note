@@ -16,6 +16,9 @@ public interface UserAnswerRepository extends JpaRepository<UserAnswer, Long> {
     // 원본 문제를 참조하므로 QuizSet.attempts cascade만으로는 정리되지 않는다.
     void deleteByQuestion_QuizSet_QuizSetId(Long quizSetId);
 
+    // 공유 퀴즈 글이 삭제된 뒤에도, 이미 풀어 본 문제는 오늘의 복습·재풀이를 계속 저장할 수 있게 한다.
+    boolean existsByQuizAttempt_Student_StudIdAndQuestion_QuestionId(Long studId, Long questionId);
+
     // 학생 한 명의 모든 풀이 답안을 문제 단위로 집계한다. quizAttempt.student로 스코핑하므로
     // 가상 세션(quizSet=null, 오답노트 재풀이/오늘의 복습) 기록도 항상 포함된다.
     // qs.course는 없을 수 있으므로 LEFT JOIN으로 명시한다(암묵적 경로 접근은 inner join이 되어

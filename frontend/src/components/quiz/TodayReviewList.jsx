@@ -1,6 +1,17 @@
 import React from 'react';
 import { CalendarCheck, ExternalLink, PlayCircle } from 'lucide-react';
 
+// 간격 반복 일정 표시. nextReviewAt(YYYY-MM-DD)이 오늘보다 이전이면 밀린 일수를 보여 준다.
+const scheduleLabel = (item) => {
+  if (!item.nextReviewAt) return null;
+  const [y, m, d] = item.nextReviewAt.split('-').map(Number);
+  const today = new Date();
+  const overdueDays = Math.round(
+    (new Date(today.getFullYear(), today.getMonth(), today.getDate()) - new Date(y, m - 1, d)) / 86400000
+  );
+  return overdueDays > 0 ? `${overdueDays}일 밀림` : '오늘 복습';
+};
+
 const TodayReviewList = ({
   items,
   isLoading,
@@ -39,7 +50,7 @@ const TodayReviewList = ({
       ) : items.length === 0 ? (
         <div className="text-center py-10">
           <CalendarCheck size={32} className="mx-auto mb-3 text-slate-300 dark:text-slate-700" />
-          <p className="font-medium text-slate-400 dark:text-slate-500 text-sm">복습할 문제가 없습니다.</p>
+          <p className="font-medium text-slate-400 dark:text-slate-500 text-sm">오늘 복습할 문제를 모두 끝냈어요.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -64,6 +75,12 @@ const TodayReviewList = ({
                   >
                     {item.incorrectCount >= 2 ? `반복 오답 ${item.incorrectCount}회` : `오답 ${item.incorrectCount}회`}
                   </span>
+                  {scheduleLabel(item) && (
+                    <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 shrink-0">
+                      {scheduleLabel(item)}
+                      {item.streak > 0 && ` · 연속 정답 ${item.streak}회`}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
                   {item.question.questionText}

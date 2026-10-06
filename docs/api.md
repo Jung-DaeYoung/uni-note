@@ -73,7 +73,7 @@
 | GET | `/quiz/incorrect/statistics/courses` | 예 | 없음 | `CourseIncorrectStatResponse[]` |
 | GET | `/quiz/incorrect/statistics/types` | 예 | 없음 | `QuestionTypeIncorrectStatResponse[]` |
 | GET | `/quiz/incorrect/statistics/blocks` | 예 | 없음 | `SourceBlockStatResponse[]` (출처 블록별 풀이 통계, 취약 블록 먼저) |
-| GET | `/quiz/incorrect/review-today` | 예 | query `limit`(기본 10), `courseId`(선택) | `TodayReviewQuestionResponse[]` |
+| GET | `/quiz/incorrect/review-today` | 예 | query `limit`(기본 10), `courseId`(선택) | `TodayReviewQuestionResponse[]` (간격 반복: 한 번이라도 틀린 문제 중 `nextReviewAt`이 오늘 이전인 문제. 마지막 오답 이후 연속 정답 `streak`에 따라 1·3·7·14·30일 간격, 5회 연속 정답이면 제외) |
 
 ## 파일
 

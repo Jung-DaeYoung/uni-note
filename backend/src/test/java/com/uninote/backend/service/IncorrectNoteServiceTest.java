@@ -22,7 +22,10 @@ import com.uninote.backend.repository.UserAnswerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -41,10 +44,13 @@ class IncorrectNoteServiceTest {
     private final QuestionResponseMapper questionResponseMapper = mock(QuestionResponseMapper.class);
 
     private final SharedQuizService sharedQuizService = mock(SharedQuizService.class);
+    // 간격 반복 일정 계산의 "오늘"을 2024-01-12로 고정한다.
+    private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
+    private final Clock clock = Clock.fixed(LocalDate.of(2024, 1, 12).atTime(12, 0).atZone(ZONE).toInstant(), ZONE);
 
     private final IncorrectNoteService incorrectNoteService = new IncorrectNoteService(
             groupRepository, itemRepository, questionRepository, userAnswerRepository, questionResponseMapper,
-            sharedQuizService);
+            sharedQuizService, clock);
 
     private Student owner;
     private Student other;
@@ -245,6 +251,9 @@ class IncorrectNoteServiceTest {
                 rawStat(41L, null, null, QuestionType.SHORT_ANSWER, 2, 0, 2, recent, recent)
         ));
         when(questionRepository.findAllById(any())).thenReturn(List.of(question, questionWithId(41L)));
+        // q40은 오답 1회 뒤 연속 3회 정답 → 다음 복습은 마지막 풀이 + 14일이라 아직 아니다. q41은 연속 오답 → 복습 대상.
+        when(userAnswerRepository.findAnswerHistoryForStudent(owner.getStudId())).thenReturn(history(
+                40L, false, 40L, true, 40L, true, 40L, true, 41L, false, 41L, false));
 
         IncorrectSummaryResponse summary = incorrectNoteService.getSummary(owner);
 
@@ -288,9 +297,9 @@ class IncorrectNoteServiceTest {
     @Test
     void getTodayReviewAppliesLimit() {
         when(userAnswerRepository.aggregateByQuestionForStudent(owner.getStudId())).thenReturn(List.of(
-                rawStat(1L, null, null, QuestionType.SHORT_ANSWER, 2, 0, 2, LocalDateTime.now(), LocalDateTime.now()),
-                rawStat(2L, null, null, QuestionType.SHORT_ANSWER, 2, 0, 2, LocalDateTime.now(), LocalDateTime.now()),
-                rawStat(3L, null, null, QuestionType.SHORT_ANSWER, 2, 0, 2, LocalDateTime.now(), LocalDateTime.now())
+                rawStat(1L, null, null, QuestionType.SHORT_ANSWER, 2, 0, 2, YESTERDAY, YESTERDAY),
+                rawStat(2L, null, null, QuestionType.SHORT_ANSWER, 2, 0, 2, YESTERDAY, YESTERDAY),
+                rawStat(3L, null, null, QuestionType.SHORT_ANSWER, 2, 0, 2, YESTERDAY, YESTERDAY)
         ));
         when(questionRepository.findAllById(any())).thenReturn(List.of(
                 questionWithId(1L), questionWithId(2L), questionWithId(3L)));
@@ -302,7 +311,7 @@ class IncorrectNoteServiceTest {
 
     @Test
     void getTodayReviewFiltersByCourseId() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = YESTERDAY;
         when(userAnswerRepository.aggregateByQuestionForStudent(owner.getStudId())).thenReturn(List.of(
                 rawStat(1L, 100L, "강의A", QuestionType.SHORT_ANSWER, 2, 0, 2, now, now),
                 rawStat(2L, 200L, "강의B", QuestionType.SHORT_ANSWER, 2, 0, 2, now, now)
@@ -339,6 +348,76 @@ class IncorrectNoteServiceTest {
         List<TodayReviewQuestionResponse> result = incorrectNoteService.getTodayReview(owner, 10, null);
 
         assertThat(result).isEmpty();
+    }
+
+    // 고정 시계(2024-01-12) 기준 어제 풀이. 오답 직후 간격(1일)이 지나 오늘 복습 대상이 된다.
+    private static final LocalDateTime YESTERDAY = LocalDateTime.of(2024, 1, 11, 9, 0);
+
+    // (questionId, isCorrect) 쌍을 시간순 풀이 이력으로 만든다.
+    private List<UserAnswerRepository.AnswerHistory> history(Object... pairs) {
+        List<UserAnswerRepository.AnswerHistory> list = new java.util.ArrayList<>();
+        for (int i = 0; i < pairs.length; i += 2) {
+            Long questionId = (Long) pairs[i];
+            Boolean correct = (Boolean) pairs[i + 1];
+            list.add(new UserAnswerRepository.AnswerHistory() {
+                public Long getQuestionId() { return questionId; }
+                public Boolean getIsCorrect() { return correct; }
+            });
+        }
+        return list;
+    }
+
+    private List<TodayReviewQuestionResponse> todayReviewFor(QuestionAnswerStat stat,
+                                                            List<UserAnswerRepository.AnswerHistory> answers) {
+        when(userAnswerRepository.aggregateByQuestionForStudent(owner.getStudId())).thenReturn(List.of(stat));
+        when(questionRepository.findAllById(any())).thenReturn(List.of(question));
+        when(userAnswerRepository.findAnswerHistoryForStudent(owner.getStudId())).thenReturn(answers);
+        return incorrectNoteService.getTodayReview(owner, 10, null);
+    }
+
+    @Test
+    void wrongAnswerYesterdayIsDueTodayWithOneDayInterval() {
+        List<TodayReviewQuestionResponse> result = todayReviewFor(
+                rawStat(40L, null, null, QuestionType.OX, 1, 0, 1, YESTERDAY, YESTERDAY), history(40L, false));
+
+        assertThat(result).singleElement().satisfies(r -> {
+            assertThat(r.getStreak()).isZero();
+            assertThat(r.getNextReviewAt()).isEqualTo(LocalDate.of(2024, 1, 12));
+        });
+    }
+
+    @Test
+    void questionAnsweredWrongTodayIsNotDueUntilTomorrow() {
+        LocalDateTime today = LocalDateTime.of(2024, 1, 12, 10, 0);
+
+        assertThat(todayReviewFor(rawStat(40L, null, null, QuestionType.OX, 1, 0, 1, today, today),
+                history(40L, false))).isEmpty();
+    }
+
+    @Test
+    void oneCorrectAfterWrongWaitsThreeDays() {
+        // 마지막 풀이(정답) 2024-01-10 → 다음 복습 01-13이라 01-12에는 아니다.
+        LocalDateTime twoDaysAgo = LocalDateTime.of(2024, 1, 10, 9, 0);
+        assertThat(todayReviewFor(rawStat(40L, null, null, QuestionType.OX, 2, 1, 1, twoDaysAgo, twoDaysAgo.minusDays(1)),
+                history(40L, false, 40L, true))).isEmpty();
+
+        // 마지막 풀이 2024-01-09 → 다음 복습 01-12라 오늘 대상이다.
+        LocalDateTime threeDaysAgo = LocalDateTime.of(2024, 1, 9, 9, 0);
+        assertThat(todayReviewFor(rawStat(40L, null, null, QuestionType.OX, 2, 1, 1, threeDaysAgo, threeDaysAgo.minusDays(1)),
+                history(40L, false, 40L, true))).singleElement()
+                .satisfies(r -> assertThat(r.getStreak()).isEqualTo(1));
+    }
+
+    @Test
+    void repeatIncorrectQuestionGraduatesAfterFiveConsecutiveCorrects() {
+        // 예전에는 2번 틀린 문제가 이후 계속 맞혀도 영원히 HIGH로 복습 목록에 남았다.
+        LocalDateTime longAgo = LocalDateTime.of(2023, 6, 1, 9, 0);
+        QuestionAnswerStat stat = rawStat(40L, null, null, QuestionType.OX, 7, 5, 2, longAgo, longAgo.minusDays(60));
+        List<UserAnswerRepository.AnswerHistory> answers =
+                history(40L, false, 40L, false, 40L, true, 40L, true, 40L, true, 40L, true, 40L, true);
+
+        assertThat(todayReviewFor(stat, answers)).isEmpty();
+        assertThat(incorrectNoteService.getSummary(owner).getReviewTargetCount()).isZero();
     }
 
     private Question questionFromBlock(Long id, Long noteId, String blockId) {

@@ -17,7 +17,7 @@ const IncorrectNotesPage = () => {
   const {
     incorrectGroups,
     isGroupsLoading,
-    selectedQuiz, setSelectedQuiz,
+    selectedQuiz,
     incorrectSummary,
     courseStats,
     typeStats,
@@ -29,6 +29,7 @@ const IncorrectNotesPage = () => {
     handleViewReviewSource,
     handlePracticeReviewQuestion,
     handleDeleteGroup,
+    closePractice,
   } = useIncorrectNotes(view);
 
   return (
@@ -36,7 +37,7 @@ const IncorrectNotesPage = () => {
       {selectedQuiz && (
         <CBTPlayer
           quizData={selectedQuiz}
-          onClose={() => setSelectedQuiz(null)}
+          onClose={closePractice}
           mode="solve"
           courseId={selectedQuiz.courseId}
         />

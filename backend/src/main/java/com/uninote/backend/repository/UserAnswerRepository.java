@@ -34,4 +34,15 @@ public interface UserAnswerRepository extends JpaRepository<UserAnswer, Long> {
            "WHERE ua.quizAttempt.student.studId = :studId " +
            "GROUP BY q.questionId, c.courseId, c.courseName")
     List<QuestionAnswerStat> aggregateByQuestionForStudent(@Param("studId") Long studId);
+
+    // 간격 반복 복습용. 학생의 문제별 정답 여부를 풀이 시각 순서로 가져와 "마지막 오답 이후 연속 정답 수"를 센다.
+    @Query("SELECT ua.question.questionId AS questionId, ua.isCorrect AS isCorrect " +
+           "FROM UserAnswer ua WHERE ua.quizAttempt.student.studId = :studId " +
+           "ORDER BY ua.quizAttempt.startTime, ua.userAnswerId")
+    List<AnswerHistory> findAnswerHistoryForStudent(@Param("studId") Long studId);
+
+    interface AnswerHistory {
+        Long getQuestionId();
+        Boolean getIsCorrect();
+    }
 }

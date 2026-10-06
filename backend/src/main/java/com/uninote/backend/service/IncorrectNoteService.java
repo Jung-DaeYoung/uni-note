@@ -12,7 +12,10 @@ import lombok.experimental.Delegate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +32,12 @@ public class IncorrectNoteService {
     private final UserAnswerRepository userAnswerRepository;
     private final QuestionResponseMapper questionResponseMapper;
     private final SharedQuizService sharedQuizService;
+    private final Clock clock;
+
+    // 간격 반복 복습 간격(일). 마지막 오답 이후 연속 정답 수가 n이면 마지막 풀이일 + n번째 간격에 다시 낸다.
+    // 연속 정답이 간격 수만큼 쌓이면 졸업해 오늘의 복습에서 빠진다.
+    // ponytail: 고정 간격표다. 개인별 난이도 보정(SM-2 등)이 필요해지면 그때 바꾼다.
+    private static final int[] REVIEW_INTERVAL_DAYS = {1, 3, 7, 14, 30};
 
     @Transactional(readOnly = true)
     public List<IncorrectNoteGroupResponse> getMyGroups(Student student) {
@@ -102,7 +111,7 @@ public class IncorrectNoteService {
         long totalAttemptCount = stats.stream().mapToLong(QuestionReviewStat::getAttemptCount).sum();
         long correctCount = stats.stream().mapToLong(QuestionReviewStat::getCorrectCount).sum();
         long incorrectCount = stats.stream().mapToLong(QuestionReviewStat::getIncorrectCount).sum();
-        long reviewTargetCount = stats.stream().filter(s -> s.getReviewPriority() != ReviewPriority.LOW).count();
+        long reviewTargetCount = dueReviews(stats, student).size();
         long repeatIncorrectCount = stats.stream().filter(s -> s.getIncorrectCount() >= 2).count();
 
         return IncorrectSummaryResponse.builder()
@@ -119,6 +128,7 @@ public class IncorrectNoteService {
     @Transactional(readOnly = true)
     public List<CourseIncorrectStatResponse> getCourseStatistics(Student student) {
         List<QuestionReviewStat> stats = buildQuestionReviewStats(student);
+        Map<Long, ReviewSchedule> due = dueReviews(stats, student);
 
         return stats.stream()
             .filter(s -> s.getCourseId() != null)
@@ -129,7 +139,7 @@ public class IncorrectNoteService {
                 long correct = group.stream().mapToLong(QuestionReviewStat::getCorrectCount).sum();
                 long incorrect = group.stream().mapToLong(QuestionReviewStat::getIncorrectCount).sum();
                 long attempts = correct + incorrect;
-                long reviewTargetCount = group.stream().filter(s -> s.getReviewPriority() != ReviewPriority.LOW).count();
+                long reviewTargetCount = group.stream().filter(s -> due.containsKey(s.getQuestionId())).count();
                 return CourseIncorrectStatResponse.builder()
                     .courseId(first.getCourseId())
                     .courseName(first.getCourseName())
@@ -209,8 +219,12 @@ public class IncorrectNoteService {
             throw new InvalidRequestException("limit은 1 이상 100 이하여야 합니다.");
         }
 
-        return buildQuestionReviewStats(student).stream()
-            .filter(s -> s.getReviewPriority() != ReviewPriority.LOW)
+        List<QuestionReviewStat> stats = buildQuestionReviewStats(student);
+        Map<Long, ReviewSchedule> due = dueReviews(stats, student);
+
+        // 정렬은 기존 복습 우선순위(PRIORITY_ORDER)를 그대로 쓰고, 대상만 "복습일이 된 문제"로 거른다.
+        return stats.stream()
+            .filter(s -> due.containsKey(s.getQuestionId()))
             .filter(s -> courseId == null || courseId.equals(s.getCourseId()))
             .limit(limit)
             .map(s -> TodayReviewQuestionResponse.builder()
@@ -221,9 +235,45 @@ public class IncorrectNoteService {
                 .incorrectCount(s.getIncorrectCount())
                 .lastIncorrectAt(s.getLastIncorrectAt())
                 .reviewPriority(s.getReviewPriority())
+                .nextReviewAt(due.get(s.getQuestionId()).nextReviewAt())
+                .streak(due.get(s.getQuestionId()).streak())
                 .build())
             .collect(Collectors.toList());
     }
+
+    // 오늘 복습할 문제(questionId → 일정). 한 번이라도 틀렸고, 졸업하지 않았고, 복습일이 오늘 이전인 문제만 담는다.
+    private Map<Long, ReviewSchedule> dueReviews(List<QuestionReviewStat> stats, Student student) {
+        if (stats.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Integer> streaks = correctStreaks(student);
+        LocalDate today = LocalDate.now(clock);
+        Map<Long, ReviewSchedule> due = new HashMap<>();
+        for (QuestionReviewStat s : stats) {
+            int streak = streaks.getOrDefault(s.getQuestionId(), 0);
+            if (s.getIncorrectCount() == 0 || streak >= REVIEW_INTERVAL_DAYS.length) {
+                continue; // 틀린 적 없음 또는 졸업
+            }
+            LocalDate next = s.getLastAttemptedAt() == null ? today
+                : s.getLastAttemptedAt().toLocalDate().plusDays(REVIEW_INTERVAL_DAYS[streak]);
+            if (!next.isAfter(today)) {
+                due.put(s.getQuestionId(), new ReviewSchedule(next, streak));
+            }
+        }
+        return due;
+    }
+
+    // 문제별 "마지막 오답 이후 연속 정답 수". 시간순 이력에서 정답이면 +1, 오답이면 0으로 되돌린다.
+    private Map<Long, Integer> correctStreaks(Student student) {
+        Map<Long, Integer> streaks = new HashMap<>();
+        for (UserAnswerRepository.AnswerHistory answer : userAnswerRepository.findAnswerHistoryForStudent(student.getStudId())) {
+            boolean correct = Boolean.TRUE.equals(answer.getIsCorrect());
+            streaks.merge(answer.getQuestionId(), correct ? 1 : 0, (prev, ignored) -> correct ? prev + 1 : 0);
+        }
+        return streaks;
+    }
+
+    private record ReviewSchedule(LocalDate nextReviewAt, int streak) {}
 
     // 문제별 통계(전체/강의별/유형별/오늘의 복습)가 모두 이 한 번의 집계 쿼리 결과를 공유하도록
     // 하여, 서로 다른 엔드포인트의 숫자가 어긋나지 않게 한다.

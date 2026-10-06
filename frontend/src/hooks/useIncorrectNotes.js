@@ -131,6 +131,12 @@ const useIncorrectNotes = (view) => {
     }
   };
 
+  // 재풀이를 마치면 풀이 이력이 바뀌므로 오늘의 복습(간격 반복 일정)과 통계를 다시 불러온다.
+  const closePractice = () => {
+    setSelectedQuiz(null);
+    if (view === 'overview') fetchIncorrectOverview();
+  };
+
   return {
     incorrectGroups,
     isGroupsLoading,
@@ -146,6 +152,7 @@ const useIncorrectNotes = (view) => {
     handleViewReviewSource,
     handlePracticeReviewQuestion,
     handleDeleteGroup,
+    closePractice,
   };
 };
 

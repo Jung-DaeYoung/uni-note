@@ -58,6 +58,10 @@
 | GET | `/shared-quizzes/{sharedQuizId}` | 예 | 없음 | `QuizSetDetailResponse` (공유 스냅샷, 조회수 +1) |
 | DELETE | `/shared-quizzes/{sharedQuizId}` | 예 | 없음 | 빈 응답(204). 작성자만 가능 |
 | POST | `/shared-quizzes/{sharedQuizId}/like` | 예 | 없음 | `{ liked, likeCount }` (추천 토글) |
+| GET | `/shared-quizzes/{sharedQuizId}/comments` | 예 | 없음 | `{ [questionId]: CommentResponse[] }` (문제별 댓글, 오래된 순, 수강생만) |
+| POST | `/shared-quizzes/{sharedQuizId}/questions/{questionId}/comments` | 예 | `{ content }` (최대 255자) | `CommentResponse`. 이 글의 문제가 아니면 400 |
+| PUT | `/shared-quizzes/comments/{commentId}` | 예 | `{ content }` | `CommentResponse`. 작성자만 |
+| DELETE | `/shared-quizzes/comments/{commentId}` | 예 | 없음 | 빈 응답(204). 작성자만 |
 
 `SharedQuizResponse`는 `sharedQuizId`, `quizSetId`(스냅샷), `courseId`, `courseName`, `title`, `difficulty`, `questionCount`, `authorName`(익명), `isAuthor`, `likeCount`, `viewCount`, `liked`, `createdAt`을 가진다. 공유 시 원본은 출처(`sourceNoteId`/`sourceBlockId`) 없이 소유자 없는 스냅샷으로 복사되므로 원문 보기가 제공되지 않고, 원본 삭제나 글 삭제가 다른 학생의 풀이 기록·오답노트에 영향을 주지 않는다.
 

@@ -46,7 +46,7 @@ const useSharedQuizzes = () => {
   const openQuiz = async (post) => {
     try {
       const res = await client.get(`/shared-quizzes/${post.sharedQuizId}`);
-      setSelectedQuiz({ ...res.data, courseId: post.courseId });
+      setSelectedQuiz({ ...res.data, courseId: post.courseId, sharedQuizId: post.sharedQuizId });
       setPosts(prev => prev.map(p => (
         p.sharedQuizId === post.sharedQuizId ? { ...p, viewCount: p.viewCount + 1 } : p
       )));

@@ -1,6 +1,7 @@
 package com.uninote.backend.service;
 
 import com.uninote.backend.domain.*;
+import com.uninote.backend.dto.CommentResponse;
 import com.uninote.backend.dto.SharedQuizLikeResponse;
 import com.uninote.backend.dto.SharedQuizResponse;
 import com.uninote.backend.exception.CourseAccessException;
@@ -33,10 +34,12 @@ class SharedQuizServiceTest {
     private final UserAnswerRepository userAnswerRepository = mock(UserAnswerRepository.class);
     private final IncorrectNoteItemRepository incorrectNoteItemRepository = mock(IncorrectNoteItemRepository.class);
     private final QuestionResponseMapper questionResponseMapper = mock(QuestionResponseMapper.class);
+    private final SharedQuizCommentRepository sharedQuizCommentRepository = mock(SharedQuizCommentRepository.class);
 
     private final SharedQuizService sharedQuizService = new SharedQuizService(
             sharedQuizRepository, sharedQuizLikeRepository, quizSetRepository, questionRepository,
-            enrollmentRepository, userAnswerRepository, incorrectNoteItemRepository, questionResponseMapper);
+            enrollmentRepository, userAnswerRepository, incorrectNoteItemRepository, questionResponseMapper,
+            sharedQuizCommentRepository);
 
     private Student author;
     private Student reader;
@@ -231,5 +234,90 @@ class SharedQuizServiceTest {
 
         when(enrollmentRepository.existsByStudentAndCourse_CourseId(reader, 10L)).thenReturn(false);
         assertThat(sharedQuizService.canSolve(snapshot, reader)).isFalse();
+    }
+
+    // ---- 문제별 댓글 ----
+
+    private Question snapshotQuestion(long id) {
+        Question q = new Question();
+        q.setQuestionId(id);
+        q.setQuizSet(snapshot);
+        snapshot.getQuestions().add(q);
+        return q;
+    }
+
+    private SharedQuizComment commentBy(Student author, Question q, long id, String content) {
+        SharedQuizComment c = new SharedQuizComment();
+        c.setCommentId(id);
+        c.setSharedQuiz(post);
+        c.setQuestion(q);
+        c.setStudent(author);
+        c.setContent(content);
+        return c;
+    }
+
+    @Test
+    void enrolledStudentCanCommentOnQuestionOfThePost() {
+        Question q = snapshotQuestion(61L);
+        when(sharedQuizCommentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        CommentResponse res = sharedQuizService.addComment(70L, 61L, "왜 답이 A인가요?", reader);
+
+        ArgumentCaptor<SharedQuizComment> captor = ArgumentCaptor.forClass(SharedQuizComment.class);
+        verify(sharedQuizCommentRepository).save(captor.capture());
+        assertThat(captor.getValue().getQuestion()).isSameAs(q);
+        assertThat(captor.getValue().getSharedQuiz()).isSameAs(post);
+        assertThat(res.getContent()).isEqualTo("왜 답이 A인가요?");
+        assertThat(res.isAuthor()).isTrue();
+        assertThat(res.getAuthorName()).isEqualTo("익명 2");
+    }
+
+    @Test
+    void commentOnQuestionOutsideThePostIsRejected() {
+        snapshotQuestion(61L);
+
+        assertThatThrownBy(() -> sharedQuizService.addComment(70L, 999L, "내용", reader))
+                .isInstanceOf(InvalidRequestException.class);
+        verify(sharedQuizCommentRepository, never()).save(any());
+    }
+
+    @Test
+    void nonEnrolledStudentCannotReadOrWriteComments() {
+        snapshotQuestion(61L);
+        when(enrollmentRepository.existsByStudentAndCourse_CourseId(reader, 10L)).thenReturn(false);
+
+        assertThatThrownBy(() -> sharedQuizService.addComment(70L, 61L, "내용", reader))
+                .isInstanceOf(CourseAccessException.class);
+        assertThatThrownBy(() -> sharedQuizService.getComments(70L, reader))
+                .isInstanceOf(CourseAccessException.class);
+    }
+
+    @Test
+    void onlyCommentAuthorCanUpdateOrDelete() {
+        SharedQuizComment comment = commentBy(reader, snapshotQuestion(61L), 5L, "원래");
+        when(sharedQuizCommentRepository.findById(5L)).thenReturn(Optional.of(comment));
+
+        assertThatThrownBy(() -> sharedQuizService.updateComment(5L, "수정", author))
+                .isInstanceOf(CourseAccessException.class);
+        assertThatThrownBy(() -> sharedQuizService.deleteComment(5L, author))
+                .isInstanceOf(CourseAccessException.class);
+        verify(sharedQuizCommentRepository, never()).delete(any());
+
+        assertThat(sharedQuizService.updateComment(5L, "수정", reader).getContent()).isEqualTo("수정");
+        sharedQuizService.deleteComment(5L, reader);
+        verify(sharedQuizCommentRepository).delete(comment);
+    }
+
+    @Test
+    void commentsAreGroupedByQuestion() {
+        Question q1 = snapshotQuestion(61L);
+        Question q2 = snapshotQuestion(62L);
+        when(sharedQuizCommentRepository.findBySharedQuizId(70L)).thenReturn(List.of(
+                commentBy(reader, q1, 1L, "a"), commentBy(author, q2, 2L, "b"), commentBy(author, q1, 3L, "c")));
+
+        var grouped = sharedQuizService.getComments(70L, reader);
+
+        assertThat(grouped.get(61L)).extracting(CommentResponse::getContent).containsExactly("a", "c");
+        assertThat(grouped.get(62L)).extracting(CommentResponse::isAuthor).containsExactly(false);
     }
 }

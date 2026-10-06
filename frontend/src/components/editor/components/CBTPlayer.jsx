@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, CheckCircle, XCircle, BookOpen, RotateCcw, ExternalLink, Loader2, Bookmark } from 'lucide-react';
 import client from '../../../api/client';
 import IncorrectNoteModal from './IncorrectNoteModal';
+import QuestionComments from '../../quiz/QuestionComments';
 
-const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers = null }) => {
+// sharedQuizId: CBT 시험 공유게시판에서 연 경우에만 넘어오며, 결과 화면에 문제별 댓글을 보여 준다.
+const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers = null, sharedQuizId = null }) => {
   const navigate = useNavigate();
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState(initialAnswers || {});
@@ -16,6 +18,15 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
   const [targetQuestionId, setTargetQuestionId] = useState(null);
 
   const scrollRef = useRef(null);
+
+  // 공유 시험 댓글은 제출 후 결과 화면에서만 보여 준다(풀이 중 정답 노출 방지). 글 전체를 한 번에 받는다.
+  const [commentsByQuestion, setCommentsByQuestion] = useState({});
+  useEffect(() => {
+    if (!submitted || !sharedQuizId) return;
+    client.get(`/shared-quizzes/${sharedQuizId}/comments`)
+      .then(res => setCommentsByQuestion(res.data || {}))
+      .catch(err => console.error('댓글을 불러오지 못했습니다.', err));
+  }, [submitted, sharedQuizId]);
 
   // 리포트 모드일 경우 questions 구조가 다를 수 있으므로 정규화
   const questions = mode === 'report' && quizData.userAnswers 
@@ -189,6 +200,14 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
                   <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg text-xs text-slate-600 dark:text-slate-300 font-medium">
                     <span className="font-bold">해설: </span>{q.explanation}
                   </div>
+                  {sharedQuizId && (
+                    <QuestionComments
+                      sharedQuizId={sharedQuizId}
+                      questionId={q.questionId}
+                      comments={commentsByQuestion[q.questionId] || []}
+                      onChange={(list) => setCommentsByQuestion(prev => ({ ...prev, [q.questionId]: list }))}
+                    />
+                  )}
                 </div>
               );
             })}

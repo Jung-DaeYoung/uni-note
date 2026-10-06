@@ -32,6 +32,7 @@ const SharedQuizBoardPage = () => {
           onClose={() => setSelectedQuiz(null)}
           mode="solve"
           courseId={selectedQuiz.courseId}
+          sharedQuizId={selectedQuiz.sharedQuizId}
         />
       )}
 

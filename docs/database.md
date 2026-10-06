@@ -36,6 +36,7 @@ Entity는 JPA로 관리되며 기본 키는 자동 증가 ID다. 실제 테이�
 |---|---|---|
 | `SharedQuiz` / `shared_quizzes` | `sharedQuizId` PK, `sourceQuizSetId`(원본 ID, FK 아님, unique), `likeCount`, `viewCount`, 생성 시각 | `QuizSet`(스냅샷) 1:1 unique, `Student`(작성자) N:1, `Course` N:1, `SharedQuizLike` 1:N |
 | `SharedQuizLike` / `shared_quiz_likes` | `id` PK | `SharedQuiz` N:1, `Student` N:1; 글·학생 unique |
+| `SharedQuizComment` / `shared_quiz_comments` | `commentId` PK, `content`(255), 생성 시각 | `SharedQuiz` N:1(글 삭제 시 함께 삭제), `Question`(스냅샷 문제) N:1, `Student` N:1 |
 
 공유 시 원본 `QuizSet`·`Question`을 복사한 스냅샷을 저장한다. 스냅샷 `QuizSet.student`는 null(소유자 없음)이고 `Question`의 출처 필드는 비운다. 글을 삭제해도 스냅샷은 남아 다른 학생의 풀이 기록·오답노트가 계속 참조한다.
 
@@ -65,6 +66,19 @@ CREATE TABLE shared_quiz_likes (
     stud_id BIGINT NOT NULL,
     PRIMARY KEY (id),
     UNIQUE (shared_quiz_id, stud_id),
+    FOREIGN KEY (shared_quiz_id) REFERENCES shared_quizzes (shared_quiz_id),
+    FOREIGN KEY (stud_id) REFERENCES students (stud_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE shared_quiz_comments (
+    comment_id BIGINT NOT NULL AUTO_INCREMENT,
+    content VARCHAR(255) NOT NULL,
+    created_at DATETIME(6),
+    question_id BIGINT NOT NULL,
+    shared_quiz_id BIGINT NOT NULL,
+    stud_id BIGINT NOT NULL,
+    PRIMARY KEY (comment_id),
+    FOREIGN KEY (question_id) REFERENCES questions (question_id),
     FOREIGN KEY (shared_quiz_id) REFERENCES shared_quizzes (shared_quiz_id),
     FOREIGN KEY (stud_id) REFERENCES students (stud_id)
 ) ENGINE=InnoDB;

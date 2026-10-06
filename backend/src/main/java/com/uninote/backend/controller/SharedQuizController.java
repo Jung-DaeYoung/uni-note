@@ -1,6 +1,8 @@
 package com.uninote.backend.controller;
 
 import com.uninote.backend.domain.Student;
+import com.uninote.backend.dto.CommentRequest;
+import com.uninote.backend.dto.CommentResponse;
 import com.uninote.backend.dto.QuizSetDetailResponse;
 import com.uninote.backend.dto.ShareQuizRequest;
 import com.uninote.backend.dto.SharedQuizLikeResponse;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/shared-quizzes")
@@ -53,6 +56,34 @@ public class SharedQuizController {
     @PostMapping("/{sharedQuizId}/like")
     public ResponseEntity<SharedQuizLikeResponse> toggleLike(@PathVariable @Positive Long sharedQuizId, Principal principal) {
         return ResponseEntity.ok(sharedQuizService.toggleLike(sharedQuizId, getStudent(principal)));
+    }
+
+    @GetMapping("/{sharedQuizId}/comments")
+    public ResponseEntity<Map<Long, List<CommentResponse>>> getComments(@PathVariable @Positive Long sharedQuizId, Principal principal) {
+        return ResponseEntity.ok(sharedQuizService.getComments(sharedQuizId, getStudent(principal)));
+    }
+
+    @PostMapping("/{sharedQuizId}/questions/{questionId}/comments")
+    public ResponseEntity<CommentResponse> addComment(
+            @PathVariable @Positive Long sharedQuizId,
+            @PathVariable @Positive Long questionId,
+            @Valid @RequestBody CommentRequest request,
+            Principal principal) {
+        return ResponseEntity.ok(sharedQuizService.addComment(sharedQuizId, questionId, request.getContent(), getStudent(principal)));
+    }
+
+    @PutMapping("/comments/{commentId}")
+    public ResponseEntity<CommentResponse> updateComment(
+            @PathVariable @Positive Long commentId,
+            @Valid @RequestBody CommentRequest request,
+            Principal principal) {
+        return ResponseEntity.ok(sharedQuizService.updateComment(commentId, request.getContent(), getStudent(principal)));
+    }
+
+    @DeleteMapping("/comments/{commentId}")
+    public ResponseEntity<Void> deleteComment(@PathVariable @Positive Long commentId, Principal principal) {
+        sharedQuizService.deleteComment(commentId, getStudent(principal));
+        return ResponseEntity.noContent().build();
     }
 
     private Student getStudent(Principal principal) {

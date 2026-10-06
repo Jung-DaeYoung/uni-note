@@ -52,4 +52,7 @@ public class SharedQuiz {
 
     @OneToMany(mappedBy = "sharedQuiz", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SharedQuizLike> likes = new ArrayList<>();
+
+    @OneToMany(mappedBy = "sharedQuiz", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<SharedQuizComment> comments = new ArrayList<>(); // 문제별 댓글. 글과 함께 삭제된다.
 }

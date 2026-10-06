@@ -11,6 +11,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,6 +30,7 @@ public class SharedQuizService {
     private final UserAnswerRepository userAnswerRepository;
     private final IncorrectNoteItemRepository incorrectNoteItemRepository;
     private final QuestionResponseMapper questionResponseMapper;
+    private final SharedQuizCommentRepository sharedQuizCommentRepository;
 
     // ponytail: 페이지네이션 없이 수강 강의의 글 전체를 반환한다. 글이 많아지면 Pageable로 바꾼다.
     @Transactional(readOnly = true)
@@ -179,6 +181,64 @@ public class SharedQuizService {
                 student.getStudId(), question.getQuestionId())
             || incorrectNoteItemRepository.existsByGroup_Student_StudIdAndQuestion_QuestionId(
                 student.getStudId(), question.getQuestionId());
+    }
+
+    // 글 전체 댓글을 문제별로 묶어 반환한다(오래된 순). 결과 화면이 한 번에 받아 문제 카드마다 나눠 보여 준다.
+    @Transactional(readOnly = true)
+    public Map<Long, List<CommentResponse>> getComments(Long sharedQuizId, Student student) {
+        SharedQuiz post = getPost(sharedQuizId);
+        validateEnrollment(student, post.getCourse().getCourseId());
+        return sharedQuizCommentRepository.findBySharedQuizId(sharedQuizId).stream()
+            .collect(Collectors.groupingBy(c -> c.getQuestion().getQuestionId(), LinkedHashMap::new,
+                Collectors.mapping(c -> toCommentResponse(c, student), Collectors.toList())));
+    }
+
+    @Transactional
+    public CommentResponse addComment(Long sharedQuizId, Long questionId, String content, Student student) {
+        SharedQuiz post = getPost(sharedQuizId);
+        validateEnrollment(student, post.getCourse().getCourseId());
+        Question question = post.getQuizSet().getQuestions().stream()
+            .filter(q -> q.getQuestionId().equals(questionId))
+            .findFirst()
+            .orElseThrow(() -> new InvalidRequestException("이 시험에 속하지 않는 문제입니다."));
+
+        SharedQuizComment comment = new SharedQuizComment();
+        comment.setSharedQuiz(post);
+        comment.setQuestion(question);
+        comment.setStudent(student);
+        comment.setContent(content);
+        return toCommentResponse(sharedQuizCommentRepository.save(comment), student);
+    }
+
+    @Transactional
+    public CommentResponse updateComment(Long commentId, String content, Student student) {
+        SharedQuizComment comment = getOwnedComment(commentId, student, "작성자 본인만 수정할 수 있습니다.");
+        comment.setContent(content);
+        return toCommentResponse(comment, student);
+    }
+
+    @Transactional
+    public void deleteComment(Long commentId, Student student) {
+        sharedQuizCommentRepository.delete(getOwnedComment(commentId, student, "작성자 본인만 삭제할 수 있습니다."));
+    }
+
+    private SharedQuizComment getOwnedComment(Long commentId, Student student, String message) {
+        SharedQuizComment comment = sharedQuizCommentRepository.findById(commentId)
+            .orElseThrow(() -> new ResourceNotFoundException("댓글을 찾을 수 없습니다."));
+        if (!comment.getStudent().getStudId().equals(student.getStudId())) {
+            throw new CourseAccessException(message);
+        }
+        return comment;
+    }
+
+    private static CommentResponse toCommentResponse(SharedQuizComment c, Student viewer) {
+        return CommentResponse.builder()
+            .commentId(c.getCommentId())
+            .content(c.getContent())
+            .authorName(PostService.anonymousName(c.getStudent()))
+            .author(c.getStudent().getStudId().equals(viewer.getStudId()))
+            .createdAt(c.getCreatedAt())
+            .build();
     }
 
     // 소유자 없는 복사본. 원문 보기를 막기 위해 출처(sourceNoteId/sourceBlockId)는 복사하지 않는다.

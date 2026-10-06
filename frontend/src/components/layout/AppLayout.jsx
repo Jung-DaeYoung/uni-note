@@ -69,7 +69,7 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
             >
               <div className="flex items-center gap-3">
                 <LayoutDashboard size={18} />
-                <span className="text-sm font-bold">대시보드</span>
+                <span className="text-sm font-bold">현재강의목록</span>
               </div>
               <button 
                 onClick={toggleDashboard}
@@ -115,7 +115,7 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
             }`}
           >
             <BrainCircuit size={18} />
-            <span className="text-sm font-bold">생성 문제 모음</span>
+            <span className="text-sm font-bold">나의 CBT 시험</span>
           </button>
 
           <button

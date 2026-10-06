@@ -73,7 +73,7 @@ const SharedQuizBoardPage = () => {
           <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-lg border border-dashed border-slate-200 dark:border-slate-700">
             <Share2 size={40} className="mx-auto mb-4 text-slate-300 dark:text-slate-700" />
             <p className="font-medium text-slate-400 dark:text-slate-500 text-sm">아직 공유된 시험이 없습니다.</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">생성 문제 모음에서 퀴즈를 공유할 수 있습니다.</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">나의 CBT 시험에서 퀴즈를 공유할 수 있습니다.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

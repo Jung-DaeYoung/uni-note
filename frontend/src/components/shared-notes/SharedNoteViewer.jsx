@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
-import { ArrowLeft, Calendar, FileText, Trash2 } from 'lucide-react';
+import { ArrowLeft, Calendar, ChevronRight, Trash2 } from 'lucide-react';
 import client from '../../api/client';
 import { noteSchemaExtensions, NoteEditorStyles } from '../editor/NotionEditor';
 import { NoteTreeProvider, findNote } from '../../context/NoteTreeContext';
@@ -33,32 +33,18 @@ const ReadOnlyNote = ({ content, onOpenNote }) => {
   return <EditorContent editor={editor} />;
 };
 
-const SnapshotTree = ({ nodes, selectedId, onSelect, depth = 0 }) => (
-  <ul>
-    {nodes.map(node => (
-      <li key={node.noteId}>
-        <button
-          onClick={() => onSelect(node.noteId)}
-          style={{ paddingLeft: `${depth * 12 + 8}px` }}
-          className={`w-full flex items-center gap-2 py-1.5 pr-2 rounded-md text-left text-xs font-medium transition-colors ${
-            node.noteId === selectedId
-              ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400'
-              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-          }`}
-        >
-          <FileText size={12} className="shrink-0" />
-          <span className="truncate">{node.title || '제목 없음'}</span>
-        </button>
-        {node.children?.length > 0 && (
-          <SnapshotTree nodes={node.children} selectedId={selectedId} onSelect={onSelect} depth={depth + 1} />
-        )}
-      </li>
-    ))}
-  </ul>
-);
+// 루트에서 id 노트까지의 경로(상위 노트 → 현재 노트). 없으면 빈 배열.
+const findPath = (nodes, id) => {
+  for (const node of nodes || []) {
+    if (node.noteId === id) return [node];
+    const rest = findPath(node.children, id);
+    if (rest.length) return [node, ...rest];
+  }
+  return [];
+};
 
-// 공유 노트 상세: 공유 시점 스냅샷 트리 + 선택한 노트 본문(읽기 전용) + 댓글.
-// 자동 저장·업로드·노트 생성 기능은 없다(NotionEditor를 쓰지 않음).
+// 공유 노트 상세: 선택한 노트 본문(읽기 전용) + 댓글. 하위 노트는 본문의 페이지 링크로 들어가고,
+// 하위 노트를 볼 때만 위쪽 경로로 상위 노트에 돌아간다. 자동 저장·업로드·노트 생성 기능은 없다(NotionEditor를 쓰지 않음).
 const SharedNoteViewer = ({ postId, onBack, onDelete }) => {
   const [post, setPost] = useState(null);
   const [comments, setComments] = useState([]);
@@ -87,7 +73,8 @@ const SharedNoteViewer = ({ postId, onBack, onDelete }) => {
 
   if (!post) return null;
 
-  const selected = findNote(post.notes, selectedId);
+  const path = findPath(post.notes, selectedId);
+  const selected = path[path.length - 1];
   const openNote = (noteId) => {
     if (findNote(post.notes, Number(noteId))) setSelectedId(Number(noteId));
   };
@@ -125,16 +112,30 @@ const SharedNoteViewer = ({ postId, onBack, onDelete }) => {
           )}
         </header>
 
-        <div className="flex flex-col lg:flex-row gap-6">
-          <aside className="lg:w-56 shrink-0 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-2 h-fit">
-            <SnapshotTree nodes={post.notes} selectedId={selectedId} onSelect={setSelectedId} />
-          </aside>
+        {path.length > 1 && (
+          <nav aria-label="노트 경로" className="mb-3 flex items-center gap-1.5 flex-wrap text-xs font-semibold">
+            {path.map((node, i) => (
+              <React.Fragment key={node.noteId}>
+                {i > 0 && <ChevronRight size={12} className="text-slate-300 dark:text-slate-600" />}
+                {i < path.length - 1 ? (
+                  <button
+                    onClick={() => setSelectedId(node.noteId)}
+                    className="text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  >
+                    {node.title || '제목 없음'}
+                  </button>
+                ) : (
+                  <span className="text-slate-700 dark:text-slate-200">{node.title || '제목 없음'}</span>
+                )}
+              </React.Fragment>
+            ))}
+          </nav>
+        )}
 
-          <section className="flex-1 min-w-0 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 px-6 py-6">
-            <NoteEditorStyles />
-            {selected && <ReadOnlyNote key={selected.noteId} content={selected.content} onOpenNote={openNote} />}
-          </section>
-        </div>
+        <section className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 px-6 py-6">
+          <NoteEditorStyles />
+          {selected && <ReadOnlyNote key={selected.noteId} content={selected.content} onOpenNote={openNote} />}
+        </section>
 
         <section className="mt-6 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-5">
           <QuestionComments

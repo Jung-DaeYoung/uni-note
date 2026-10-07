@@ -122,6 +122,32 @@ const CustomParagraph = Paragraph.extend({
   },
 });
 
+// 저장된 노트 JSON을 해석하는 스키마 확장. 편집기와 공유 노트 읽기 전용 뷰어(SharedNoteViewer)가
+// 함께 써서 같은 문서가 같은 모양으로 보이게 한다. 편집 전용 확장(Placeholder, SlashCommand)은 뺐다.
+// eslint-disable-next-line react-refresh/only-export-components
+export const noteSchemaExtensions = [
+  CustomDocument,
+  StarterKit.configure({
+    document: false,
+    heading: false,
+    paragraph: false,
+    codeBlock: false,
+    // TrailingNode 기본값은 문서 스키마(CustomDocument: 'heading block*')의
+    // 시작 노드 타입(heading)을 문서 끝에 자동 삽입할 노드로 오판해, 마지막 블록이
+    // heading이 아닐 때마다 빈 H1을 계속 추가했다. paragraph로 명시해 방지한다.
+    trailingNode: { node: 'paragraph' },
+  }),
+  CustomHeading.configure({ levels: [1, 2, 3] }),
+  CustomParagraph,
+  TaskList,
+  TaskItem.configure({ nested: true }),
+  Image,
+  CustomCodeBlock.configure({ lowlight }),
+  BlockId,
+  PageLink,
+  PdfBlock,
+];
+
 // "/" 명령 중 블록 종류만 바꾸는 항목: [제목, 아이콘, 적용할 체인 명령]
 const BLOCK_COMMANDS = [
   ['제목 1', <Heading1 size={18} />, (chain) => chain.toggleHeading({ level: 1 })],
@@ -160,32 +186,13 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
 
   const editor = useEditor({
     extensions: [
-      CustomDocument,
-      StarterKit.configure({
-        document: false,
-        heading: false,
-        paragraph: false,
-        codeBlock: false,
-        // TrailingNode 기본값은 문서 스키마(CustomDocument: 'heading block*')의
-        // 시작 노드 타입(heading)을 문서 끝에 자동 삽입할 노드로 오판해, 마지막 블록이
-        // heading이 아닐 때마다 빈 H1을 계속 추가했다. paragraph로 명시해 방지한다.
-        trailingNode: { node: 'paragraph' },
-      }),
-      CustomHeading.configure({ levels: [1, 2, 3] }),
-      CustomParagraph,
+      ...noteSchemaExtensions,
       Placeholder.configure({
         placeholder: ({ pos }) => {
           if (pos === 0) return '제목을 입력하세요';
           return '오늘의 강의 내용을 기록하세요. "/"를 입력해 명령어를 확인하세요...';
         },
       }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      Image,
-      CustomCodeBlock.configure({ lowlight }),
-      BlockId,
-      PageLink,
-      PdfBlock,
       SlashCommand.configure({
         suggestion: {
           items: ({ query }) => {
@@ -407,7 +414,23 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
       )}
 
       <section className="relative min-h-[850px] bg-white dark:bg-slate-900 rounded-[2.5rem] px-12 py-8 shadow-2xl shadow-slate-200/40 dark:shadow-slate-950/40 border border-slate-100 dark:border-slate-700 ring-1 ring-slate-50 dark:ring-slate-800">
-        <style>{`
+        <NoteEditorStyles />
+        <div className="relative z-20">
+          {editor && <BlockHandle editor={editor} />}
+          <EditorContent editor={editor} />
+        </div>
+        <div className="absolute top-0 left-12 w-[1px] h-full bg-red-50/50 dark:bg-red-500/10" />
+        <div className="absolute top-10 right-10 opacity-5">
+          <PenLine size={120} className="text-slate-900 dark:text-slate-100" />
+        </div>
+      </section>
+    </div>
+  );
+};
+
+// 에디터 본문 스타일. 공유 노트 읽기 전용 뷰어도 같은 모양을 위해 쓴다.
+export const NoteEditorStyles = () => (
+  <style>{`
           .uninote-editor { color: #1e293b; font-size: 0.9375rem; }
           .ProseMirror h1:first-child { 
             font-size: 1.875rem; 
@@ -531,18 +554,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
           .dark .ProseMirror code { background: rgba(148, 163, 184, 0.16); }
           .dark .ProseMirror > *:hover { background: rgba(148, 163, 184, 0.08); }
           .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
-        `}</style>
-        <div className="relative z-20">
-          {editor && <BlockHandle editor={editor} />}
-          <EditorContent editor={editor} />
-        </div>
-        <div className="absolute top-0 left-12 w-[1px] h-full bg-red-50/50 dark:bg-red-500/10" />
-        <div className="absolute top-10 right-10 opacity-5">
-          <PenLine size={120} className="text-slate-900 dark:text-slate-100" />
-        </div>
-      </section>
-    </div>
-  );
-};
+  `}</style>
+);
 
 export default NotionEditor;

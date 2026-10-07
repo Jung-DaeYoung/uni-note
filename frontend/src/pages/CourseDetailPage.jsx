@@ -7,7 +7,8 @@ import {
   FileText,
   Home,
   FolderOpen,
-  BrainCircuit
+  BrainCircuit,
+  Share2
 } from 'lucide-react';
 import AppLayout from '../components/layout/AppLayout';
 import NotionEditor from '../components/editor/NotionEditor';
@@ -31,7 +32,7 @@ const CourseDetailPage = () => {
     return course ? course.courseName : '';
   }, [courses, courseId]);
 
-  const { noteTree, noteData, fetchTree, handleCreateRootNote, handleDeleteNote } = useCourseNotes({
+  const { noteTree, noteData, fetchTree, handleCreateRootNote, handleDeleteNote, handleShareNote } = useCourseNotes({
     courseId,
     noteId,
     navigate,
@@ -124,6 +125,15 @@ const CourseDetailPage = () => {
             >
               <BrainCircuit size={12} />
               AI 문제 생성
+            </button>
+            <button
+              onClick={() => handleShareNote(noteData?.title || '제목 없음')}
+              disabled={!noteData || saveState.status !== 'synced'}
+              title={saveState.status !== 'synced' ? '저장이 끝난 뒤 공유할 수 있습니다' : '현재 노트와 하위 노트를 공유합니다'}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Share2 size={12} />
+              노트 공유
             </button>
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
               <div className={`w-1.5 h-1.5 rounded-full ${saveState.status === 'saving' ? 'bg-blue-500 animate-pulse' : saveState.status === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />

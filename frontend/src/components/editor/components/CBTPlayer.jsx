@@ -202,8 +202,9 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
                   </div>
                   {sharedQuizId && (
                     <QuestionComments
-                      sharedQuizId={sharedQuizId}
-                      questionId={q.questionId}
+                      addUrl={`/shared-quizzes/${sharedQuizId}/questions/${q.questionId}/comments`}
+                      commentUrl="/shared-quizzes/comments"
+                      placeholder="이 문제에 대한 질문이나 풀이를 남겨 보세요 (익명)"
                       comments={commentsByQuestion[q.questionId] || []}
                       onChange={(list) => setCommentsByQuestion(prev => ({ ...prev, [q.questionId]: list }))}
                     />

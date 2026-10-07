@@ -105,7 +105,20 @@ const useCourseNotes = ({ courseId, noteId, navigate, searchParams }) => {
     }
   };
 
-  return { noteTree, noteData, fetchTree, handleCreateRootNote, handleDeleteNote };
+  // 현재 노트와 하위 노트를 노트 공유 게시판에 올린다. 서버에 저장된 내용이 복사되므로
+  // 호출부는 저장이 끝난(synced) 상태에서만 부른다.
+  const handleShareNote = async (title) => {
+    if (!window.confirm(`'${title}' 노트와 하위 노트를 노트 공유 게시판에 공유할까요?
+지금 내용이 복사되며 이후 수정은 반영되지 않습니다.`)) return;
+    try {
+      await client.post('/shared-notes', { rootNoteId: Number(noteId) });
+      if (window.confirm('공유했습니다. 노트 공유 게시판으로 이동할까요?')) navigate('/shared-notes');
+    } catch (err) {
+      alert(err.response?.data?.message || '노트를 공유하지 못했습니다.');
+    }
+  };
+
+  return { noteTree, noteData, fetchTree, handleCreateRootNote, handleDeleteNote, handleShareNote };
 };
 
 export default useCourseNotes;

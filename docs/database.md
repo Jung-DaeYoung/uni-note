@@ -84,6 +84,55 @@ CREATE TABLE shared_quiz_comments (
 ) ENGINE=InnoDB;
 ```
 
+## 노트 공유 게시판
+
+| Entity / 테이블 | 주요 필드 | 관계 |
+|---|---|---|
+| `SharedNotePost` / `shared_note_posts` | `sharedNotePostId` PK, `sourceRootNoteId`(원본 ID, FK 아님, unique), `title`, 생성 시각 | `Student`(작성자) N:1, `Course` N:1, `SharedNoteSnapshot`·`SharedNoteComment` 1:N(글 삭제 시 함께 삭제) |
+| `SharedNoteSnapshot` / `shared_note_snapshots` | `snapshotId` PK, `originalNoteId`, `parentOriginalNoteId`(루트는 null), `title`, `content`(Tiptap JSON) | `SharedNotePost` N:1 |
+| `SharedNoteComment` / `shared_note_comments` | `commentId` PK, `content`(255), 생성 시각 | `SharedNotePost` N:1, `Student` N:1 |
+
+공유 시 노트와 모든 하위 노트를 스냅샷으로 복사하므로 원본 수정·삭제가 공유본에 영향을 주지 않는다. 스냅샷의 부모 관계는 자기참조 FK 대신 원본 노트 ID 값으로 보관하고 조회 시 메모리에서 트리를 조립한다.
+
+운영(`ddl-auto: validate`) 배포 전 실행할 DDL:
+
+```sql
+CREATE TABLE shared_note_posts (
+    shared_note_post_id BIGINT NOT NULL AUTO_INCREMENT,
+    created_at DATETIME(6),
+    source_root_note_id BIGINT NOT NULL,
+    title VARCHAR(255),
+    course_id BIGINT NOT NULL,
+    stud_id BIGINT NOT NULL,
+    PRIMARY KEY (shared_note_post_id),
+    UNIQUE (source_root_note_id),
+    FOREIGN KEY (course_id) REFERENCES courses (course_id),
+    FOREIGN KEY (stud_id) REFERENCES students (stud_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE shared_note_snapshots (
+    snapshot_id BIGINT NOT NULL AUTO_INCREMENT,
+    content LONGTEXT,
+    original_note_id BIGINT NOT NULL,
+    parent_original_note_id BIGINT,
+    title VARCHAR(255),
+    shared_note_post_id BIGINT NOT NULL,
+    PRIMARY KEY (snapshot_id),
+    FOREIGN KEY (shared_note_post_id) REFERENCES shared_note_posts (shared_note_post_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE shared_note_comments (
+    comment_id BIGINT NOT NULL AUTO_INCREMENT,
+    content VARCHAR(255) NOT NULL,
+    created_at DATETIME(6),
+    shared_note_post_id BIGINT NOT NULL,
+    stud_id BIGINT NOT NULL,
+    PRIMARY KEY (comment_id),
+    FOREIGN KEY (shared_note_post_id) REFERENCES shared_note_posts (shared_note_post_id),
+    FOREIGN KEY (stud_id) REFERENCES students (stud_id)
+) ENGINE=InnoDB;
+```
+
 ## 오답노트
 
 | Entity / 테이블 | 주요 필드 | 관계 |

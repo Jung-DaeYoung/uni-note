@@ -11,6 +11,7 @@ import {
   BookOpen,
   PenLine,
   Share2,
+  FileText,
   Moon,
   Sun
 } from 'lucide-react';
@@ -126,6 +127,16 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
           >
             <Share2 size={18} />
             <span className="text-sm font-bold">CBT 시험 공유게시판</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/shared-notes')}
+            className={`w-full flex items-center gap-3 py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap mb-2 ${
+              location.pathname.startsWith('/shared-notes') ? 'border-blue-500 bg-blue-500/5 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <FileText size={18} />
+            <span className="text-sm font-bold">노트 공유 게시판</span>
           </button>
 
           <button

@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { MessageSquare, PenLine, Trash2 } from 'lucide-react';
 import client from '../../api/client';
 
-// CBT 시험 공유게시판 결과 화면의 문제별 댓글. 목록은 CBTPlayer가 글 단위로 한 번 받아 내려주고,
-// 작성·수정·삭제 결과는 onChange로 이 문제의 목록만 갱신한다.
-const QuestionComments = ({ sharedQuizId, questionId, comments, onChange }) => {
-  const [isOpen, setIsOpen] = useState(false);
+// 공유게시판 댓글 목록·작성·수정·삭제. CBT 시험(문제별)과 노트 공유(글별)가 함께 쓴다.
+// 목록은 부모가 받아 내려주고, 작성·수정·삭제 결과는 onChange로 이 목록만 갱신한다.
+// addUrl: 작성 경로, commentUrl: 수정·삭제 경로 앞부분(뒤에 /{commentId}가 붙는다).
+const QuestionComments = ({ addUrl, commentUrl, comments, onChange, placeholder, defaultOpen = false }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const [newComment, setNewComment] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editingContent, setEditingContent] = useState('');
@@ -15,7 +16,7 @@ const QuestionComments = ({ sharedQuizId, questionId, comments, onChange }) => {
   const handleAdd = async () => {
     if (!newComment.trim()) return;
     try {
-      const res = await client.post(`/shared-quizzes/${sharedQuizId}/questions/${questionId}/comments`, { content: newComment });
+      const res = await client.post(addUrl, { content: newComment });
       onChange([...comments, res.data]);
       setNewComment('');
     } catch (err) {
@@ -26,7 +27,7 @@ const QuestionComments = ({ sharedQuizId, questionId, comments, onChange }) => {
   const handleUpdate = async (commentId) => {
     if (!editingContent.trim()) return;
     try {
-      const res = await client.put(`/shared-quizzes/comments/${commentId}`, { content: editingContent });
+      const res = await client.put(`${commentUrl}/${commentId}`, { content: editingContent });
       onChange(comments.map(c => (c.commentId === commentId ? res.data : c)));
       setEditingId(null);
     } catch (err) {
@@ -37,7 +38,7 @@ const QuestionComments = ({ sharedQuizId, questionId, comments, onChange }) => {
   const handleDelete = async (commentId) => {
     if (!window.confirm('댓글을 삭제할까요?')) return;
     try {
-      await client.delete(`/shared-quizzes/comments/${commentId}`);
+      await client.delete(`${commentUrl}/${commentId}`);
       onChange(comments.filter(c => c.commentId !== commentId));
     } catch (err) {
       fail(err, '댓글을 삭제하지 못했습니다.');
@@ -94,7 +95,7 @@ const QuestionComments = ({ sharedQuizId, questionId, comments, onChange }) => {
               value={newComment}
               maxLength={255}
               onChange={e => setNewComment(e.target.value)}
-              placeholder="이 문제에 대한 질문이나 풀이를 남겨 보세요 (익명)"
+              placeholder={placeholder}
               rows={2}
               className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md p-2 text-xs text-slate-900 dark:text-slate-100"
             />

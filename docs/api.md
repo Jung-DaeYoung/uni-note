@@ -65,6 +65,21 @@
 
 `SharedQuizResponse`는 `sharedQuizId`, `quizSetId`(스냅샷), `courseId`, `courseName`, `title`, `difficulty`, `questionCount`, `authorName`(익명), `isAuthor`, `likeCount`, `viewCount`, `liked`, `createdAt`을 가진다. 공유 시 원본은 출처(`sourceNoteId`/`sourceBlockId`) 없이 소유자 없는 스냅샷으로 복사되므로 원문 보기가 제공되지 않고, 원본 삭제나 글 삭제가 다른 학생의 풀이 기록·오답노트에 영향을 주지 않는다.
 
+## 노트 공유 게시판
+
+| Method | Endpoint | 인증 | 요청 | 응답 |
+|---|---|---:|---|---|
+| GET | `/shared-notes` | 예 | query `courseId`(선택) | `SharedNoteResponse[]` (수강 중인 강의의 글, 최신순) |
+| POST | `/shared-notes` | 예 | `{ rootNoteId }` (본인 노트) | 빈 응답. 노트와 모든 하위 노트를 스냅샷으로 복사. 이미 공유한 노트면 400 |
+| GET | `/shared-notes/{postId}` | 예 | 없음 | `SharedNoteDetailResponse` (공유 시점 스냅샷 트리, 수강생만) |
+| DELETE | `/shared-notes/{postId}` | 예 | 없음 | 빈 응답(204). 작성자만. 스냅샷·댓글도 함께 삭제 |
+| GET | `/shared-notes/{postId}/comments` | 예 | 없음 | `CommentResponse[]` (오래된 순, 수강생만) |
+| POST | `/shared-notes/{postId}/comments` | 예 | `{ content }` (최대 255자) | `CommentResponse` (수강생만) |
+| PUT | `/shared-notes/comments/{commentId}` | 예 | `{ content }` | `CommentResponse`. 작성자만 |
+| DELETE | `/shared-notes/comments/{commentId}` | 예 | 없음 | 빈 응답(204). 작성자만 |
+
+`SharedNoteResponse`는 `sharedNotePostId`, `courseId`, `courseName`, `title`(공유 시점 루트 노트 제목), `authorName`(익명), `isAuthor`, `createdAt`을 가진다. `SharedNoteDetailResponse`는 같은 필드에 `notes`(`{ noteId, title, content, children }` 트리)를 더한다. `noteId`는 원본 노트 ID로, 본문 페이지 링크와 맞추는 용도이며 원본 노트 API(`/notes/{noteId}`)는 여전히 작성자만 접근할 수 있다. VIEW 전용이며 공유본을 수정하는 API는 없다.
+
 ## 오답노트
 
 | Method | Endpoint | 인증 | 요청 | 응답 |

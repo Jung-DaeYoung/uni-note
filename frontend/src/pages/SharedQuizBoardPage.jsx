@@ -51,7 +51,7 @@ const SharedQuizBoardPage = () => {
               className="text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg px-3 py-2"
             >
               <option value="">전체 강의</option>
-              {courses.map(c => (
+              {courses.filter(c => !c.userCreated).map(c => (
                 <option key={c.courseId} value={c.courseId}>{c.courseName}</option>
               ))}
             </select>

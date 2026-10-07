@@ -6,6 +6,7 @@ import com.uninote.backend.domain.Post;
 import com.uninote.backend.domain.Professor;
 import com.uninote.backend.domain.Student;
 import com.uninote.backend.exception.ResourceNotFoundException;
+import com.uninote.backend.repository.CourseRepository;
 import com.uninote.backend.repository.EnrollmentRepository;
 import com.uninote.backend.repository.NoteRepository;
 import com.uninote.backend.repository.PostRepository;
@@ -33,9 +34,10 @@ class DashboardServiceTest {
     private final StudentRepository studentRepository = mock(StudentRepository.class);
     private final PostRepository postRepository = mock(PostRepository.class);
     private final NoteRepository noteRepository = mock(NoteRepository.class);
+    private final CourseRepository courseRepository = mock(CourseRepository.class);
 
     private final DashboardService dashboardService = new DashboardService(
-            enrollmentRepository, studentRepository, postRepository, noteRepository);
+            enrollmentRepository, studentRepository, postRepository, noteRepository, courseRepository);
 
     private Student student;
     private Course enrolledCourse;
@@ -124,5 +126,21 @@ class DashboardServiceTest {
 
         assertThatThrownBy(() -> dashboardService.getDashboardData("unknown-num"))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+    @Test
+    void userCreatedCoursesAreListedAfterEnrolledCoursesWithoutProfessor() {
+        Course myCourse = new Course();
+        myCourse.setCourseId(20L);
+        myCourse.setCourseName("내가 만든 강의");
+        myCourse.setOwner(student);
+        myCourse.setUserCreated(true); // 교수·강의코드 없음
+        when(courseRepository.findByOwner_StudIdAndUserCreatedTrueOrderByCourseIdAsc(1L)).thenReturn(List.of(myCourse));
+
+        var response = dashboardService.getDashboardData("owner-num");
+
+        assertThat(response.getCourses()).extracting("courseId", "professorName", "userCreated")
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(10L, "교수", false),
+                        org.assertj.core.groups.Tuple.tuple(20L, null, true));
     }
 }

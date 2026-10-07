@@ -23,5 +23,14 @@ public class Course {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "prof_id")
-    private Professor professor; // 해당 강의를 담당하는 교수님
+    private Professor professor; // 해당 강의를 담당하는 교수님(직접 생성 강의는 null)
+
+    // 사용자가 직접 만든 강의의 소유자. 소유자에게는 Enrollment를 만들지 않으므로
+    // 수강권과 소유권은 별개다. 기존(학교) 강의는 null.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_stud_id")
+    private Student owner;
+
+    @Column(name = "user_created", nullable = false)
+    private boolean userCreated; // 직접 생성 강의 여부
 }

@@ -12,6 +12,7 @@ import {
   PenLine,
   Share2,
   FileText,
+  Plus,
   Moon,
   Sun
 } from 'lucide-react';
@@ -25,8 +26,54 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { courses } = useCourses();
+  const { courses, createCourse } = useCourses();
   const { theme, toggleTheme } = useTheme();
+  const enrolledCourses = courses.filter(c => !c.userCreated);
+  const myCourses = courses.filter(c => c.userCreated);
+  // VS Code 새 파일처럼 "내가 만든 강의" 목록 안에 이름 입력칸을 띄운다. null이면 입력칸을 숨긴다.
+  const [newCourseName, setNewCourseName] = useState(null);
+  const [isCreatingCourse, setIsCreatingCourse] = useState(false);
+
+  // Enter·포커스 이탈 모두 여기로 온다. 비어 있으면 취소하고, Enter 뒤에 이어지는 blur로
+  // 두 번 만들어지지 않도록 진행 중이면 무시한다. 실패하면 입력칸을 남겨 이름을 고칠 수 있게 한다.
+  const submitNewCourse = async () => {
+    if (newCourseName === null || isCreatingCourse) return;
+    const name = newCourseName.trim();
+    if (!name) {
+      setNewCourseName(null);
+      return;
+    }
+    setIsCreatingCourse(true);
+    try {
+      const course = await createCourse(name);
+      setNewCourseName(null);
+      navigate(`/course/${course.courseId}`);
+    } catch (err) {
+      alert(err.response?.data?.message || '강의를 만들지 못했습니다.');
+    } finally {
+      setIsCreatingCourse(false);
+    }
+  };
+
+  const renderCourse = (course) => {
+    // '/course/1'이 '/course/10'에도 걸리지 않도록 경로 구분자까지 비교한다.
+    const isCourseActive = `${location.pathname}/`.startsWith(`/course/${course.courseId}/`);
+    const Icon = course.userCreated ? PenLine : BookOpen;
+    return (
+      <button
+        key={course.courseId}
+        onClick={() => navigate(`/course/${course.courseId}`)}
+        className={`w-[calc(100%-0.5rem)] ml-2 flex items-center gap-3 p-2.5 rounded-lg transition-colors text-xs font-bold ${
+          isCourseActive
+          ? 'bg-blue-600/10 text-blue-400'
+          : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'
+        }`}
+      >
+        <Icon size={14} className={isCourseActive ? 'text-blue-400' : 'text-slate-500'} />
+        <span className="truncate">{course.courseName}</span>
+      </button>
+    );
+  };
 
   const toggleDashboard = (e) => {
     e.stopPropagation();
@@ -70,7 +117,7 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
             >
               <div className="flex items-center gap-3">
                 <LayoutDashboard size={18} />
-                <span className="text-sm font-bold">현재강의목록</span>
+                <span className="text-sm font-bold">강의목록</span>
               </div>
               <button 
                 onClick={toggleDashboard}
@@ -80,30 +127,49 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
               </button>
             </div>
 
-            {/* Course List (Nested) */}
+            {/* Course List (Nested): 수강 중인 강의 / 내가 만든 강의 */}
             {isDashboardExpanded && (
               <div className="mt-1 ml-4 space-y-1 border-l border-slate-800">
-                {courses.length === 0 ? (
+                <p className="px-4 pt-1 pb-1 text-[10px] font-bold text-slate-600">수강 중인 강의</p>
+                {enrolledCourses.length === 0 ? (
                   <p className="px-6 py-2 text-[10px] text-slate-600 font-bold uppercase tracking-widest italic">수강 중인 강의 없음</p>
                 ) : (
-                  courses.map((course) => {
-                    const isCourseActive = location.pathname.includes(`/course/${course.courseId}`);
-                    return (
-                      <div key={course.courseId} className="space-y-0.5">
-                        <button
-                          onClick={() => navigate(`/course/${course.courseId}`)}
-                          className={`w-[calc(100%-0.5rem)] ml-2 flex items-center gap-3 p-2.5 rounded-lg transition-colors text-xs font-bold ${
-                            isCourseActive 
-                            ? 'bg-blue-600/10 text-blue-400' 
-                            : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'
-                          }`}
-                        >
-                          <BookOpen size={14} className={isCourseActive ? 'text-blue-400' : 'text-slate-500'} />
-                          <span className="truncate">{course.courseName}</span>
-                        </button>
-                      </div>
-                    );
-                  })
+                  enrolledCourses.map(renderCourse)
+                )}
+
+                <div className="flex items-center justify-between pl-4 pr-2 pt-3 pb-1">
+                  <p className="text-[10px] font-bold text-slate-600">내가 만든 강의</p>
+                  <button
+                    onClick={() => setNewCourseName('')}
+                    title="새 강의 만들기"
+                    aria-label="새 강의 만들기"
+                    className="p-1 hover:bg-white/10 rounded text-slate-500 hover:text-white transition-colors"
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
+                {myCourses.map(renderCourse)}
+                {newCourseName !== null && (
+                  <div className="w-[calc(100%-0.5rem)] ml-2 flex items-center gap-3 p-2 rounded-lg bg-white/5">
+                    <PenLine size={14} className="text-slate-500 shrink-0" />
+                    <input
+                      autoFocus
+                      value={newCourseName}
+                      maxLength={100}
+                      placeholder="강의 이름"
+                      aria-label="새 강의 이름"
+                      disabled={isCreatingCourse}
+                      onChange={(e) => setNewCourseName(e.target.value)}
+                      onKeyDown={(e) => {
+                        // 한글 IME 조합 중 Enter는 조합 확정용이라 제출하지 않는다(마지막 글자 유실·중복 방지).
+                        if (e.nativeEvent.isComposing) return;
+                        if (e.key === 'Enter') submitNewCourse();
+                        if (e.key === 'Escape') setNewCourseName(null);
+                      }}
+                      onBlur={submitNewCourse}
+                      className="flex-1 min-w-0 bg-transparent border-b border-blue-500 text-xs font-bold text-slate-100 placeholder:text-slate-600 outline-none py-0.5"
+                    />
+                  </div>
                 )}
               </div>
             )}

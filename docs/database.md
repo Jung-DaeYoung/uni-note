@@ -8,8 +8,19 @@ Entity는 JPA로 관리되며 기본 키는 자동 증가 ID다. 실제 테이�
 |---|---|---|
 | `Student` / `students` | `studId` PK, `studentNum` unique, `name`, `password` | 노트·게시글·수강·퀴즈·오답그룹의 학생 |
 | `Professor` / `professors` | `profId` PK, 교수 정보 | `Course`의 담당 교수 |
-| `Course` / `courses` | `courseId` PK, `courseName`, `courseCode` unique | `Professor` N:1, 다른 기능의 강의 기준 |
+| `Course` / `courses` | `courseId` PK, `courseName`, `courseCode` unique(nullable), `userCreated` | `Professor` N:1(직접 생성 강의는 null), `Student`(`owner`, 직접 생성 강의 소유자) N:1, 다른 기능의 강의 기준 |
 | `Enrollment` / `enrollments` | `enrollId` PK | `Student` N:1, `Course` N:1 |
+
+직접 생성 강의(`userCreated = true`)는 소유자에게 `Enrollment`를 만들지 않는다. 노트 접근은 수강 또는 소유자로 허용한다. 삭제 시 소유자의 이 강의 퀴즈 → 루트 노트(하위 노트 cascade) → 강의 순으로 지운다.
+
+운영(`ddl-auto: validate`) 배포 전 실행할 DDL:
+
+```sql
+ALTER TABLE courses
+    ADD COLUMN owner_stud_id BIGINT NULL,
+    ADD COLUMN user_created BIT(1) NOT NULL DEFAULT 0,
+    ADD FOREIGN KEY (owner_stud_id) REFERENCES students (stud_id);
+```
 
 ## 노트·게시판
 

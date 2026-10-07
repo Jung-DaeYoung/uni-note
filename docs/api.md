@@ -8,6 +8,11 @@
 |---|---|---:|---|---|
 | POST | `/auth/login` | 아니오 | `{ studentNum, password }` | `{ token, studentNum }` |
 | GET | `/dashboard/courses` | 예 | 없음 | `DashboardResponse` |
+| POST | `/courses` | 예 | `{ courseName }` (최대 100자) | `CourseResponse`. 본인 소유 직접 생성 강의를 만든다 |
+| PUT | `/courses/{courseId}` | 예 | `{ courseName }` | `CourseResponse`. 본인이 만든 강의만, 학교 강의는 403 |
+| DELETE | `/courses/{courseId}` | 예 | 없음 | 빈 응답(204). 본인이 만든 강의만. 노트·하위 노트와 본인의 이 강의 퀴즈·풀이 기록·오답노트 항목도 함께 삭제 |
+
+`DashboardResponse.courses`는 수강 강의 다음에 본인이 만든 강의를 붙여 반환한다. `CourseResponse`는 `courseId`, `courseName`, `courseCode`, `professorName`, `userCreated`를 가지며, 직접 생성 강의는 `courseCode`·`professorName`이 null이다. 직접 생성 강의에서는 노트·AI 퀴즈·오답노트를 그대로 쓸 수 있고(노트 API는 수강 또는 강의 소유자를 허용), 게시판은 403, 노트·퀴즈 공유는 400이다.
 
 ## 노트
 

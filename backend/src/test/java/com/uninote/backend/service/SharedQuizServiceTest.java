@@ -123,6 +123,17 @@ class SharedQuizServiceTest {
     }
 
     @Test
+    void shareRejectsQuizOfUserCreatedCourse() {
+        course.setUserCreated(true);
+        when(quizSetRepository.findById(50L)).thenReturn(Optional.of(origin));
+
+        assertThatThrownBy(() -> sharedQuizService.share(50L, author))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessageContaining("직접 만든 강의");
+        verify(sharedQuizRepository, never()).save(any());
+    }
+
+    @Test
     void shareRejectsAlreadySharedQuiz() {
         when(quizSetRepository.findById(50L)).thenReturn(Optional.of(origin));
         when(sharedQuizRepository.existsBySourceQuizSetId(50L)).thenReturn(true);

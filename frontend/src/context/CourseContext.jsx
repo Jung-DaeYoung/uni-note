@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import client from '../api/client';
 import { useAuth } from './AuthContext';
@@ -6,7 +6,10 @@ import { useAuth } from './AuthContext';
 const CourseContext = createContext({
   courses: [],
   recentPosts: [],
-  recentNotes: []
+  recentNotes: [],
+  createCourse: async () => {},
+  renameCourse: async () => {},
+  deleteCourse: async () => {},
 });
 
 // Provider와 그 짝인 훅을 같은 파일에 두는 관례이며, 이 훅 하나만을 위해 파일을
@@ -23,28 +26,49 @@ export const CourseProvider = ({ children }) => {
   const [recentNotes, setRecentNotes] = useState([]);
   const { isAuthenticated } = useAuth();
 
+  const loadDashboard = useCallback((signal) => (
+    client.get('/dashboard/courses', { signal }).then((response) => {
+      setCourses(response.data.courses || []);
+      setRecentPosts(response.data.recentPosts || []);
+      setRecentNotes(response.data.recentNotes || []);
+    })
+  ), []);
+
   // 인증 상태가 바뀔 때 대시보드 데이터를 새로 불러온다. signal은 React StrictMode(개발 모드)의
   // mount→cleanup→remount 이중 실행이나 빠른 재인증 시 이전 요청을 실제로 취소해, 중복 요청과
   // 늦게 도착한 응답의 상태 반영을 함께 막는다.
   useEffect(() => {
     if (!isAuthenticated) return;
     const controller = new AbortController();
-    client.get('/dashboard/courses', { signal: controller.signal })
-      .then((response) => {
-        setCourses(response.data.courses || []);
-        setRecentPosts(response.data.recentPosts || []);
-        setRecentNotes(response.data.recentNotes || []);
-      })
+    loadDashboard(controller.signal)
       .catch((error) => {
         if (axios.isCancel(error)) return;
         console.error("강의 목록 로딩 실패", error);
       });
     return () => controller.abort();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, loadDashboard]);
+
+  // 직접 생성 강의 관리. 실패는 호출부가 서버 message로 알린다. 성공하면 사이드바·대시보드가
+  // 함께 쓰는 목록을 다시 불러온다.
+  const createCourse = useCallback(async (courseName) => {
+    const res = await client.post('/courses', { courseName });
+    await loadDashboard();
+    return res.data;
+  }, [loadDashboard]);
+
+  const renameCourse = useCallback(async (courseId, courseName) => {
+    await client.put(`/courses/${courseId}`, { courseName });
+    await loadDashboard();
+  }, [loadDashboard]);
+
+  const deleteCourse = useCallback(async (courseId) => {
+    await client.delete(`/courses/${courseId}`);
+    await loadDashboard();
+  }, [loadDashboard]);
 
   const value = useMemo(
-    () => ({ courses, recentPosts, recentNotes }),
-    [courses, recentPosts, recentNotes]
+    () => ({ courses, recentPosts, recentNotes, createCourse, renameCourse, deleteCourse }),
+    [courses, recentPosts, recentNotes, createCourse, renameCourse, deleteCourse]
   );
 
   return <CourseContext.Provider value={value}>{children}</CourseContext.Provider>;

@@ -8,7 +8,9 @@ import {
   Home,
   FolderOpen,
   BrainCircuit,
-  Share2
+  Share2,
+  PenLine,
+  Trash2
 } from 'lucide-react';
 import AppLayout from '../components/layout/AppLayout';
 import NotionEditor from '../components/editor/NotionEditor';
@@ -25,12 +27,33 @@ const CourseDetailPage = () => {
   const { courseId, noteId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { courses } = useCourses();
+  const { courses, renameCourse, deleteCourse } = useCourses();
 
-  const courseName = useMemo(() => {
-    const course = courses.find(c => c.courseId === parseInt(courseId));
-    return course ? course.courseName : '';
-  }, [courses, courseId]);
+  const course = useMemo(() => courses.find(c => c.courseId === parseInt(courseId)), [courses, courseId]);
+  const courseName = course ? course.courseName : '';
+  // 직접 만든 강의에는 커뮤니티·노트 공유가 없고(서버도 막는다), 대신 이름 변경·삭제를 제공한다.
+  const isUserCreated = Boolean(course?.userCreated);
+
+  const handleRenameCourse = async () => {
+    const name = window.prompt('새 강의 이름', courseName);
+    if (!name?.trim() || name.trim() === courseName) return;
+    try {
+      await renameCourse(course.courseId, name.trim());
+    } catch (err) {
+      alert(err.response?.data?.message || '강의 이름을 바꾸지 못했습니다.');
+    }
+  };
+
+  const handleDeleteCourse = async () => {
+    if (!window.confirm(`'${courseName}' 강의를 삭제할까요?
+이 강의의 모든 노트와 하위 노트, 퀴즈·풀이 기록·오답노트 항목이 함께 영구 삭제됩니다.`)) return;
+    try {
+      await deleteCourse(course.courseId);
+      navigate('/dashboard');
+    } catch (err) {
+      alert(err.response?.data?.message || '강의를 삭제하지 못했습니다.');
+    }
+  };
 
   const { noteTree, noteData, fetchTree, handleCreateRootNote, handleDeleteNote, handleShareNote } = useCourseNotes({
     courseId,
@@ -39,7 +62,8 @@ const CourseDetailPage = () => {
     searchParams: location.search,
   });
 
-  const board = useCourseBoard({ courseId, searchString: location.search });
+  // 강의 목록이 아직 없으면(첫 로딩) 강의 종류를 모르므로 게시판 조회를 미룬다.
+  const board = useCourseBoard({ courseId, searchString: location.search, enabled: Boolean(course) && !isUserCreated });
   const { isBoardOpen, setIsBoardOpen, isBoardMaximized } = board;
 
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
@@ -126,6 +150,7 @@ const CourseDetailPage = () => {
               <BrainCircuit size={12} />
               AI 문제 생성
             </button>
+            {!isUserCreated && (
             <button
               onClick={() => handleShareNote(noteData?.title || '제목 없음')}
               disabled={!noteData || saveState.status !== 'synced'}
@@ -135,6 +160,7 @@ const CourseDetailPage = () => {
               <Share2 size={12} />
               노트 공유
             </button>
+            )}
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
               <div className={`w-1.5 h-1.5 rounded-full ${saveState.status === 'saving' ? 'bg-blue-500 animate-pulse' : saveState.status === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
               <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -151,6 +177,26 @@ const CourseDetailPage = () => {
             </div>
           </>
         )}
+        {isUserCreated ? (
+          <>
+            <button
+              onClick={handleRenameCourse}
+              title="강의 이름 변경"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              <PenLine size={12} />
+              이름 변경
+            </button>
+            <button
+              onClick={handleDeleteCourse}
+              title="강의 삭제"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+            >
+              <Trash2 size={12} />
+              강의 삭제
+            </button>
+          </>
+        ) : (
         <button
           onClick={() => setIsBoardOpen(!isBoardOpen)}
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
@@ -162,6 +208,7 @@ const CourseDetailPage = () => {
           <MessageSquare size={12} />
           {isBoardOpen ? '닫기' : '커뮤니티'}
         </button>
+        )}
       </div>
     </div>
   );

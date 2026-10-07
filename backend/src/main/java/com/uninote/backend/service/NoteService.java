@@ -127,8 +127,10 @@ public class NoteService {
         noteRepository.delete(note);
     }
 
+    // 수강 중인 강의이거나, 본인이 직접 만든 강의면 노트를 쓸 수 있다.
     private void validateEnrollment(Student student, Long courseId) {
-        if (!enrollmentRepository.existsByStudentAndCourse_CourseId(student, courseId)) {
+        if (!enrollmentRepository.existsByStudentAndCourse_CourseId(student, courseId)
+                && !courseRepository.existsByCourseIdAndUserCreatedTrueAndOwner_StudId(courseId, student.getStudId())) {
             throw new CourseAccessException("해당 강의를 수강하지 않습니다.");
         }
     }

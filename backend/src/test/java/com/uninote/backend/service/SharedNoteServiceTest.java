@@ -97,6 +97,16 @@ class SharedNoteServiceTest {
     }
 
     @Test
+    void shareRejectsNoteOfUserCreatedCourse() {
+        course.setUserCreated(true);
+
+        assertThatThrownBy(() -> sharedNoteService.share(100L, author))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessageContaining("직접 만든 강의");
+        verify(sharedNotePostRepository, never()).save(any());
+    }
+
+    @Test
     void shareRejectsAlreadySharedNote() {
         when(sharedNotePostRepository.existsBySourceRootNoteId(100L)).thenReturn(true);
 

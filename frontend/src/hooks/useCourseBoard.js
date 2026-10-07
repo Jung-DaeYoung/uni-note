@@ -3,7 +3,9 @@ import axios from 'axios';
 import client from '../api/client';
 
 // 익명 게시판(글/댓글) 목록·상세·작성·수정·삭제 상태와 대시보드 postId 딥링크를 담당한다.
-const useCourseBoard = ({ courseId, searchString }) => {
+// enabled=false면 게시글을 불러오지 않는다. 직접 만든 강의에는 게시판이 없어 서버가 403을 주고,
+// client.js의 403 공통 처리(alert 후 대시보드 이동)가 강의 화면을 쫓아내기 때문이다.
+const useCourseBoard = ({ courseId, searchString, enabled = true }) => {
   const [posts, setPosts] = useState([]);
 
   const [isBoardOpen, setIsBoardOpen] = useState(false);
@@ -20,6 +22,7 @@ const useCourseBoard = ({ courseId, searchString }) => {
   // 빠른 강의 전환 시 이전 요청을 취소해, 늦게 도착한 응답이 현재 courseId의
   // 게시판 상태를 덮어쓰지 않도록 한다.
   useEffect(() => {
+    if (!enabled) return;
     const controller = new AbortController();
     const fetchPosts = async () => {
       try {
@@ -32,7 +35,7 @@ const useCourseBoard = ({ courseId, searchString }) => {
     };
     fetchPosts();
     return () => controller.abort();
-  }, [courseId]);
+  }, [courseId, enabled]);
 
   // 대시보드에서 넘어온 postId 처리
   // URL(searchString)과 비동기로 불러온 posts 두 값이 모두 준비되어야 여는

@@ -63,6 +63,9 @@ public class SharedNoteService {
         if (root.getCourse() == null) {
             throw new InvalidRequestException("강의가 없는 노트는 공유할 수 없습니다.");
         }
+        if (root.getCourse().isUserCreated()) {
+            throw new InvalidRequestException("직접 만든 강의의 노트는 공유할 수 없습니다.");
+        }
         validateEnrollment(student, root.getCourse().getCourseId());
         if (sharedNotePostRepository.existsBySourceRootNoteId(rootNoteId)) {
             throw new InvalidRequestException("이미 공유된 노트입니다.");

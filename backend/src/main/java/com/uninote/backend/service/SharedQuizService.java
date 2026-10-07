@@ -89,6 +89,9 @@ public class SharedQuizService {
         if (origin.getCourse() == null) {
             throw new InvalidRequestException("강의가 없는 퀴즈는 공유할 수 없습니다.");
         }
+        if (origin.getCourse().isUserCreated()) {
+            throw new InvalidRequestException("직접 만든 강의의 퀴즈는 공유할 수 없습니다.");
+        }
         validateEnrollment(student, origin.getCourse().getCourseId());
         if (sharedQuizRepository.existsBySourceQuizSetId(quizSetId)) {
             throw new InvalidRequestException("이미 공유된 퀴즈입니다.");

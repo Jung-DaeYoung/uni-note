@@ -9,6 +9,8 @@ const DashboardPage = () => {
   // 대시보드 페이지에서 동일한 요청을 다시 보내지 않고 그대로 재사용한다.
   const { courses, recentPosts, recentNotes } = useCourses();
   const navigate = useNavigate();
+  // 직접 만든 강의는 사이드바 "내가 만든 강의"에서 관리하고, 대시보드에는 수강 강의만 보여 준다.
+  const enrolledCourses = courses.filter(c => !c.userCreated);
 
   const formatTime = (dateStr) => {
     const now = new Date();
@@ -35,10 +37,10 @@ const DashboardPage = () => {
               </h3>
             </div>
             <div className="space-y-3">
-              {courses.length === 0 ? (
+              {enrolledCourses.length === 0 ? (
                 <p className="py-12 text-center text-slate-400 dark:text-slate-500 text-sm font-medium border border-dashed border-slate-200 dark:border-slate-700 rounded-xl">수강 중인 강의가 없습니다.</p>
               ) : (
-                courses.map((course) => (
+                enrolledCourses.map((course) => (
                   <div
                     key={course.courseId}
                     className="group bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-4 hover:border-blue-400 dark:hover:border-blue-500/50 transition-colors cursor-pointer flex items-center gap-4"
@@ -59,6 +61,7 @@ const DashboardPage = () => {
                 ))
               )}
             </div>
+
           </div>
 
           {/* Right Column - 2/3 Width (Recent Notes + Community) */}

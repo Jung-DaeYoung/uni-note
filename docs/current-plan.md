@@ -1,270 +1,288 @@
-# UniNote 노트 공유 게시판 구현 계획
+# UniNote 사용자 직접 생성 강의 구현 계획
 
 ## 문제와 목표
 
-기존 UniNote는 `NoteService`가 노트 작성자 본인만 노트에 접근하도록 검증하고, `PostService`가 강의별 익명 게시글·댓글을 처리한다. 새로운 기능은 노트 페이지를 게시글 형태로 공유하고, 공유 시점의 루트 노트와 모든 하위 노트를 다른 수강생이 VIEW 권한으로 열람하게 하며, 공유 게시글에 댓글을 제공하는 것이다.
+현재 UniNote의 `Course`는 교수·강의 정보와 연결되고, 사용자의 접근은 `Enrollment`를 통해 확인된다. `Note`는 반드시 강의와 학생을 보유하며, `NoteService`의 생성·조회·수정·삭제 경로가 수강 여부와 노트 소유권을 검증한다.
+
+새 기능은 기존 수강 강의와 별도로 사용자가 자신의 강의를 생성하고, 해당 강의에서 기존 노트/하위 노트 기능을 그대로 사용하도록 만드는 것이다. 기존 수강 강의 데이터와 API 계약은 보존하고, 향후 노트 공유 게시판에서 직접 생성 강의의 공유 정책을 별도로 확장할 수 있어야 한다.
 
 확정된 정책:
 
-- 게시판 위치: 기존 `CBT 시험 공유게시판` 메뉴 아래 별도 `노트 공유 게시판` 메뉴
-- 공개 범위: 공유한 노트가 속한 강의의 수강생
-- 권한: VIEW만 지원. EDIT 기능과 편집 API는 만들지 않는다.
-- 하위 노트: 공유 시점의 전체 하위 노트를 재귀적으로 포함
-- 동기화: 공유 시점 스냅샷. 원본 변경은 공유본에 반영하지 않는다.
-- 공유 단위: 루트 노트 하나당 활성 공유 게시글 하나
-- 공유 해제: 작성자가 게시글을 삭제하면 즉시 접근 차단
-- 댓글 삭제: 댓글 작성자 본인만 삭제
-- 공유 게시글 제목: 루트 노트 제목을 자동 사용(입력 UI 없음)
-- 댓글 수정: 기존 CBT 공유 댓글과 동일하게 작성자 본인 수정 지원(`QuestionComments` 재사용)
-- 첨부 파일: 추가 처리 불필요(아래 "기존 코드와의 충돌 방지" 참고)
-- 목록: 기존 CBT 공유 게시판처럼 페이지네이션 없이 최신순 전체 목록
-- 공유 해제: soft delete 없이 cascade 삭제
-
-## 기준 구현(복제할 선례)
-
-CBT 시험 공유게시판이 같은 구조를 이미 갖고 있으므로 이를 그대로 따른다.
-
-- `domain/SharedQuiz.java`, `SharedQuizComment.java`: 원본 ID를 FK가 아닌 unique 값으로 보관, 작성자·강의 N:1, `comments` cascade·orphanRemoval
-- `service/SharedQuizService.java`: `share`, `deletePost`, `getPost`, `validateEnrollment`, `getOwnedComment`, `toCommentResponse`
-- 예외: `CourseAccessException`(403), `InvalidRequestException`(400, 중복 공유), `ResourceNotFoundException`(404)
-- 운영 DDL은 `docs/database.md`에 기록한다(migration 디렉터리 없음).
+- `Course`에 소유자(`owner: Student`)와 직접 생성 여부(`userCreated`)를 추가한다.
+- 직접 생성 강의는 강의명만 입력한다. 강의코드·교수는 사용하지 않는다.
+- 소유자에게 `Enrollment`를 생성하지 않는다. 기존 수강권과 소유권을 별도로 구분한다.
+- 직접 생성 강의의 생성·수정·삭제는 소유자 본인만 가능하다.
+- 삭제는 현재 강의와 그 강의의 노트·하위 노트를 cascade 영구 삭제한다.
+- 직접 생성 강의의 향후 노트 공유 공개 범위는 이번 기능에서 고정하지 않고, 공유 게시판 정책에서 별도 결정한다. 이번 범위에서는 직접 생성 강의의 노트·퀴즈 공유를 막는다(서버 400, 노트 공유 버튼 숨김).
+- 강의명 중복은 허용한다(unique 제약 없음).
+- 직접 생성 강의에는 커뮤니티 게시판을 제공하지 않는다(커뮤니티 버튼 숨김).
+- 강의 삭제 시 소유자의 해당 강의 퀴즈·풀이 기록·오답노트 항목도 함께 영구 삭제한다. soft delete는 하지 않는다.
 
 ## 현재 코드 분석
 
-### Note와 기존 권한
+### Course, Enrollment, Student
 
-- `Note`는 `Course`, `Student`, `parentNote`, `childNotes`, Tiptap `content`, 미리보기·검색 필드를 가진다.
-- `NoteService.getNote`, `saveNote`, `deleteNote`는 `validateOwnership`으로 작성자 본인 여부를 검사한다.
-- `getNoteTree`는 같은 강의·학생의 모든 노트를 한 번에 조회한 뒤 `parentNoteId`로 메모리 트리를 구성한다.
-- 기존 `/api/notes/{noteId}`를 공유 열람에 재사용하면 작성자 전용 403 정책을 깨뜨리므로 공유 조회 API를 별도로 둔다.
-- 공유 스냅샷은 기존 `Note`의 학생/강의/부모 관계를 직접 재사용하지 않고 별도 엔티티로 저장해야 원본 삭제·수정과 권한 충돌을 피할 수 있다.
+- `Course`는 `courseId`, `courseName`, `courseCode`, `professor`를 가진다.
+- `Enrollment`는 `Student`와 `Course`의 수강 관계만 표현하며 별도 unique 제약이나 소유권 필드는 없다.
+- `Student`가 사용자 엔티티이며 JWT principal은 학번(`studentNum`)이다.
+- `CourseRepository`와 `EnrollmentRepository`는 기본 CRUD와 학생별 수강 목록/수강 여부 조회만 제공한다.
+- `DashboardService`는 `enrollmentRepository.findByStudent(student)` 결과만 대시보드 강의 목록으로 반환한다. 현재 직접 생성 강의는 목록에 포함될 수 없다.
+- `DashboardService`는 `enrollment.getCourse().getProfessor().getName()`을 그대로 호출하므로, 교수가 null인 직접 생성 강의가 섞이면 NPE로 대시보드 전체가 500이 된다. 서버에서 null 안전하게 변환해야 한다.
+- `course_code`는 이미 unique·nullable이다. MySQL unique는 NULL 중복을 허용하므로 직접 생성 강의의 null 강의코드는 문제없다.
 
-### Post/Comment와 게시판
+### Note와 권한
 
-- `Post`는 `Course`와 작성 학생을 연결하고 제목·본문·익명 여부·`Comment` 목록을 보유한다.
-- `PostService`는 강의 수강 여부를 확인한 뒤 게시글·댓글 CRUD를 수행한다.
-- 댓글 수정/삭제와 게시글 수정/삭제는 작성자 학번을 비교해 403을 반환한다.
-- 기존 `Post.content` 하나에 여러 노트의 계층 구조를 직렬화해 넣는 방식은 노트별 열람·제목·트리 표현·공유 해제 처리가 불명확하므로 사용하지 않는다.
-- 댓글 UX와 `CommentRequest`/`CommentResponse`, 익명명 생성 규칙은 재사용할 수 있지만, 노트 공유 게시글과 기존 게시판 댓글을 같은 `Post`/`Comment` 레코드로 섞지 않는다.
+- `Note`는 `Course`, `Student`, `parentNote`, `childNotes`, Tiptap `content`, `previewText`, `searchContent`를 가진다.
+- `NoteService.getNote`, `saveNote`, `deleteNote`는 `validateOwnership`으로 노트 작성자 본인을 확인한다.
+- `NoteService.getNoteTree`, `createNote`, `deleteNote`는 `validateEnrollment`로 해당 강의 수강 여부를 확인한다.
+- `createNote`의 부모 검증은 부모 노트의 강의와 학생 소유권을 확인한다.
+- 따라서 직접 생성 강의 소유자가 Enrollment 없이 노트를 사용하려면, `NoteService`의 수강 검증을 소유자 강의에는 허용하는 공통 권한 규칙으로 확장해야 한다. 기존 수강 강의의 본인 노트 권한은 그대로 유지한다.
+- 기존 `Note`의 `course_id`, `stud_id`, `parent_note_id` 구조를 변경하지 않고 재사용할 수 있다.
 
-### User와 강의 권한
+### Frontend 강의 흐름
 
-- 사용자 엔티티는 `Student`, 강의 수강 관계는 `Enrollment`다.
-- 기존 기능은 `enrollmentRepository.existsByStudentAndCourse_CourseId`로 강의 접근을 검증한다.
-- 노트 공유 목록·상세·댓글 조회·댓글 작성은 모두 공유 루트 노트의 `Course`에 대한 수강 여부를 서버에서 검사한다.
-- 게시글 삭제와 댓글 삭제는 각각 공유 게시글 작성자, 댓글 작성자 본인만 허용한다.
+- `CourseContext`는 `/api/dashboard/courses`의 `courses`만 보관하며 `AppLayout` 사이드바와 `DashboardPage`가 이를 함께 사용한다.
+- `DashboardPage`는 수강 중인 강의 카드만 표시하고, `CourseDetailPage`는 `/course/{courseId}`와 `/course/{courseId}/note/{noteId}` 경로로 기존 노트 UI를 제공한다.
+- `useCourseNotes`는 강의 ID로 트리 조회·노트 생성·삭제를 수행하고, `NotionEditor`는 동일한 `courseId`를 사용해 하위 노트를 생성하고 자동 저장한다.
+- `AppLayout` 사이드바의 강의 목록도 `CourseContext.courses`에 의존하므로, API 응답에 강의 유형을 추가하면 기존 카드·메뉴에서 수강 강의와 직접 생성 강의를 구분할 수 있다.
+- `CourseContext.courses`는 `SharedQuizBoardPage`·`SharedNoteBoardPage`의 강의 필터에도 쓰인다. 직접 생성 강의를 필터로 고르면 수강 검증에서 403이 나므로 필터에서 제외한다.
+- `CourseDetailPage`의 "커뮤니티" 버튼은 `PostService`(수강 검증)를 호출하므로 직접 생성 강의에서는 숨긴다. "노트 공유" 버튼도 숨긴다.
 
-### Frontend 구조
+### 수강 검증 위치
 
-- `AppLayout`에 `CBT 시험 공유게시판` 메뉴가 직접 정의되어 있고, `SharedQuizBoardPage`가 공유 시험 목록·상세 풀이를 담당한다.
-- `App.jsx`의 보호 라우트에 `/shared-quizzes`가 등록되어 있다.
-- `useCourseBoard`/`CourseBoardPanel`은 강의 상세 화면의 기존 게시판과 댓글 상태를 담당한다.
-- 노트 공유는 기존 강의 상세 게시판에 섞기보다 `SharedNoteBoardPage`와 `useSharedNotes`를 추가하고, `AppLayout`에서 CBT 공유 메뉴 아래에 진입점을 추가하는 방향이 기존 화면 책임과 충돌이 적다.
-- 공유 노트 상세는 `NotionEditor`를 재사용하지 않고 읽기 전용 렌더러를 둔다. EDIT가 없으므로 자동 저장·업로드·slash command·노트 생성 로직을 공유 화면에 노출하지 않는다.
+`enrollmentRepository.existsByStudentAndCourse_CourseId`/`findByStudent`를 쓰는 곳은 다음뿐이다.
+
+- `NoteService.validateEnrollment`: 직접 생성 강의 소유자도 허용하도록 변경한다.
+- `DashboardService`: 수강 강의에 본인 직접 생성 강의를 더해 반환하도록 변경한다.
+- `PostService`, `SharedQuizService`, `SharedNoteService`: 소유자는 수강생이 아니므로 직접 생성 강의를 자동으로 차단한다. 이번 범위에서는 그대로 둔다(공유는 아래처럼 400 메시지만 먼저 반환).
+- `QuizService`, `IncorrectNoteService`는 수강 여부가 아니라 노트·퀴즈 소유권만 검사하므로(`validateOwnership`, `validateSameCourse`) 직접 생성 강의에서도 수정 없이 동작한다.
 
 ## 구현 계획
 
-### 1. 기능/사용자 흐름
+### 1. 데이터 구조 변경
 
-1. 사용자가 본인 노트의 메뉴에서 `노트 공유`를 선택한다.
-2. 서버가 루트 노트의 소유권과 강의 수강 여부를 확인한다.
-3. 서버가 루트 노트와 현재 존재하는 모든 하위 노트를 순회해 공유 스냅샷을 만든다.
-4. 사용자는 `노트 공유 게시판`에서 자신이 수강 중인 강의의 공유 글 목록을 확인한다.
-5. 목록에서 게시글을 열면 공유 시점의 노트 트리와 각 노트의 본문을 읽기 전용으로 확인한다.
-6. 게시글 작성자는 본인 공유 글을 삭제할 수 있다. 삭제 후 해당 공유 글과 스냅샷은 더 이상 조회되지 않는다.
-7. 공유 글 열람자는 댓글을 작성하고, 댓글 작성자는 자신의 댓글만 삭제할 수 있다.
-8. 원본 노트의 수정·삭제·하위 노트 추가는 기존 노트 기능으로 처리되며, 이미 생성된 공유 스냅샷에는 영향을 주지 않는다.
+#### `Course` 확장
 
-### 2. DB(Entity/관계) 설계
+- `owner`:
+  - `@ManyToOne(fetch = FetchType.LAZY)`
+  - `@JoinColumn(name = "owner_stud_id")`
+  - 직접 생성 강의의 소유자
+  - 기존 시스템 강의는 null일 수 있도록 nullable 허용
+- `userCreated`:
+  - `@Column(nullable = false)`
+  - 직접 생성 강의면 true, 기존 수강 강의면 false
+  - 기존 데이터 migration 시 기본값 false로 채운다.
+- 기존 `professor`는 nullable을 유지한다. 직접 생성 강의는 교수 없이 저장한다.
+- `courseCode`도 직접 생성 강의에서는 null을 허용한다.
 
-#### 권장 엔티티
+응답 DTO에는 다음 표시용 필드를 추가한다.
 
-- `SharedNotePost` / `shared_note_posts`
-  - `sharedNotePostId` PK
-  - `sourceRootNoteId` 값 또는 원본 식별용 필드
-  - `course` N:1
-  - `student` N:1, 공유 게시글 작성자
-  - `title`, `createdAt`
-  - 활성 공유만 허용할 수 있도록 `sourceRootNoteId` unique 정책을 둔다.
-- `SharedNoteSnapshot` / `shared_note_snapshots`
-  - `snapshotId` PK
-  - `sharedNotePost` N:1
-  - `originalNoteId` 값, `parentOriginalNoteId` 값(루트는 null)
-  - `title`, `content`
-  - 공유 시점의 노트 계층과 내용을 독립적으로 보존한다.
-  - 부모 관계를 자기참조 FK 대신 원본 ID 값으로 둔다. 자기참조 FK는 cascade 삭제 시 삭제 순서에 따라 FK 위반이 날 수 있고, 트리는 어차피 메모리에서 조립한다. `previewText`/`searchContent`는 뷰어가 쓰지 않으므로 복사하지 않는다.
-- `SharedNoteComment` / `shared_note_comments`
-  - `commentId` PK
-  - `sharedNotePost` N:1
-  - `student` N:1
-  - `content`, `createdAt`
-  - 게시글 삭제 시 댓글 cascade/orphan removal
+- `userCreated`
+- 목록에는 본인이 만든 직접 생성 강의만 나오므로 `ownedByMe`는 항상 `userCreated`와 같다. 별도 필드를 두지 않는다.
+- 직접 생성 강의에서는 `professorName`과 `courseCode`가 null이므로 서버는 null로 내려주고, 프론트는 “내 강의” 표시를 사용한다.
 
-`SharedNoteSnapshot`을 별도 테이블로 두는 이유는 원본 `Note`의 `student` 소유권과 `parentNote` 관계를 공유 사용자에게 노출하지 않고, 원본 삭제 후에도 DB FK 오류 없이 공유 게시글의 생명주기를 제어하기 위해서다. 게시글 삭제 시 공유 게시글·스냅샷·댓글은 함께 삭제하는 방식을 기본안으로 둔다. 공유 해제 후 접근 차단이라는 요구와 고아 스냅샷 누적을 동시에 막을 수 있다.
+#### 관계와 삭제
 
-#### 운영 DDL/인덱스
+- `courses`를 FK로 참조하는 테이블은 `enrollments`, `notes`, `posts`, `quiz_sets`, `shared_quizzes`, `shared_note_posts`다.
+- 직접 생성 강의는 게시판·공유를 막으므로 `notes`와 소유자의 `quiz_sets`만 참조한다. Enrollment도 만들지 않는다.
+- `Course.notes` 관계는 추가하지 않고 `CourseService.deleteUserCourse`에서 삭제 순서를 명시적으로 처리한다.
+  1. 소유자의 해당 강의 퀴즈마다 기존 `QuizService.deleteQuiz`를 호출한다(오답노트 항목·가상 세션 답안 정리 후 QuizSet 삭제, 풀이 기록은 cascade).
+  2. 해당 강의의 루트 노트를 삭제한다. 하위 노트는 `Note.childNotes`의 `cascade = ALL, orphanRemoval = true`로 함께 삭제된다.
+  3. 강의를 삭제한다.
+- 실제 삭제 동작은 퀴즈·오답노트가 있는 상태에서 통합 테스트로 확인한다.
 
-- `course_id`, `stud_id`, `created_at` 인덱스
-- `source_root_note_id` unique 인덱스
-- 스냅샷·댓글은 `shared_note_post_id` FK 인덱스로 충분하다.
-- 운영 프로파일이 `ddl-auto: validate`이므로 `docs/database.md`에 DDL을 추가한다.
+#### 기존 데이터 migration
 
-### 3. Backend API/Service/권한 검증
+- 기존 `courses` 행은 `user_created = false`, `owner_stud_id = null`로 초기화한다.
+- `user_created`는 `NOT NULL` 적용 전 기존 행에 기본값을 채운다.
+- 운영은 `ddl-auto: validate`이므로 기존 방식대로 `docs/database.md`에 DDL을 기록하고 배포 전 실행한다.
+
+```sql
+ALTER TABLE courses
+    ADD COLUMN owner_stud_id BIGINT NULL,
+    ADD COLUMN user_created BIT(1) NOT NULL DEFAULT 0,
+    ADD FOREIGN KEY (owner_stud_id) REFERENCES students (stud_id);
+```
+- 로컬은 `ddl-auto: update`이므로 개발 재기동 시 컬럼 생성 여부를 확인할 수 있지만, 운영 적용 절차의 대체로 사용하지 않는다.
+
+### 2. Backend API/Service
 
 #### API 초안
 
-- `GET /api/shared-notes`
-  - 현재 사용자가 수강 중인 강의의 공유 게시글 목록
-  - 기본 최신순, 필요하면 `courseId` 필터와 페이지네이션을 기존 공유 CBT 목록과 동일한 방식으로 확장
-- `POST /api/shared-notes`
-  - 요청: `{ rootNoteId }`
-  - 본인 루트 노트인지, 해당 강의를 수강 중인지, 이미 활성 공유가 있는지 검증
-- `GET /api/shared-notes/{sharedNotePostId}`
-  - 게시글 메타데이터와 스냅샷 노트 트리·본문 반환
-  - 수강 여부 검증 후에만 조회
-- `DELETE /api/shared-notes/{sharedNotePostId}`
-  - 게시글 작성자 본인만 삭제
-  - 공유 게시글·스냅샷·댓글 cascade 삭제
-  - 응답의 노트 트리 노드는 `{ noteId(원본 ID), title, content, children }`. 원본 ID는 본문 안 `PageLink`의 `noteId`와 맞추기 위해서만 쓴다.
-- `GET /api/shared-notes/{sharedNotePostId}/comments`
-  - 해당 강의 수강생만 조회
-- `POST /api/shared-notes/{sharedNotePostId}/comments`
-  - 해당 강의 수강생만 작성
-  - `CommentRequest`와 최대 길이 검증 재사용
-- `PUT /api/shared-notes/comments/{commentId}`
-  - 댓글 작성자 본인만 수정
-- `DELETE /api/shared-notes/comments/{commentId}`
-  - 댓글 작성자 본인만 삭제
+- `GET /api/dashboard/courses`
+  - 기존 응답을 유지하면서 `courses`에 직접 생성 강의를 더하고 각 항목에 `userCreated`를 추가한다.
+  - 기존 프론트 계약을 깨지 않도록 `courses` 필드명은 유지한다.
+- 새 `CourseController`의 `/api/courses`, `/api/courses/{courseId}`는 기존 `NoteController`의 `/api/courses/{courseId}/notes...`와 경로가 겹치지 않는다. 요청 DTO는 `CourseRequest { @NotBlank @Size(max = 100) courseName }`.
+- `POST /api/courses`
+  - 요청: `{ courseName }`
+  - 현재 인증 사용자를 `owner`로 저장하고 `userCreated=true`, `professor=null`, `courseCode=null`로 생성한다.
+- `PUT /api/courses/{courseId}`
+  - 요청: `{ courseName }`
+  - 직접 생성 강의 소유자 본인만 수정 가능하다.
+- `DELETE /api/courses/{courseId}`
+  - 직접 생성 강의 소유자 본인만 삭제 가능하다.
+  - 하위 노트를 포함한 해당 강의 노트를 삭제한 후 강의를 삭제한다.
+- `GET /api/courses/{courseId}`는 현재 강의 상세 화면이 별도 호출하지 않으므로 초기 범위에서 추가하지 않는다. 필요해질 때 소유권·수강권을 함께 반환하는 상세 API로 확장한다.
 
-#### 서비스
+#### 서비스 구조
 
-- `SharedNoteService` 하나에 공유 생성, 스냅샷 복사, 목록·상세 조회, 게시글 삭제, 댓글 CRUD, 수강·작성자 검증을 둔다(`SharedQuizService`와 같은 구성).
-- 엔티티 → DTO 변환은 서비스 내부 private static 메서드로 둔다.
+- `CourseService`를 새로 두어 직접 생성·수정·삭제를 담당한다. 강의 접근 판정은 바뀌는 곳이 `NoteService` 하나뿐이므로 별도 공통 컴포넌트로 빼지 않는다.
+- `DashboardService`는 `CourseRepository`(소유자 기준 조회)를 이용해 기존 수강 강의와 본인 직접 생성 강의를 합쳐 반환하고, 교수명은 null 안전하게 변환한다.
+- `SharedQuizService.share`, `SharedNoteService.share`는 `course.userCreated`면 "직접 만든 강의는 공유할 수 없습니다"(400)를 먼저 반환한다. 지금은 수강 검증에 걸려 "해당 강의를 수강하지 않습니다"(403)가 나온다.
+- 기존 `NoteService`의 `validateEnrollment`를 다음 규칙으로 교체한다.
+  1. 학생이 해당 강의를 수강 중이면 허용
+  2. 강의가 `userCreated=true`이고 `course.owner == student`이면 허용
+  3. 그 외에는 `CourseAccessException`(403)
+- 노트 생성·트리 조회·노트 삭제·하위 노트 생성이 모두 동일 규칙을 사용하게 한다.
+- 노트 자체 수정은 기존 `validateOwnership`을 유지한다.
+- 직접 생성 강의 생성 API는 `Authentication`/`@AuthenticationPrincipal`의 학번을 기존 서비스 방식으로 Student 조회에 사용한다.
 
-#### 권한 규칙
+#### 강의 삭제 순서
 
-- 원본 노트 접근: 기존 `NoteService.validateOwnership`을 변경하지 않는다.
-- 공유 생성: `rootNote.student == currentStudent` 및 `rootNote.course` 수강 여부 확인.
-- 하위 노트는 같은 강의·학생 노트만 조회해 수집하므로 다른 강의/학생 노트가 섞일 수 없다(별도 검증 불필요).
-- 공유 목록/상세/댓글 조회·작성: 현재 사용자의 `Enrollment`와 공유 게시글의 `course`를 비교.
-- 게시글 삭제: `SharedNotePost.student`와 현재 사용자 비교.
-- 댓글 삭제: `SharedNoteComment.student`와 현재 사용자 비교. 게시글 작성자에게 삭제 권한을 부여하지 않는다.
-- 존재하지 않는 공유 ID와 권한 없는 공유 ID의 응답 정책은 기존 서비스 관례에 맞춰 404/403을 구분한다.
+1. `Course`를 조회한다.
+2. `userCreated=true`인지 확인한다. 시스템 강의 삭제 요청은 403 또는 별도 invalid request로 차단한다.
+3. 현재 사용자가 `owner`인지 확인한다.
+4. 소유자의 해당 강의 퀴즈를 `QuizService.deleteQuiz`로 삭제한다(공유는 막혀 있으므로 공유 게시글·스냅샷은 없다).
+5. 해당 강의의 루트 노트를 삭제한다(하위 노트 cascade).
+6. 직접 생성 강의를 삭제한다.
 
-#### 기존 코드와의 충돌 방지
+### 3. Frontend UI/강의 구분
 
-- `NoteController`의 `/api/notes/{noteId}`는 수정하지 않는다.
-- `Post`/`Comment`에 노트 공유 전용 필드를 추가하지 않는다.
-- 공유 스냅샷 응답에는 원본 `student`, 원본 소유권 정보, 편집 URL을 포함하지 않는다.
-- 첨부 파일(확인 완료, 추가 작업 없음): `FileAccessSigner`는 `(파일명, 업로더 학번)`에 서명하고 요청자를 검증하지 않으며, `/api/upload/view/**`·`/download/**`는 `permitAll`이다. 본문에 저장된 서명 URL이 스냅샷에 그대로 복사되므로 다른 수강생도 열람된다. 파일 삭제 로직이 없어 원본 노트를 지워도 파일은 남는다.
+#### Dashboard와 Sidebar
 
-### 4. Frontend 게시판 UI
+- 대시보드에는 직접 생성 강의를 표시하지 않는다. "수강 중인 강의" 카드에는 `userCreated=false`인 강의만 보여 준다(기존 강의코드·교수명·이동 동작 유지).
+- `AppLayout` 사이드바 메뉴 이름을 "현재강의목록"에서 "강의목록"으로 바꾸고, 그 아래를 `CourseResponse.userCreated` 기준으로 두 그룹으로 나눈다. 클릭 경로는 기존 `/course/{courseId}`를 재사용한다.
+  - `수강 중인 강의`: 비어 있으면 "수강 중인 강의 없음"
+  - `내가 만든 강의`: 그룹 제목 옆에 `+` 버튼
+- `CourseContext`는 전체 강의 목록과 기존 최근 노트/게시글 데이터를 계속 한 번의 요청으로 관리한다.
 
-- `SharedNoteBoardPage` 추가
-  - 공유 노트 목록
-  - 강의 필터
-  - 제목·작성자·강의·공유일 표시
-- 공유 생성 진입점: `CourseDetailPage` 헤더의 `AI 문제 생성` 옆 `노트 공유` 버튼(현재 노트와 하위 노트 공유). 공유는 서버에 저장된 내용을 복사하므로 저장 상태가 `synced`일 때만 활성화한다.
-- `SharedNoteViewer` 추가
-  - 노트 트리와 현재 선택 노트 본문 표시
-  - `useEditor({ editable: false })`로 렌더링한다. 본문에는 `PageLink`, `PdfBlock`, `BlockId`, 이미지, 코드 블록 노드가 있으므로 `NotionEditor.jsx`의 스키마 확장(SlashCommand·Placeholder 제외)과 에디터 스타일을 export해 그대로 쓴다. `NotionEditor` 자체는 재사용하지 않는다(자동 저장·localStorage 복구가 원본 noteId로 동작하므로).
-  - `PageLink`는 `useNoteTree().findTitle(noteId)`로 제목을 찾으므로 뷰어를 스냅샷 트리로 만든 `NoteTreeProvider`로 감싼다. 링크 클릭 시 스냅샷 안의 노트면 그 노트로 전환하고, 공유 범위 밖이면 저장된 제목만 표시한다.
-  - 편집 버튼·자동 저장·파일 업로드·노트 생성 기능을 표시하지 않음
-- `useSharedNotes`
-  - 목록 조회, 상세 조회, 공유 삭제
-  - 기존 `client.js` Axios 인터셉터 사용
-- 댓글 UI: `components/quiz/QuestionComments.jsx`의 하드코딩된 URL을 props(`addUrl`, `commentUrl`)로 받게 바꿔 CBT와 노트 공유가 함께 쓴다.
-- `AppLayout`
-  - CBT 시험 공유게시판 메뉴 아래에 `노트 공유 게시판` 메뉴 추가
-- `App.jsx`
-  - 보호 라우트 `/shared-notes` 및 상세 경로 추가
-- 기존 `SharedQuizBoardPage`와 컴포넌트 스타일·course filter·empty state 패턴을 재사용하되, 퀴즈 풀이 컴포넌트는 재사용하지 않는다.
+#### 강의 생성·수정·삭제 UI
 
-### 5. 댓글 기능
+- 생성은 사이드바 "내가 만든 강의" 옆 `+` 버튼으로 한다. VS Code에서 새 파일을 만들 때처럼 목록 안에 이름 입력칸이 나타난다.
+  - Enter 또는 이름을 입력한 채 포커스를 옮기면 생성하고 그 강의로 이동한다.
+  - Esc를 누르거나 빈 채로 포커스를 옮기면 취소한다.
+  - 실패하면 서버 메시지를 알리고 입력칸을 남겨 이름을 고칠 수 있게 한다.
+  - Enter 뒤에 이어지는 blur로 두 번 생성되지 않게 막는다.
+- 입력값은 강의명 하나로 제한한다(최대 100자).
+- 직접 생성 강의 상세 화면의 헤더에 "이름 변경"(입력 창)·"강의 삭제" 버튼을 표시한다.
+- 수강 강의에는 해당 버튼을 표시하지 않는다.
+- 삭제 전 하위 노트와 이 강의의 퀴즈·풀이 기록·오답노트 항목까지 삭제된다는 확인 문구를 표시한다.
+- 직접 생성 강의에서는 `CourseDetailPage`의 "커뮤니티"·"노트 공유" 버튼을 숨긴다.
+- 직접 생성 강의에서는 게시판 게시글도 불러오지 않는다(`useCourseBoard`의 `enabled`). 불러오면 서버 403에 `client.js`의 공통 처리(알림 후 대시보드 이동)가 걸려 강의 화면에서 튕긴다. 강의 목록이 로딩 중이라 종류를 모를 때도 조회를 미룬다. 수동 테스트에서 발견해 수정했다.
+- 사이드바 활성 강의 판정은 `/course/{id}/`까지 비교한다. 단순 `includes`는 `/course/1`이 `/course/10`에도 걸린다(수동 테스트에서 발견해 수정).
+- 공유 게시판 강의 필터에서는 직접 생성 강의를 제외한다.
+- 생성·수정·삭제 성공 후 `CourseContext`의 강의 목록을 재조회하거나 기존 상태를 안전하게 갱신한다.
+- 노트 생성·자동 저장·하위 노트 이동·AI 퀴즈 진입은 기존 `CourseDetailPage`, `useCourseNotes`, `NotionEditor`를 그대로 재사용한다.
 
-- 기존 `CommentRequest`의 content validation을 재사용한다.
-- 응답은 `CommentResponse`의 `commentId`, 익명 작성자명, `isAuthor`, `content`, `createdAt` 패턴을 유지한다.
-- 댓글 목록은 공유 게시글 상세에서 로드한다.
-- 작성자는 자신의 댓글에만 삭제 버튼을 본다. 버튼 노출은 UI 편의일 뿐이고 서버가 최종 검증한다.
-- 삭제 실패 시 서버 `message`를 alert 또는 기존 공통 오류 처리 방식으로 표시한다.
-- 댓글 작성·조회는 공유 노트 게시글의 강의 수강생만 가능하게 한다.
+#### 라우팅
 
-### 6. 하위 노트 공유 처리
+- 기존 `/course/:courseId`와 `/course/:courseId/note/:noteId`를 그대로 사용한다.
+- 프론트에서 유형을 보고 라우트를 나누지 않는다. 서버가 요청자 권한을 검사하므로 URL 직접 접근도 동일하게 처리된다.
 
-1. 루트 노트를 조회하고 작성자·강의·수강 여부를 검증한다.
-2. 기존 `NoteRepository.findByCourseAndStudentOrderByCreatedAtAsc`로 같은 강의·학생 노트를 한 번에 조회하고, `getNoteTree`처럼 `parentNoteId`로 묶어 N+1을 피한다(새 repository 메서드 불필요).
-3. 원본 노트 ID를 방문 집합으로 관리해 순환 데이터가 있어도 무한 루프가 없게 한다.
-4. 루트부터 모든 하위 노트를 BFS로 순회한다.
-5. 각 노트의 title/content를 스냅샷으로 복사한다.
-6. 원본 `parentNote` 관계는 `parentOriginalNoteId` 값으로 보관한다.
-7. 공유 생성 시점 이후 원본에 추가된 하위 노트는 포함하지 않는다.
-8. 공유 게시글 삭제 시 스냅샷 전체를 cascade 삭제한다.
-9. 상세 응답은 스냅샷 트리와 본문만 반환하고 원본 노트 API 링크는 반환하지 않는다.
+### 4. 권한 처리
 
-대안으로 원본 `Note`를 직접 참조하고 조회 시점에 권한을 검사하는 방법은 구현량이 적지만, 공유 후 원본 변경·삭제의 영향을 받고 기존 `NoteService` 소유권 검사와 충돌할 가능성이 크므로 채택하지 않는다.
+#### 권한 표
 
-### 7. 테스트 계획
+| 대상 | 수강 강의 수강생 | 직접 생성 강의 소유자 | 기타 사용자 |
+|---|---:|---:|---:|
+| 수강 강의 목록 표시 | 허용 | 해당 없음 | 차단 |
+| 직접 생성 강의 목록 표시 | 본인 소유만 | 허용 | 차단 |
+| 직접 생성 강의 노트 조회/생성 | 해당 없음 | 허용 | 403 |
+| 직접 생성 강의 노트 수정/삭제 | 해당 없음 | 허용(소유자만 노트를 만들 수 있음) | 403 |
+| 직접 생성 강의 노트·퀴즈 공유, 게시판 | 해당 없음 | 400/403(이번 범위 제외) | 403 |
+| 직접 생성 강의 수정/삭제 | 차단 | 허용 | 403 |
+| 시스템 수강 강의 수정/삭제 | 차단 | 해당 없음 | 차단 |
+
+#### 서버 검증 원칙
+
+- 프론트의 `userCreated`는 표시용일 뿐 권한 판단에 사용하지 않는다.
+- 모든 강의 생성·수정·삭제와 노트 트리/생성/삭제 접근은 서버에서 현재 인증 학생을 기준으로 확인한다.
+- `Course.owner`와 `Student.studId`를 비교하고, 직접 생성 강의가 아니면 소유자 권한을 적용하지 않는다.
+- `NoteService`가 courseId만 확인하지 않고 note의 실제 `course`, `student`, parent note의 course/student를 함께 검증하도록 기존 흐름을 유지한다.
+- 직접 생성 강의 ID를 임의로 바꾼 요청, 다른 학생의 courseId·noteId·parentNoteId 요청은 403 또는 404 정책에 맞게 차단한다.
+
+### 5. 기존 기능 영향도
+
+#### 영향이 없는 영역
+
+- 기존 `Note` 테이블의 본문·트리·소유자 필드는 변경하지 않는다.
+- 기존 수강 강의의 Enrollment 기반 접근과 강의 게시판은 그대로 동작한다.
+- 기존 `/api/courses/{courseId}/notes/tree`, `/api/notes/{noteId}`, 노트 저장 API 경로는 유지한다.
+- AI 퀴즈와 오답노트는 `courseId`를 기준으로 동작하므로 직접 생성 강의에서도 같은 강의·노트 권한을 통과하면 재사용 가능하다.
+- 기존 CBT 공유와 노트 공유 기능은 공유 게시글의 `course_id`를 유지해 별도 정책으로 확장한다.
+
+#### 반드시 확인할 영향
+
+- `DashboardService`의 최근 노트는 `findTop6ByStudentOrderByUpdatedAtDesc`이므로 직접 생성 강의 노트도 자동으로 포함될 수 있다. UI에서 강의 표시만 보완하면 된다.
+- `DashboardService`의 최근 게시글은 수강 강의만 조회하므로 직접 생성 강의 게시판을 제공하지 않는다면 현재 동작을 유지한다.
+- `PostService`는 Enrollment만 요구하므로 직접 생성 강의에서는 커뮤니티 게시판을 제공하지 않는다(버튼 숨김).
+- 수강 검증 위치별 처리는 "수강 검증 위치" 절을 따른다. `QuizService`·`IncorrectNoteService`는 변경하지 않는다.
+- 강의 삭제 시 FK는 "관계와 삭제" 절의 순서(퀴즈 → 루트 노트 → 강의)로 해결한다.
+
+### 6. 테스트 계획
 
 #### Backend 단위/웹 계층
 
-- 공유 생성
-  - 본인 루트 노트 성공
-  - 타인 노트 403
-  - 미수강 강의 403
-  - 하위 노트 전체 스냅샷 생성
-  - 동일 루트 노트 중복 공유 400
-- 공유 조회
-  - 같은 강의 수강생 성공
-  - 다른 강의 또는 미수강 학생 403
-  - 스냅샷 제목·본문·트리 순서 검증
-  - 원본 수정·삭제 후 공유 스냅샷 유지
-  - 게시글 삭제 후 목록·상세·댓글 조회 404
-- 게시글 삭제
-  - 작성자 성공
+- 강의 생성
+  - 인증 사용자가 강의명만으로 직접 생성 강의를 생성
+  - `owner`, `userCreated=true`, 교수 null, 강의코드 null 검증
+  - 빈 이름·길이 초과 400, 같은 이름 중복 생성 허용
+- 강의 수정/삭제
+  - 소유자 수정·삭제 성공
   - 다른 사용자 403
-  - 스냅샷·댓글 cascade 삭제 검증
-- 댓글
-  - 수강생 작성·조회 성공
-  - 미수강 학생 403
-  - 본인 삭제 성공
-  - 타인 댓글 삭제 403
-  - 존재하지 않는 댓글 404
-  - content 길이·공백 검증
-- 회귀
-  - 기존 `NoteService`의 타인 노트 접근 403 유지
-  - 기존 `PostService` 게시판·댓글 CRUD 영향 없음
-  - 기존 `SharedQuizService` API와 경로 충돌 없음
+  - 시스템 수강 강의 수정·삭제 차단
+  - 삭제 시 노트·하위 노트 정리 검증
+  - 퀴즈·풀이 기록·오답노트 항목이 있어도 FK 오류 없이 삭제
+- 목록
+  - 기존 수강 강의와 본인 직접 생성 강의가 함께 반환
+  - 다른 사용자의 직접 생성 강의는 반환되지 않음
+  - `userCreated` 응답 필드 검증
+  - 교수가 null인 직접 생성 강의가 섞여도 대시보드 정상 응답(NPE 회귀)
+- NoteService 회귀
+  - 수강 강의 수강생의 기존 노트 CRUD 유지
+  - 직접 생성 강의 소유자의 노트 트리 조회·루트/하위 노트 생성·저장·삭제 성공
+  - 다른 사용자의 직접 생성 강의 접근 403
+  - 다른 강의의 parentNote 연결 차단
+- 관련 서비스 권한
+  - 직접 생성 강의 노트로 AI 퀴즈 생성·풀이·오답노트 추가 가능
+  - 직접 생성 강의의 노트·퀴즈 공유 400
+- 기존 회귀
+  - 기존 DashboardService, NoteService, PostService 테스트 모두 통과
 
 #### Frontend
 
-- 공유 게시판 목록·강의 필터·빈 상태
-- 공유 생성 버튼과 성공 후 중복 상태
-- 읽기 전용 노트 트리 탐색
-- EDIT UI와 자동 저장 API가 호출되지 않음
-- 댓글 작성·삭제 버튼의 작성자 조건
-- 게시글 삭제 후 목록에서 제거
-- 401/403/404 오류 표시
-- 라우트와 사이드바 메뉴 활성화
+- 사이드바 "강의목록"에서 수강 중인 강의/내가 만든 강의 그룹이 구분되어 표시되고, 대시보드에는 직접 생성 강의가 없음
+- `+` 인라인 입력: Enter·포커스 이탈로 생성(한 번만), Esc·빈 이름은 취소
+- 직접 생성 강의 생성·수정·삭제 UI
+- 수강 강의에는 소유자 전용 버튼이 표시되지 않음
+- 직접 생성 강의에는 커뮤니티·노트 공유 버튼이 표시되지 않음
+- 공유 게시판 강의 필터에 직접 생성 강의가 나오지 않음
+- 직접 생성 강의에서 기존 노트 트리·에디터·하위 노트 생성 동작
+- 삭제 후 강의 목록과 현재 라우트 상태 갱신
+- 다른 사용자의 강의 URL 직접 접근 시 403 오류 처리
+- `CourseContext` 데이터 갱신과 사이드바/대시보드 동기화
 
 #### 검증 명령
 
 - Backend: `backend\gradlew.bat test`
 - Frontend: `npm run lint`, `npm run build`, `npm run test`
-- 운영 DDL이 추가되면 prod `ddl-auto: validate` 기동 검증을 별도로 수행한다.
+- 운영 DDL을 추가한 경우 `SPRING_PROFILES_ACTIVE=prod`와 `ddl-auto: validate` 기동 검증
+- 실제 DB에서 기존 수강 강의와 직접 생성 강의를 각각 생성해 노트·하위 노트·삭제 시나리오 확인
 
 ## 결정 사항(확정)
 
-1. 첨부 파일: 서명 URL이 요청자와 무관하므로 추가 작업 없음.
-2. 제목: 루트 노트 제목 자동 사용.
-3. 페이지네이션: 없음(CBT 공유 게시판과 동일).
-4. 공유 해제: cascade hard delete.
-5. 댓글 수정: 지원.
+1. 이름 중복: 허용.
+2. 게시판: 직접 생성 강의에는 제공하지 않음.
+3. 삭제와 학습 데이터: 소유자의 해당 강의 퀴즈·풀이 기록·오답노트 항목까지 함께 삭제.
+4. 노트 공유 범위: 이번 범위에서는 공유 불가(서버 400, 버튼 숨김). 공개 범위는 추후 별도 기능에서 결정.
+5. soft delete: 하지 않음.
 
 ## 구현 순서
 
-1. 공유 노트·스냅샷·댓글 엔티티와 repository 추가
-2. `SharedNoteService` 및 권한 검증 구현
-3. Controller/DTO/API 문서(`docs/api.md`)/운영 DDL(`docs/database.md`) 갱신
-4. Backend 단위 테스트 구현
-5. 읽기 전용 공유 노트 viewer와 게시판 UI 구현
-6. Frontend 테스트·lint/build 및 수동 다중 사용자 시나리오 검증
+1. `Course` 소유권 필드와 `docs/database.md` 운영 DDL 추가
+2. `CourseService`, repository 조회, 생성·수정·삭제 API 구현
+3. `DashboardService`(NPE 수정 포함)/`CourseContext`에 수강 강의·내 강의 구분 반영
+4. `NoteService`의 소유자 강의 접근 허용, 공유 서비스의 직접 생성 강의 400 처리
+5. Backend 단위·웹·회귀 테스트 작성
+6. Dashboard/Sidebar 강의 관리 UI, 커뮤니티·노트 공유 버튼 숨김, 공유 게시판 필터 제외
+7. Frontend 테스트·lint/build 및 실제 다중 사용자 시나리오 검증

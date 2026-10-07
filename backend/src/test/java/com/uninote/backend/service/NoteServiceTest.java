@@ -282,4 +282,25 @@ class NoteServiceTest {
                 .findByCourseAndStudentOrderByCreatedAtAsc(any(), any());
         org.mockito.Mockito.verifyNoMoreInteractions(noteRepository);
     }
+    @Test
+    void ownerOfUserCreatedCourseCanUseNotesWithoutEnrollment() {
+        when(studentRepository.findByStudentNum("owner-num")).thenReturn(Optional.of(owner));
+        when(courseRepository.findById(10L)).thenReturn(Optional.of(course));
+        when(enrollmentRepository.existsByStudentAndCourse_CourseId(owner, 10L)).thenReturn(false);
+        when(courseRepository.existsByCourseIdAndUserCreatedTrueAndOwner_StudId(10L, 1L)).thenReturn(true);
+        when(noteRepository.findByCourseAndStudentOrderByCreatedAtAsc(course, owner)).thenReturn(List.of(note));
+
+        assertThat(noteService.getNoteTree(10L, "owner-num")).hasSize(1);
+    }
+
+    @Test
+    void nonOwnerCannotUseNotesOfSomeoneElsesUserCreatedCourse() {
+        when(studentRepository.findByStudentNum("other-num")).thenReturn(Optional.of(other));
+        when(courseRepository.findById(10L)).thenReturn(Optional.of(course));
+        when(enrollmentRepository.existsByStudentAndCourse_CourseId(other, 10L)).thenReturn(false);
+        when(courseRepository.existsByCourseIdAndUserCreatedTrueAndOwner_StudId(10L, 2L)).thenReturn(false);
+
+        assertThatThrownBy(() -> noteService.getNoteTree(10L, "other-num"))
+                .isInstanceOf(CourseAccessException.class);
+    }
 }

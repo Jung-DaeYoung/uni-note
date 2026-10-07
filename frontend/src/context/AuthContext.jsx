@@ -24,7 +24,10 @@ export const AuthProvider = ({ children }) => {
   // 이 조건을 거침), isAuthenticated를 별도 상태로 두지 않고 token으로부터 파생시킨다.
   const [token, setToken] = useState(() => {
     const stored = localStorage.getItem('token');
-    return isTokenValid(stored) ? stored : null;
+    if (isTokenValid(stored)) return stored;
+    // 이미 만료된 토큰이 로컬에 남아있으면 정리한다.
+    localStorage.removeItem('token');
+    return null;
   });
   const isAuthenticated = token !== null;
 
@@ -37,14 +40,6 @@ export const AuthProvider = ({ children }) => {
   const logout = useCallback(() => {
     localStorage.removeItem('token');
     setToken(null);
-  }, []);
-
-  useEffect(() => {
-    // 이미 만료된 토큰이 로컬에 남아있으면 정리한다.
-    const stored = localStorage.getItem('token');
-    if (stored && !isTokenValid(stored)) {
-      localStorage.removeItem('token');
-    }
   }, []);
 
   useEffect(() => {

@@ -10,20 +10,18 @@ const NoteTreeContext = createContext({
 // eslint-disable-next-line react-refresh/only-export-components
 export const useNoteTree = () => useContext(NoteTreeContext);
 
-const findTitleInTree = (tree, id) => {
-  if (!tree) return null;
-  for (const item of tree) {
-    if (item.noteId === id) return item.title;
-    if (item.children) {
-      const found = findTitleInTree(item.children, id);
-      if (found) return found;
-    }
+// eslint-disable-next-line react-refresh/only-export-components
+export const findNote = (tree, id) => {
+  for (const item of tree || []) {
+    if (item.noteId === id) return item;
+    const found = findNote(item.children, id);
+    if (found) return found;
   }
   return null;
 };
 
 export const NoteTreeProvider = ({ children, noteTree }) => {
-  const findTitle = useCallback((id) => findTitleInTree(noteTree, id), [noteTree]);
+  const findTitle = useCallback((id) => findNote(noteTree, id)?.title || null, [noteTree]);
 
   const value = useMemo(() => ({ noteTree, findTitle }), [noteTree, findTitle]);
 

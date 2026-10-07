@@ -187,7 +187,6 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
       PageLink,
       PdfBlock,
       SlashCommand.configure({
-        // ... (기존 suggestion 설정 유지)
         suggestion: {
           items: ({ query }) => {
             return [
@@ -302,10 +301,8 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
         },
       }),
     ],
-    // 핵심 수정 부분: 초기 콘텐츠를 useEditor 단계에서 설정
     content: getInitialContent(),
     editorProps: {
-      // ... (기존 editorProps 유지)
       attributes: {
         class: 'uninote-editor focus:outline-none min-h-[700px] text-lg leading-relaxed',
         spellcheck: 'false',
@@ -366,13 +363,12 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
     },
   });
 
-  // noteId가 바뀔 때 에디터 인스턴스는 유지하되 내용만 초기화해야 할 경우를 위해 남겨둠
-  // 단, 부모에서 <NotionEditor key={noteId} />를 사용한다면 이 Effect는 아예 필요 없음
+  // 최초 1회 에디터 내용을 서버/로컬 데이터와 맞추고 자동 저장 기준점을 잡는다(useNoteAutosave.syncEditor).
   useEffect(() => {
     if (!editor) return;
     syncEditor(editor);
     return () => cancelPendingSave();
-  }, [noteId, editor, initialData, syncEditor, cancelPendingSave]); // initialData 추가하여 데이터 로딩 완료 시점에 반영되도록 함
+  }, [noteId, editor, initialData, syncEditor, cancelPendingSave]);
 
   // retrySave/editor 참조 자체는 의존성으로 쓰지 않는다: editor 인스턴스가 렌더마다
   // 새 참조로 보일 수 있어 이를 deps에 넣으면 onSaveStateChange 호출 → 부모 setState →

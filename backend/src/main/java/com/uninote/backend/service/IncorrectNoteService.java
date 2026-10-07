@@ -296,7 +296,7 @@ public class IncorrectNoteService {
                 double accuracyRate = stat.getAttemptCount() == 0 ? 0.0
                     : (double) stat.getCorrectCount() / stat.getAttemptCount();
 
-                return new QuestionReviewStat(stat, questionsById.get(stat.getQuestionId()), accuracyRate,
+                return new QuestionReviewStat(stat, questionsById.get(stat.getQuestionId()),
                     recentlyIncorrect, classifyPriority(stat.getIncorrectCount(), accuracyRate, recentlyIncorrect));
             })
             .sorted(PRIORITY_ORDER)
@@ -332,7 +332,6 @@ public class IncorrectNoteService {
         @Delegate
         private final QuestionAnswerStat stat;
         private final Question question;
-        private final double accuracyRate;
         private final boolean recentlyIncorrect;
         private final ReviewPriority reviewPriority;
     }

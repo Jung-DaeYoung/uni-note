@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNoteTree } from '../../../context/NoteTreeContext';
+import { useNoteTree, findNote } from '../../../context/NoteTreeContext';
 import { X, Check, BookOpen, Loader2, ChevronRight, Minus, Plus, ListTree } from 'lucide-react';
 import client from '../../../api/client';
 
@@ -517,7 +517,7 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
     const current = isWhole ? blocks.map(block => block.id) : (blockSelections[noteId] || []);
     const isSelecting = !current.includes(blocks[index].id);
     const nextIds = isSelecting
-      ? [...current, ...targetIds.filter(id => !current.includes(id))]
+      ? [...new Set([...current, ...targetIds])]
       : current.filter(id => !targetIds.includes(id));
 
     if (isWhole) {
@@ -561,45 +561,14 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
   };
 
   const toggleNote = (noteId) => {
-    // 해당 노드와 모든 자식 노드 ID를 찾는 헬퍼 함수
-    const getAllChildIds = (nodes, id) => {
-      for (const node of nodes) {
-        if (node.noteId === id) {
-          const ids = [node.noteId];
-          const collectChildren = (children) => {
-            if (!children) return;
-            children.forEach(child => {
-              ids.push(child.noteId);
-              collectChildren(child.children);
-            });
-          };
-          collectChildren(node.children);
-          return ids;
-        }
-        if (node.children) {
-          const found = getAllChildIds(node.children, id);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    const targetIds = getAllChildIds(noteTree, noteId) || [noteId];
+    // 해당 노트와 모든 하위 노트 ID
+    const note = findNote(noteTree, noteId);
+    const targetIds = note ? collectNoteIds([note]) : [noteId];
     const isSelecting = !selectedIds.includes(noteId);
 
-    setSelectedIds(prev => {
-      if (isSelecting) {
-        // 선택 시: 기존 선택 목록에 대상 ID들 중 없는 것만 추가
-        const next = [...prev];
-        targetIds.forEach(id => {
-          if (!next.includes(id)) next.push(id);
-        });
-        return next;
-      } else {
-        // 해제 시: 대상 ID들을 모두 제거
-        return prev.filter(id => !targetIds.includes(id));
-      }
-    });
+    setSelectedIds(prev => (isSelecting
+      ? [...new Set([...prev, ...targetIds])]
+      : prev.filter(id => !targetIds.includes(id))));
     // 노트 체크박스는 "전체" 선택이다. 선택하면 일부 블록 선택을 전체로 바꾸고, 해제하면 함께 비운다.
     setBlockSelections(prev => (targetIds.some(id => prev[id]) ? omitNotes(prev, targetIds) : prev));
   };

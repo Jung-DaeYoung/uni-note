@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import client, { API_BASE_URL } from '../../../api/client';
 
-const SERVER_URL = API_BASE_URL;
-
 // 서버(ImageUploadController)와 동일한 확장자 화이트리스트, 크기 제한(application.yaml
 // max-file-size: 10MB)을 클라이언트에서도 미리 확인해 불필요한 업로드 요청을 막는다.
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -18,8 +16,8 @@ const ALLOWED_FILE_PATH_PREFIXES = ['/api/upload/view/', '/api/upload/download/'
 export const isAllowedFileUrl = (url) => {
   if (!url) return false;
   try {
-    const serverOrigin = new URL(SERVER_URL).origin;
-    const parsed = new URL(url, SERVER_URL);
+    const serverOrigin = new URL(API_BASE_URL).origin;
+    const parsed = new URL(url, API_BASE_URL);
     if (parsed.origin !== serverOrigin) return false;
     return ALLOWED_FILE_PATH_PREFIXES.some((prefix) => parsed.pathname.startsWith(prefix));
   } catch {
@@ -84,7 +82,7 @@ const useNoteUploads = () => {
       allowedMimeTypes: ALLOWED_IMAGE_MIME_TYPES,
       label: '이미지',
     });
-    return data && SERVER_URL + data.url;
+    return data && API_BASE_URL + data.url;
   };
 
   const handlePdfUpload = async (file) => {
@@ -94,7 +92,7 @@ const useNoteUploads = () => {
       allowedMimeTypes: ALLOWED_PDF_MIME_TYPES,
       label: 'PDF',
     });
-    return data && { url: SERVER_URL + data.url, title: data.title };
+    return data && { url: API_BASE_URL + data.url, title: data.title };
   };
 
   return { handleImageUpload, handlePdfUpload, uploadStatus, uploadError, clearUploadError };

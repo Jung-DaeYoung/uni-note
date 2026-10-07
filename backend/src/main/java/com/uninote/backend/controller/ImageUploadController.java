@@ -14,6 +14,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
 import org.springframework.web.util.UriUtils;
 
 import java.nio.charset.StandardCharsets;
@@ -51,8 +52,9 @@ public class ImageUploadController {
     // 서명 도입(P1-1) 이전에 "/uploads/{fileName}" 정적 경로로 발급된 파일 중,
     // 실제로 저장된 노트가 여전히 참조하고 있어 계속 서빙해야 하는 파일만 콤마로 나열한다.
     // 새로 업로드되는 파일은 전부 서명이 있으므로 이 목록에 추가할 필요가 없다.
+    // Spring이 콤마 구분 값을 Set으로 변환한다(공백 trim 포함).
     @Value("${file-access.legacy-allowed-files:}")
-    private String legacyAllowedFilesRaw;
+    private Set<String> legacyAllowedFiles = Set.of();
 
     // 새로 업로드된 파일(서명 있음)을 화면에 표시하기 위한 인라인 서빙.
     @GetMapping("/api/upload/view/{fileName}")
@@ -83,18 +85,9 @@ public class ImageUploadController {
         // owner/sig가 모두 없으면 서명 검증 대상이 아니라, 화이트리스트에 등록된
         // 레거시 파일인지만 확인한다(신규 파일은 항상 서명이 있으므로 여기 걸리지 않는다).
         if (owner == null && sig == null) {
-            return isLegacyAllowedFile(fileName);
+            return legacyAllowedFiles.contains(fileName);
         }
         return fileAccessSigner.isValid(fileName, owner, sig);
-    }
-
-    private boolean isLegacyAllowedFile(String fileName) {
-        if (legacyAllowedFilesRaw == null || legacyAllowedFilesRaw.isBlank()) {
-            return false;
-        }
-        return Arrays.stream(legacyAllowedFilesRaw.split(","))
-                .map(String::trim)
-                .anyMatch(allowed -> allowed.equals(fileName));
     }
 
     // 경로 조작 문자열(traversal)은 인가 여부와 무관하게 항상 먼저 거부되어야 하므로,
@@ -150,19 +143,10 @@ public class ImageUploadController {
         return resolved;
     }
 
-    // Files.probeContentType()은 OS의 파일 형식 연결 설정에 의존해 환경에 따라 null을
-    // 반환할 수 있다. 이 앱이 실제로 다루는 확장자만 최소한으로 직접 보정한다.
-    private MediaType resolveContentType(Path filePath) throws IOException {
-        String probed = Files.probeContentType(filePath);
-        if (probed != null) {
-            return MediaType.parseMediaType(probed);
-        }
-        String fileName = filePath.getFileName().toString().toLowerCase();
-        if (fileName.endsWith(".pdf")) return MediaType.APPLICATION_PDF;
-        if (fileName.endsWith(".png")) return MediaType.IMAGE_PNG;
-        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) return MediaType.IMAGE_JPEG;
-        if (fileName.endsWith(".gif")) return MediaType.IMAGE_GIF;
-        return MediaType.APPLICATION_OCTET_STREAM;
+    // Files.probeContentType()은 OS 설정에 따라 결과가 달라지므로 Spring의 확장자 매핑을 쓴다.
+    private MediaType resolveContentType(Path filePath) {
+        return MediaTypeFactory.getMediaType(filePath.getFileName().toString())
+                .orElse(MediaType.APPLICATION_OCTET_STREAM);
     }
 
     @PostMapping("/api/upload/image")

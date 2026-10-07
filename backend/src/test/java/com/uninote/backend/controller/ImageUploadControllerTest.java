@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -160,7 +161,7 @@ class ImageUploadControllerTest {
     @Test
     void unsignedRequestForWhitelistedLegacyFileStillWorks() throws IOException {
         String fileName = writeTestFile("hello-legacy-whitelisted");
-        ReflectionTestUtils.setField(controller, "legacyAllowedFilesRaw", "other-file.png," + fileName);
+        ReflectionTestUtils.setField(controller, "legacyAllowedFiles", Set.of("other-file.png", fileName));
 
         ResponseEntity<Resource> response = controller.viewFile(fileName, null, null);
 
@@ -170,7 +171,7 @@ class ImageUploadControllerTest {
     @Test
     void legacyStaticPathEndpointServesWhitelistedFile() throws IOException {
         String fileName = writeTestFile("hello-uploads-path");
-        ReflectionTestUtils.setField(controller, "legacyAllowedFilesRaw", fileName);
+        ReflectionTestUtils.setField(controller, "legacyAllowedFiles", Set.of(fileName));
 
         ResponseEntity<Resource> response = controller.viewLegacyFile(fileName);
 

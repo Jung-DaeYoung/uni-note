@@ -32,6 +32,7 @@ import SlashCommand from './extensions/SlashCommand.js';
 import BlockId from './extensions/BlockId.js';
 import PageLink from './extensions/PageLink.jsx';
 import PdfBlock from './extensions/PdfBlock.jsx';
+import SourceHighlight from './extensions/SourceHighlight.js';
 import SuggestionList from './components/SuggestionList.jsx';
 import BlockHandle from './components/BlockHandle.jsx';
 import CodeBlockComponent from './components/CodeBlockComponent';
@@ -187,6 +188,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
   const editor = useEditor({
     extensions: [
       ...noteSchemaExtensions,
+      SourceHighlight,
       Placeholder.configure({
         placeholder: ({ pos }) => {
           if (pos === 0) return '제목을 입력하세요';

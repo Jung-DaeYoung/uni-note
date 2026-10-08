@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import client from '../api/client';
+import { useConfirm } from '../context/ConfirmContext';
 
 // 노트 공유 게시판의 강의 필터 조회와 글 삭제를 담당한다. 상세·댓글은 SharedNoteViewer가 직접 불러온다.
 const useSharedNotes = () => {
+  const confirm = useConfirm();
   const [courseId, setCourseId] = useState('');
   const [posts, setPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -29,7 +31,11 @@ const useSharedNotes = () => {
 
   // 삭제하면 다른 수강생도 즉시 볼 수 없다. 성공 여부를 반환해 상세 화면이 목록으로 돌아갈 수 있게 한다.
   const deletePost = async (post) => {
-    if (!window.confirm('게시판에서 이 노트 공유를 내릴까요?\n댓글도 함께 삭제됩니다.')) return false;
+    if (!(await confirm({
+      title: '게시판에서 이 노트 공유를 내릴까요?',
+      message: '댓글도 함께 삭제됩니다.',
+      confirmLabel: '공유 내리기',
+    }))) return false;
     try {
       await client.delete(`/shared-notes/${post.sharedNotePostId}`);
       setPosts(prev => prev.filter(p => p.sharedNotePostId !== post.sharedNotePostId));

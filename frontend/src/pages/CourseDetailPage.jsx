@@ -18,6 +18,7 @@ import QuizConfigModal from '../components/editor/components/QuizConfigModal';
 import CBTPlayer from '../components/editor/components/CBTPlayer';
 import { NoteTreeProvider } from '../context/NoteTreeContext';
 import { useCourses } from '../context/CourseContext';
+import { useConfirm } from '../context/ConfirmContext';
 import NoteTreeItem from '../components/course/NoteTreeItem';
 import CourseBoardPanel from '../components/course/CourseBoardPanel';
 import useCourseNotes from '../hooks/useCourseNotes';
@@ -28,6 +29,7 @@ const CourseDetailPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { courses, renameCourse, deleteCourse } = useCourses();
+  const confirm = useConfirm();
 
   const course = useMemo(() => courses.find(c => c.courseId === parseInt(courseId)), [courses, courseId]);
   const courseName = course ? course.courseName : '';
@@ -45,8 +47,11 @@ const CourseDetailPage = () => {
   };
 
   const handleDeleteCourse = async () => {
-    if (!window.confirm(`'${courseName}' 강의를 삭제할까요?
-이 강의의 모든 노트와 하위 노트, 퀴즈·풀이 기록·오답노트 항목이 함께 영구 삭제됩니다.`)) return;
+    if (!(await confirm({
+      title: `'${courseName}' 강의를 삭제할까요?`,
+      message: '이 강의의 모든 노트와 하위 노트, 퀴즈·풀이 기록·오답노트 항목이 함께 영구 삭제됩니다.',
+      confirmLabel: '강의 삭제',
+    }))) return;
     try {
       await deleteCourse(course.courseId);
       navigate('/dashboard');

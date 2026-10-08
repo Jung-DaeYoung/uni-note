@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import client from '../api/client';
+import { useConfirm } from '../context/ConfirmContext';
 
 // CBT 시험 공유게시판의 정렬·강의 필터 조회와 추천·풀기·글 삭제 액션을 담당한다.
 const useSharedQuizzes = () => {
+  const confirm = useConfirm();
   const [sort, setSort] = useState('latest'); // 'latest' | 'likes' | 'views'
   const [courseId, setCourseId] = useState('');
   const [posts, setPosts] = useState([]);
@@ -56,7 +58,11 @@ const useSharedQuizzes = () => {
   };
 
   const deletePost = async (post) => {
-    if (!window.confirm('게시판에서 이 시험을 내릴까요?\n이미 풀었거나 오답노트에 담은 사용자의 기록은 유지됩니다.')) return;
+    if (!(await confirm({
+      title: '게시판에서 이 시험을 내릴까요?',
+      message: '이미 풀었거나 오답노트에 담은 사용자의 기록은 유지됩니다.',
+      confirmLabel: '공유 내리기',
+    }))) return;
     try {
       await client.delete(`/shared-quizzes/${post.sharedQuizId}`);
       setPosts(prev => prev.filter(p => p.sharedQuizId !== post.sharedQuizId));

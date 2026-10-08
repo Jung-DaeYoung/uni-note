@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
+import { useConfirm } from '../context/ConfirmContext';
 
 // 오답노트 페이지(통계/모음)의 조회와 재풀이·삭제 액션을 담당한다.
 // useQuizLibrary와 독립된 selectedQuiz를 소유하며, 두 훅은 서로 다른 페이지에서만 쓰인다.
 const useIncorrectNotes = (view) => {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [incorrectGroups, setIncorrectGroups] = useState([]);
   const [isGroupsLoading, setIsGroupsLoading] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
@@ -122,7 +124,11 @@ const useIncorrectNotes = (view) => {
 
   const handleDeleteGroup = async (e, groupId) => {
     e.stopPropagation();
-    if (!window.confirm('오답노트를 삭제하시겠습니까? (저장된 오답들도 함께 사라집니다)')) return;
+    if (!(await confirm({
+      title: '오답노트를 삭제할까요?',
+      message: '저장된 오답들도 함께 삭제되며 되돌릴 수 없습니다.',
+      confirmLabel: '오답노트 삭제',
+    }))) return;
     try {
       await client.delete(`/quiz/incorrect/groups/${groupId}`);
       setIncorrectGroups(incorrectGroups.filter(g => g.id !== groupId));

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import client from '../api/client';
+import { useConfirm } from '../context/ConfirmContext';
 
 // 학습 보관함의 탭별 조회(퀴즈/풀이 이력)와 재풀이·이력·삭제 액션을 담당한다.
 const useQuizLibrary = (activeTab) => {
+  const confirm = useConfirm();
   const [quizzes, setQuizzes] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
@@ -69,7 +71,12 @@ const useQuizLibrary = (activeTab) => {
   // 공유하면 서버가 스냅샷을 복사해 게시판에 올린다. 원본을 지워도 게시판 글은 남는다.
   const handleShare = async (e, quiz) => {
     e.stopPropagation();
-    if (!window.confirm(`'${quiz.title}'을(를) CBT 시험 공유게시판에 공유할까요?\n같은 강의 수강생이 풀 수 있고, 원문 보기는 제공되지 않습니다.`)) return;
+    if (!(await confirm({
+      title: `'${quiz.title}'을(를) CBT 시험 공유게시판에 공유할까요?`,
+      message: '같은 강의 수강생이 풀 수 있고, 원문 보기는 제공되지 않습니다.',
+      variant: 'share',
+      confirmLabel: '공유하기',
+    }))) return;
     try {
       await client.post('/shared-quizzes', { quizSetId: quiz.quizSetId });
       setQuizzes(prev => prev.map(q => (q.quizSetId === quiz.quizSetId ? { ...q, shared: true } : q)));
@@ -81,10 +88,13 @@ const useQuizLibrary = (activeTab) => {
   const handleDelete = async (e, quizSetId) => {
     e.stopPropagation();
     const shared = quizzes.find(q => q.quizSetId === quizSetId)?.shared;
-    const message = shared
-      ? '정말 삭제하시겠습니까?\n공유게시판에 올린 글은 유지됩니다. 글을 내리려면 게시판에서 삭제하세요.'
-      : '정말 삭제하시겠습니까?';
-    if (!window.confirm(message)) return;
+    if (!(await confirm({
+      title: '퀴즈를 삭제할까요?',
+      message: shared
+        ? '삭제한 퀴즈는 복구할 수 없습니다.\n공유게시판에 올린 글은 유지됩니다. 글을 내리려면 게시판에서 삭제하세요.'
+        : '삭제한 퀴즈는 복구할 수 없습니다.',
+      confirmLabel: '퀴즈 삭제',
+    }))) return;
     try {
       await client.delete(`/quiz/${quizSetId}`);
       setQuizzes(quizzes.filter(q => q.quizSetId !== quizSetId));
@@ -95,7 +105,11 @@ const useQuizLibrary = (activeTab) => {
 
   const handleDeleteAttempt = async (e, attemptId) => {
     e.stopPropagation();
-    if (!window.confirm('이 풀이 기록을 삭제할까요? 오답 통계에서도 빠집니다.')) return;
+    if (!(await confirm({
+      title: '이 풀이 기록을 삭제할까요?',
+      message: '오답 통계에서도 빠집니다.',
+      confirmLabel: '기록 삭제',
+    }))) return;
     try {
       await client.delete(`/quiz/attempts/${attemptId}`);
       setAttempts(prev => prev.filter(a => a.attemptId !== attemptId));

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import client from '../api/client';
+import { useConfirm } from '../context/ConfirmContext';
 
 // 익명 게시판(글/댓글) 목록·상세·작성·수정·삭제 상태와 대시보드 postId 딥링크를 담당한다.
 // enabled=false면 게시글을 불러오지 않는다. 직접 만든 강의에는 게시판이 없어 서버가 403을 주고,
 // client.js의 403 공통 처리(alert 후 대시보드 이동)가 강의 화면을 쫓아내기 때문이다.
 const useCourseBoard = ({ courseId, searchString, enabled = true }) => {
+  const confirm = useConfirm();
   const [posts, setPosts] = useState([]);
 
   const [isBoardOpen, setIsBoardOpen] = useState(false);
@@ -114,7 +116,11 @@ const useCourseBoard = ({ courseId, searchString, enabled = true }) => {
   };
 
   const handleDeleteComment = async (commentId) => {
-    if (!window.confirm("댓글을 삭제하시겠습니까?")) return;
+    if (!(await confirm({
+      title: '댓글을 삭제할까요?',
+      message: '삭제한 댓글은 복구할 수 없습니다.',
+      confirmLabel: '댓글 삭제',
+    }))) return;
     try {
       await client.delete(`/posts/comments/${commentId}`);
       await refreshPosts();
@@ -125,7 +131,11 @@ const useCourseBoard = ({ courseId, searchString, enabled = true }) => {
 
   const handleDeletePost = async () => {
     if (!selectedPost) return;
-    if (!window.confirm("정말로 이 게시글을 삭제하시겠습니까?")) return;
+    if (!(await confirm({
+      title: '게시글을 삭제할까요?',
+      message: '삭제한 게시글은 복구할 수 없습니다.',
+      confirmLabel: '게시글 삭제',
+    }))) return;
     try {
       await client.delete(`/posts/${selectedPost.postId}`);
       setPosts(posts.filter(p => p.postId !== selectedPost.postId));

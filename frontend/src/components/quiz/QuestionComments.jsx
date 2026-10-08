@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { MessageSquare, PenLine, Trash2 } from 'lucide-react';
 import client from '../../api/client';
+import { useConfirm } from '../../context/ConfirmContext';
 
 // 공유게시판 댓글 목록·작성·수정·삭제. CBT 시험(문제별)과 노트 공유(글별)가 함께 쓴다.
 // 목록은 부모가 받아 내려주고, 작성·수정·삭제 결과는 onChange로 이 목록만 갱신한다.
 // addUrl: 작성 경로, commentUrl: 수정·삭제 경로 앞부분(뒤에 /{commentId}가 붙는다).
 const QuestionComments = ({ addUrl, commentUrl, comments, onChange, placeholder, defaultOpen = false }) => {
+  const confirm = useConfirm();
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [newComment, setNewComment] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -36,7 +38,11 @@ const QuestionComments = ({ addUrl, commentUrl, comments, onChange, placeholder,
   };
 
   const handleDelete = async (commentId) => {
-    if (!window.confirm('댓글을 삭제할까요?')) return;
+    if (!(await confirm({
+      title: '댓글을 삭제할까요?',
+      message: '삭제한 댓글은 복구할 수 없습니다.',
+      confirmLabel: '댓글 삭제',
+    }))) return;
     try {
       await client.delete(`${commentUrl}/${commentId}`);
       onChange(comments.filter(c => c.commentId !== commentId));

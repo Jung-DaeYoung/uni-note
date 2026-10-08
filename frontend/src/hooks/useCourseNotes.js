@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import client from '../api/client';
+import { useConfirm } from '../context/ConfirmContext';
 
 // 노트 트리 조회/생성/삭제와 현재 노트 조회, 최초 진입 시 노트 이동/생성을 담당한다.
 const useCourseNotes = ({ courseId, noteId, navigate, searchParams }) => {
+  const confirm = useConfirm();
   const [noteTree, setNoteTree] = useState([]);
   const [noteData, setNoteData] = useState(null);
 
@@ -86,7 +88,11 @@ const useCourseNotes = ({ courseId, noteId, navigate, searchParams }) => {
   };
 
   const handleDeleteNote = async (targetId, title) => {
-    if (!window.confirm(`'${title}' 노트를 삭제하시겠습니까? 하위 노트도 모두 삭제됩니다.`)) return;
+    if (!(await confirm({
+      title: `'${title}' 노트를 삭제할까요?`,
+      message: '하위 노트도 모두 삭제되며 되돌릴 수 없습니다.',
+      confirmLabel: '노트 삭제',
+    }))) return;
     try {
       await client.delete(`/notes/${targetId}`);
       const updatedTree = await fetchTree();
@@ -108,11 +114,22 @@ const useCourseNotes = ({ courseId, noteId, navigate, searchParams }) => {
   // 현재 노트와 하위 노트를 노트 공유 게시판에 올린다. 서버에 저장된 내용이 복사되므로
   // 호출부는 저장이 끝난(synced) 상태에서만 부른다.
   const handleShareNote = async (title) => {
-    if (!window.confirm(`'${title}' 노트와 하위 노트를 노트 공유 게시판에 공유할까요?
-지금 내용이 복사되며 이후 수정은 반영되지 않습니다.`)) return;
+    if (!(await confirm({
+      title: `'${title}' 노트와 하위 노트를 공유할까요?`,
+      message: '노트 공유 게시판에 지금 내용이 복사되며 이후 수정은 반영되지 않습니다.',
+      variant: 'share',
+      confirmLabel: '공유하기',
+    }))) return;
     try {
       await client.post('/shared-notes', { rootNoteId: Number(noteId) });
-      if (window.confirm('공유했습니다. 노트 공유 게시판으로 이동할까요?')) navigate('/shared-notes');
+      const goToBoard = await confirm({
+        title: '공유가 완료되었습니다',
+        message: '노트 공유 게시판으로 이동할까요?',
+        variant: 'navigate',
+        confirmLabel: '게시판으로 이동',
+        cancelLabel: '머무르기',
+      });
+      if (goToBoard) navigate('/shared-notes');
     } catch (err) {
       alert(err.response?.data?.message || '노트를 공유하지 못했습니다.');
     }

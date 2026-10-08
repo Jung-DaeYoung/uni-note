@@ -470,6 +470,55 @@ describe('QuizConfigModal', () => {
       ]);
     });
 
+    it('빈 줄·중첩 블록과만 id가 겹친 블록은 그대로 선택할 수 있다', async () => {
+      const user = userEvent.setup();
+      renderModal({ currentNoteId: 1 });
+      const note = {
+        noteId: 1,
+        content: JSON.stringify({
+          type: 'doc',
+          content: [
+            { type: 'heading', attrs: { id: 't', level: 1 }, content: [{ type: 'text', text: '노트 제목' }] },
+            { type: 'heading', attrs: { id: 'x', level: 2 }, content: [{ type: 'text', text: '기본 개념' }] },
+            { type: 'paragraph', attrs: { id: 'y' }, content: [{ type: 'text', text: '본문 문단' }] },
+            { type: 'blockquote', attrs: { id: 'q' }, content: [{ type: 'paragraph', attrs: { id: 'x' }, content: [{ type: 'text', text: '인용' }] }] },
+            { type: 'paragraph', attrs: { id: 'x' } },
+            { type: 'paragraph', attrs: { id: 'y' } },
+          ],
+        }),
+      };
+
+      const panel = within(await openBlocks(user, '부모 노트', note));
+      await panel.findByRole('checkbox', { name: /본문 문단/ });
+
+      expect(panel.getAllByRole('checkbox')).toHaveLength(3);
+      expect(panel.getByRole('checkbox', { name: /기본 개념/ })).toBeInTheDocument();
+      expect(panel.getByRole('checkbox', { name: /인용/ })).toBeInTheDocument();
+    });
+
+    it('목록 블록끼리 id가 겹쳐 저장된 블록은 선택 목록에서 빠지고 안내가 표시된다', async () => {
+      const user = userEvent.setup();
+      renderModal({ currentNoteId: 1 });
+      const noteWithDuplicateIds = {
+        noteId: 1,
+        content: JSON.stringify({
+          type: 'doc',
+          content: [
+            { type: 'heading', attrs: { id: 't', level: 1 }, content: [{ type: 'text', text: '노트 제목' }] },
+            { type: 'paragraph', attrs: { id: 'dup' }, content: [{ type: 'text', text: '첫 문단' }] },
+            { type: 'paragraph', attrs: { id: 'dup' }, content: [{ type: 'text', text: '둘째 문단' }] },
+            { type: 'paragraph', attrs: { id: 'ok' }, content: [{ type: 'text', text: '정상 문단' }] },
+          ],
+        }),
+      };
+
+      const panel = within(await openBlocks(user, '부모 노트', noteWithDuplicateIds));
+      await panel.findByRole('checkbox', { name: /정상 문단/ });
+
+      expect(panel.getAllByRole('checkbox')).toHaveLength(1);
+      expect(panel.getByText('PDF 등 일부 블록은 노트 전체를 선택할 때만 포함됩니다')).toBeInTheDocument();
+    });
+
     it('블록 목록을 불러오지 못하면 그 노트 아래에 사유를 표시한다', async () => {
       const user = userEvent.setup();
       client.get.mockRejectedValueOnce(new Error('Network Error'));

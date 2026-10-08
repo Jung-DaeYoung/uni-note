@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import client from '../../../api/client';
+import { BLOCK_ID_REPAIR_META } from '../extensions/BlockId';
 
 // 마지막 호출 뒤 ms 동안 추가 호출이 없으면 fn을 실행한다. cancel()로 대기 중인 실행을 취소한다.
 const debounce = (fn, ms) => {
@@ -145,19 +146,30 @@ const useNoteAutosave = ({ noteId, initialData, onSaved }) => {
   // StrictMode의 이중 호출, initialData/editor 참조 변경 등)으로 인해 사용자가
   // 이미 입력 중인 내용이 뒤늦게 오래된 initialData로 덮어써지는 것을 방지한다.
   const syncEditor = useCallback((editor) => {
-    if (!editor || hasSyncedRef.current) return;
-    hasSyncedRef.current = true;
+    if (!editor) return;
+    if (!hasSyncedRef.current) {
+      hasSyncedRef.current = true;
 
-    const currentContent = editor.getJSON();
-    const initialContent = getInitialContent();
+      const currentContent = editor.getJSON();
+      const initialContent = getInitialContent();
 
-    if (JSON.stringify(currentContent) !== JSON.stringify(initialContent)) {
-      editor.commands.setContent(initialContent, false); // emitUpdate: false로 불필요한 저장 방지
+      if (JSON.stringify(currentContent) !== JSON.stringify(initialContent)) {
+        editor.commands.setContent(initialContent, false); // emitUpdate: false로 불필요한 저장 방지
+      }
+
+      lastSavedJson.current = initialContent;
+      isInitialMount.current = false;
+
+      // 예전 BlockId 버그로 id가 비었거나 겹쳐 저장된 블록을 열자마자 고친다(BlockId.js).
+      editor.view.dispatch(editor.state.tr.setMeta(BLOCK_ID_REPAIR_META, true).setMeta('addToHistory', false));
     }
 
-    lastSavedJson.current = initialContent;
-    isInitialMount.current = false;
-  }, [getInitialContent]);
+    // 저장본과 다르면(위 id 수리 등) 저장을 예약한다. effect 정리(StrictMode 이중 실행 포함)의
+    // cancelPendingSave가 대기 중 저장을 취소해도 재실행 때 다시 예약되고, 같으면 아무 일도 없다.
+    if (JSON.stringify(editor.getJSON()) !== JSON.stringify(lastSavedJson.current)) {
+      debouncedSaveToServer(editor, noteId);
+    }
+  }, [getInitialContent, debouncedSaveToServer, noteId]);
 
   const cancelPendingSave = useCallback(() => {
     debouncedSaveToServer.cancel();

@@ -11,6 +11,9 @@ const makeEditor = (json, text) => ({
   getJSON: () => json,
   getText: () => text,
   commands: { setContent: vi.fn() },
+  // syncEditor가 BlockId 점검 트랜잭션을 dispatch한다.
+  state: { tr: { setMeta() { return this; } } },
+  view: { dispatch: vi.fn() },
 });
 
 describe('useNoteAutosave', () => {
@@ -154,6 +157,43 @@ describe('useNoteAutosave', () => {
 
       expect(client.put).not.toHaveBeenCalled();
       expect(localStorage.getItem('note-temp-5')).toBeNull();
+    });
+  });
+
+  describe('BlockId 수리 저장', () => {
+    const paragraph = (id) => ({ type: 'paragraph', attrs: { id }, content: [{ type: 'text', text: id }] });
+    const serverDoc = { type: 'doc', content: [paragraph('dup'), paragraph('dup')] };
+    const repairedDoc = { type: 'doc', content: [paragraph('dup'), paragraph('new')] };
+    const initialData = { title: '제목', content: JSON.stringify(serverDoc), updatedAt: 100 };
+
+    it('열면서 고친 id는 StrictMode처럼 정리 후 재실행돼도 서버에 저장된다', async () => {
+      const { result } = renderHook(() => useNoteAutosave({ noteId: 5, initialData }));
+      const editor = makeEditor(repairedDoc, 'dupnew');
+
+      act(() => {
+        result.current.syncEditor(editor);
+        result.current.cancelPendingSave();
+        result.current.syncEditor(editor);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+
+      expect(client.put).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(client.put.mock.calls[0][1].content)).toEqual(repairedDoc);
+    });
+
+    it('고칠 것이 없으면 열기만 해서는 저장하지 않는다', async () => {
+      const { result } = renderHook(() => useNoteAutosave({ noteId: 5, initialData }));
+
+      act(() => {
+        result.current.syncEditor(makeEditor(serverDoc, 'dupdup'));
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+
+      expect(client.put).not.toHaveBeenCalled();
     });
   });
 });

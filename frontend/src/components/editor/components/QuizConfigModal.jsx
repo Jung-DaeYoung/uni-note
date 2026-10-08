@@ -67,13 +67,25 @@ const parseNoteBlocks = (rawContent) => {
     return { blocks: [], hasUnselectable: false };
   }
   const nodes = Array.isArray(doc?.content) ? doc.content.slice(1) : [];
-  const blocks = [];
+  const candidates = [];
   let hasUnselectable = false;
   nodes.forEach((node) => {
     const text = collectText(node).replace(/\s+/g, ' ').trim();
     if (!text && !hasMedia(node)) return;
     const id = node?.attrs?.id;
     if (!id) {
+      hasUnselectable = true;
+      return;
+    }
+    candidates.push({ node, text, id });
+  });
+  // 예전 BlockId 버그로 목록 블록끼리 id가 겹쳐 저장됐으면 하나만 골라도 모두 선택되므로,
+  // 노트를 에디터로 열어 id가 고쳐지기 전까지 선택 불가로 둔다. 빈 줄·중첩 블록과의 중복은 무시한다.
+  const idCounts = {};
+  candidates.forEach(({ id }) => { idCounts[id] = (idCounts[id] || 0) + 1; });
+  const blocks = [];
+  candidates.forEach(({ node, text, id }) => {
+    if (idCounts[id] > 1) {
       hasUnselectable = true;
       return;
     }

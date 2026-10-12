@@ -1,0 +1,21 @@
+# 운영 프로파일 전용 설정. 비밀값은 담지 않고(전부 환경 변수로 주입) application.yaml의
+# 개발 기본값 위에 운영에 필요한 값만 덮어쓴다. 활성화: SPRING_PROFILES_ACTIVE=prod
+#
+# 필요한 환경 변수: DB_HOST, DB_PORT(기본 3306), DB_NAME(기본 uninote_db),
+#                  DB_USERNAME, DB_PASSWORD, JWT_SECRET, JWT_EXPIRATION, CORS_ALLOWED_ORIGINS
+# (DB_USERNAME/DB_PASSWORD/JWT_SECRET/JWT_EXPIRATION/CORS_ALLOWED_ORIGINS는
+#  플레이스홀더로 선언되어 있어, 값이 없으면 그 시점에 기동이 실패한다.
+#  CORS_ALLOWED_ORIGINS는 값이 있어도 비어있거나 localhost/127.0.0.1을 포함하면
+#  SecurityConfig.validateCorsConfigForProd()가 기동을 실패시킨다.)
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/${DB_NAME:uninote_db}?serverTimezone=Asia/Seoul&useSSL=true&requireSSL=true&allowPublicKeyRetrieval=false
+
+  jpa:
+    hibernate:
+      # 운영에서는 스키마를 자동으로 만들거나 바꾸지 않는다. 스키마 변경은 별도 migration으로 관리한다.
+      ddl-auto: validate
+    show-sql: false
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS}

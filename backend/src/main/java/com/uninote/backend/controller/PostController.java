@@ -3,9 +3,12 @@ package com.uninote.backend.controller;
 import com.uninote.backend.dto.PostRequest;
 import com.uninote.backend.dto.PostResponse;
 import com.uninote.backend.service.PostService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -13,46 +16,47 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/posts")
 @RequiredArgsConstructor
+@Validated
 public class PostController {
 
     private final PostService postService;
 
     @GetMapping("/{courseId}")
     public ResponseEntity<List<PostResponse>> getPosts(
-            @PathVariable Long courseId,
+            @PathVariable @Positive Long courseId,
             @AuthenticationPrincipal String studentNum) {
         return ResponseEntity.ok(postService.getPosts(courseId, studentNum));
     }
 
     @PostMapping("/{courseId}")
     public ResponseEntity<PostResponse> savePost(
-            @PathVariable Long courseId,
+            @PathVariable @Positive Long courseId,
             @AuthenticationPrincipal String studentNum,
-            @RequestBody PostRequest request) {
+            @Valid @RequestBody PostRequest request) {
         return ResponseEntity.ok(postService.savePost(courseId, studentNum, request));
     }
 
     @PostMapping("/{postId}/comments")
     public ResponseEntity<Void> addComment(
-            @PathVariable Long postId,
+            @PathVariable @Positive Long postId,
             @AuthenticationPrincipal String studentNum,
-            @RequestBody com.uninote.backend.dto.CommentRequest request) {
+            @Valid @RequestBody com.uninote.backend.dto.CommentRequest request) {
         postService.addComment(postId, studentNum, request.getContent());
         return ResponseEntity.ok().build();
     }
 
     @PutMapping("/comments/{commentId}")
     public ResponseEntity<Void> updateComment(
-            @PathVariable Long commentId,
+            @PathVariable @Positive Long commentId,
             @AuthenticationPrincipal String studentNum,
-            @RequestBody com.uninote.backend.dto.CommentRequest request) {
+            @Valid @RequestBody com.uninote.backend.dto.CommentRequest request) {
         postService.updateComment(commentId, studentNum, request.getContent());
         return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/comments/{commentId}")
     public ResponseEntity<Void> deleteComment(
-            @PathVariable Long commentId,
+            @PathVariable @Positive Long commentId,
             @AuthenticationPrincipal String studentNum) {
         postService.deleteComment(commentId, studentNum);
         return ResponseEntity.ok().build();
@@ -60,7 +64,7 @@ public class PostController {
 
     @DeleteMapping("/{postId}")
     public ResponseEntity<Void> deletePost(
-            @PathVariable Long postId,
+            @PathVariable @Positive Long postId,
             @AuthenticationPrincipal String studentNum) {
         postService.deletePost(postId, studentNum);
         return ResponseEntity.ok().build();
@@ -68,9 +72,9 @@ public class PostController {
 
     @PutMapping("/{postId}")
     public ResponseEntity<PostResponse> updatePost(
-            @PathVariable Long postId,
+            @PathVariable @Positive Long postId,
             @AuthenticationPrincipal String studentNum,
-            @RequestBody PostRequest request) {
+            @Valid @RequestBody PostRequest request) {
         return ResponseEntity.ok(postService.updatePost(postId, studentNum, request));
     }
 }

@@ -2,13 +2,25 @@ package com.uninote.backend.service;
 
 import com.uninote.backend.domain.*;
 import com.uninote.backend.dto.*;
+import com.uninote.backend.exception.CourseAccessException;
+import com.uninote.backend.exception.InvalidRequestException;
+import com.uninote.backend.exception.ResourceNotFoundException;
 import com.uninote.backend.repository.*;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.Delegate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -17,7 +29,15 @@ public class IncorrectNoteService {
     private final IncorrectNoteGroupRepository groupRepository;
     private final IncorrectNoteItemRepository itemRepository;
     private final QuestionRepository questionRepository;
-    private final QuizService quizService;
+    private final UserAnswerRepository userAnswerRepository;
+    private final QuestionResponseMapper questionResponseMapper;
+    private final SharedQuizService sharedQuizService;
+    private final Clock clock;
+
+    // 간격 반복 복습 간격(일). 마지막 오답 이후 연속 정답 수가 n이면 마지막 풀이일 + n번째 간격에 다시 낸다.
+    // 연속 정답이 간격 수만큼 쌓이면 졸업해 오늘의 복습에서 빠진다.
+    // ponytail: 고정 간격표다. 개인별 난이도 보정(SM-2 등)이 필요해지면 그때 바꾼다.
+    private static final int[] REVIEW_INTERVAL_DAYS = {1, 3, 7, 14, 30};
 
     @Transactional(readOnly = true)
     public List<IncorrectNoteGroupResponse> getMyGroups(Student student) {
@@ -36,8 +56,7 @@ public class IncorrectNoteService {
         IncorrectNoteGroup group;
         
         if (request.getGroupId() != null) {
-            group = groupRepository.findById(request.getGroupId())
-                .orElseThrow(() -> new IllegalArgumentException("오답노트를 찾을 수 없습니다."));
+            group = getOwnedGroup(request.getGroupId(), student);
         } else if (request.getNewGroupTitle() != null && !request.getNewGroupTitle().trim().isEmpty()) {
             group = groupRepository.findByStudent_StudIdAndTitle(student.getStudId(), request.getNewGroupTitle())
                 .orElseGet(() -> {
@@ -47,11 +66,13 @@ public class IncorrectNoteService {
                     return groupRepository.save(newGroup);
                 });
         } else {
-            throw new IllegalArgumentException("그룹 ID 또는 새 그룹 제목이 필요합니다.");
+            throw new InvalidRequestException("그룹 ID 또는 새 그룹 제목이 필요합니다.");
         }
 
         Question question = questionRepository.findById(request.getQuestionId())
-            .orElseThrow(() -> new IllegalArgumentException("문제를 찾을 수 없습니다."));
+            .orElseThrow(() -> new ResourceNotFoundException("문제를 찾을 수 없습니다."));
+
+        validateQuestionOwnership(question, student);
 
         // 중복 체크
         if (itemRepository.findByGroup_IdAndQuestion_QuestionId(group.getId(), question.getQuestionId()).isEmpty()) {
@@ -64,49 +85,15 @@ public class IncorrectNoteService {
 
     @Transactional
     public void deleteGroup(Long groupId, Student student) {
-        IncorrectNoteGroup group = groupRepository.findById(groupId)
-            .orElseThrow(() -> new IllegalArgumentException("오답노트를 찾을 수 없습니다."));
-        
-        if (!group.getStudent().getStudId().equals(student.getStudId())) {
-            throw new RuntimeException("삭제 권한이 없습니다.");
-        }
-        
-        groupRepository.delete(group);
-    }
-
-    @Transactional
-    public void removeItemFromGroup(Long groupId, Long questionId, Student student) {
-        IncorrectNoteGroup group = groupRepository.findById(groupId)
-            .orElseThrow(() -> new IllegalArgumentException("오답노트를 찾을 수 없습니다."));
-        
-        if (!group.getStudent().getStudId().equals(student.getStudId())) {
-            throw new RuntimeException("권한이 없습니다.");
-        }
-
-        itemRepository.findByGroup_IdAndQuestion_QuestionId(groupId, questionId)
-            .ifPresent(itemRepository::delete);
+        groupRepository.delete(getOwnedGroup(groupId, student));
     }
 
     @Transactional(readOnly = true)
     public QuizSetDetailResponse getPracticeSession(Long groupId, Student student) {
-        IncorrectNoteGroup group = groupRepository.findById(groupId)
-            .orElseThrow(() -> new IllegalArgumentException("오답노트를 찾을 수 없습니다."));
-        
-        if (!group.getStudent().getStudId().equals(student.getStudId())) {
-            throw new RuntimeException("권한이 없습니다.");
-        }
+        IncorrectNoteGroup group = getOwnedGroup(groupId, student);
 
         List<QuestionResponse> questions = group.getItems().stream()
-            .map(item -> {
-                Question q = item.getQuestion();
-                QuestionResponse qr = new QuestionResponse();
-                qr.setQuestionId(q.getQuestionId());
-                qr.setType(q.getType());
-                qr.setQuestionText(q.getQuestionText());
-                // options, explanation 등 QuizService의 로직 재활용 필요 (또는 별도 유틸리티화)
-                // 여기서는 간단히 QuizService의 형식을 따름 (실제 구현 시 DTO 변환 로직 중복 제거 권장)
-                return quizService.getQuestionResponse(q); 
-            })
+            .map(item -> questionResponseMapper.toResponse(item.getQuestion()))
             .collect(Collectors.toList());
 
         return QuizSetDetailResponse.builder()
@@ -115,5 +102,258 @@ public class IncorrectNoteService {
             .difficulty(QuizDifficulty.NORMAL)
             .questions(questions)
             .build();
+    }
+
+    @Transactional(readOnly = true)
+    public IncorrectSummaryResponse getSummary(Student student) {
+        List<QuestionReviewStat> stats = buildQuestionReviewStats(student);
+
+        long totalAttemptCount = stats.stream().mapToLong(QuestionReviewStat::getAttemptCount).sum();
+        long correctCount = stats.stream().mapToLong(QuestionReviewStat::getCorrectCount).sum();
+        long incorrectCount = stats.stream().mapToLong(QuestionReviewStat::getIncorrectCount).sum();
+        long reviewTargetCount = dueReviews(stats, student).size();
+        long repeatIncorrectCount = stats.stream().filter(s -> s.getIncorrectCount() >= 2).count();
+
+        return IncorrectSummaryResponse.builder()
+            .totalAttemptCount(totalAttemptCount)
+            .totalQuestionCount(stats.size())
+            .correctCount(correctCount)
+            .incorrectCount(incorrectCount)
+            .accuracyRate(totalAttemptCount == 0 ? 0.0 : (double) correctCount / totalAttemptCount)
+            .reviewTargetCount(reviewTargetCount)
+            .repeatIncorrectCount(repeatIncorrectCount)
+            .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CourseIncorrectStatResponse> getCourseStatistics(Student student) {
+        List<QuestionReviewStat> stats = buildQuestionReviewStats(student);
+        Map<Long, ReviewSchedule> due = dueReviews(stats, student);
+
+        return stats.stream()
+            .filter(s -> s.getCourseId() != null)
+            .collect(Collectors.groupingBy(QuestionReviewStat::getCourseId))
+            .values().stream()
+            .map(group -> {
+                QuestionReviewStat first = group.get(0);
+                long correct = group.stream().mapToLong(QuestionReviewStat::getCorrectCount).sum();
+                long incorrect = group.stream().mapToLong(QuestionReviewStat::getIncorrectCount).sum();
+                long attempts = correct + incorrect;
+                long reviewTargetCount = group.stream().filter(s -> due.containsKey(s.getQuestionId())).count();
+                return CourseIncorrectStatResponse.builder()
+                    .courseId(first.getCourseId())
+                    .courseName(first.getCourseName())
+                    .questionCount(group.size())
+                    .correctCount(correct)
+                    .incorrectCount(incorrect)
+                    .accuracyRate(attempts == 0 ? 0.0 : (double) correct / attempts)
+                    .reviewTargetCount(reviewTargetCount)
+                    .build();
+            })
+            .sorted(Comparator.comparingDouble(CourseIncorrectStatResponse::getAccuracyRate)) // 취약 강의 먼저
+            .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<QuestionTypeIncorrectStatResponse> getTypeStatistics(Student student) {
+        List<QuestionReviewStat> stats = buildQuestionReviewStats(student);
+
+        return stats.stream()
+            .collect(Collectors.groupingBy(s -> s.getQuestion().getType()))
+            .entrySet().stream()
+            .map(entry -> {
+                List<QuestionReviewStat> group = entry.getValue();
+                long correct = group.stream().mapToLong(QuestionReviewStat::getCorrectCount).sum();
+                long incorrect = group.stream().mapToLong(QuestionReviewStat::getIncorrectCount).sum();
+                long attempts = correct + incorrect;
+                return QuestionTypeIncorrectStatResponse.builder()
+                    .type(entry.getKey())
+                    .attemptCount(attempts)
+                    .correctCount(correct)
+                    .incorrectCount(incorrect)
+                    .accuracyRate(attempts == 0 ? 0.0 : (double) correct / attempts)
+                    .build();
+            })
+            .sorted(Comparator.comparingDouble(QuestionTypeIncorrectStatResponse::getAccuracyRate)) // 취약 유형 먼저
+            .collect(Collectors.toList());
+    }
+
+    // 출처 블록(noteId/blockId)별 풀이 통계. 출처가 없는(미검증) 문제는 제외하고, 취약도는
+    // 문제별 복습 우선순위와 같은 규칙(classifyPriority)으로 블록 합계에 적용한다.
+    @Transactional(readOnly = true)
+    public List<SourceBlockStatResponse> getBlockStatistics(Student student) {
+        return buildQuestionReviewStats(student).stream()
+            .filter(s -> s.getQuestion().getSourceNoteId() != null && s.getQuestion().getSourceBlockId() != null)
+            .collect(Collectors.groupingBy(s -> List.of(s.getQuestion().getSourceNoteId(), s.getQuestion().getSourceBlockId())))
+            .values().stream()
+            .map(group -> {
+                Question first = group.get(0).getQuestion();
+                long correct = group.stream().mapToLong(QuestionReviewStat::getCorrectCount).sum();
+                long incorrect = group.stream().mapToLong(QuestionReviewStat::getIncorrectCount).sum();
+                long attempts = correct + incorrect;
+                double accuracyRate = attempts == 0 ? 0.0 : (double) correct / attempts;
+                LocalDateTime lastAttemptedAt = group.stream().map(QuestionReviewStat::getLastAttemptedAt)
+                    .filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
+                LocalDateTime lastIncorrectAt = group.stream().map(QuestionReviewStat::getLastIncorrectAt)
+                    .filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
+                boolean recentlyIncorrect = lastIncorrectAt != null && lastIncorrectAt.equals(lastAttemptedAt);
+                return SourceBlockStatResponse.builder()
+                    .noteId(first.getSourceNoteId())
+                    .blockId(first.getSourceBlockId())
+                    .attemptCount(attempts)
+                    .correctCount(correct)
+                    .incorrectCount(incorrect)
+                    .accuracyRate(accuracyRate)
+                    .reviewPriority(classifyPriority(incorrect, accuracyRate, recentlyIncorrect))
+                    .build();
+            })
+            // 취약 블록 먼저: 우선순위(HIGH → LOW, enum 선언 순서) → 정답률 오름차순
+            .sorted(Comparator.comparing(SourceBlockStatResponse::getReviewPriority)
+                .thenComparingDouble(SourceBlockStatResponse::getAccuracyRate))
+            .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TodayReviewQuestionResponse> getTodayReview(Student student, int limit, Long courseId) {
+        if (limit < 1 || limit > 100) {
+            throw new InvalidRequestException("limit은 1 이상 100 이하여야 합니다.");
+        }
+
+        List<QuestionReviewStat> stats = buildQuestionReviewStats(student);
+        Map<Long, ReviewSchedule> due = dueReviews(stats, student);
+
+        // 정렬은 기존 복습 우선순위(PRIORITY_ORDER)를 그대로 쓰고, 대상만 "복습일이 된 문제"로 거른다.
+        return stats.stream()
+            .filter(s -> due.containsKey(s.getQuestionId()))
+            .filter(s -> courseId == null || courseId.equals(s.getCourseId()))
+            .limit(limit)
+            .map(s -> TodayReviewQuestionResponse.builder()
+                .question(questionResponseMapper.toResponse(s.getQuestion()))
+                .courseId(s.getCourseId())
+                .courseName(s.getCourseName())
+                .attemptCount(s.getAttemptCount())
+                .incorrectCount(s.getIncorrectCount())
+                .lastIncorrectAt(s.getLastIncorrectAt())
+                .reviewPriority(s.getReviewPriority())
+                .nextReviewAt(due.get(s.getQuestionId()).nextReviewAt())
+                .streak(due.get(s.getQuestionId()).streak())
+                .build())
+            .collect(Collectors.toList());
+    }
+
+    // 오늘 복습할 문제(questionId → 일정). 한 번이라도 틀렸고, 졸업하지 않았고, 복습일이 오늘 이전인 문제만 담는다.
+    private Map<Long, ReviewSchedule> dueReviews(List<QuestionReviewStat> stats, Student student) {
+        if (stats.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Integer> streaks = correctStreaks(student);
+        LocalDate today = LocalDate.now(clock);
+        Map<Long, ReviewSchedule> due = new HashMap<>();
+        for (QuestionReviewStat s : stats) {
+            int streak = streaks.getOrDefault(s.getQuestionId(), 0);
+            if (s.getIncorrectCount() == 0 || streak >= REVIEW_INTERVAL_DAYS.length) {
+                continue; // 틀린 적 없음 또는 졸업
+            }
+            LocalDate next = s.getLastAttemptedAt() == null ? today
+                : s.getLastAttemptedAt().toLocalDate().plusDays(REVIEW_INTERVAL_DAYS[streak]);
+            if (!next.isAfter(today)) {
+                due.put(s.getQuestionId(), new ReviewSchedule(next, streak));
+            }
+        }
+        return due;
+    }
+
+    // 문제별 "마지막 오답 이후 연속 정답 수". 시간순 이력에서 정답이면 +1, 오답이면 0으로 되돌린다.
+    private Map<Long, Integer> correctStreaks(Student student) {
+        Map<Long, Integer> streaks = new HashMap<>();
+        for (UserAnswerRepository.AnswerHistory answer : userAnswerRepository.findAnswerHistoryForStudent(student.getStudId())) {
+            boolean correct = Boolean.TRUE.equals(answer.getIsCorrect());
+            streaks.merge(answer.getQuestionId(), correct ? 1 : 0, (prev, ignored) -> correct ? prev + 1 : 0);
+        }
+        return streaks;
+    }
+
+    private record ReviewSchedule(LocalDate nextReviewAt, int streak) {}
+
+    // 문제별 통계(전체/강의별/유형별/오늘의 복습)가 모두 이 한 번의 집계 쿼리 결과를 공유하도록
+    // 하여, 서로 다른 엔드포인트의 숫자가 어긋나지 않게 한다.
+    private List<QuestionReviewStat> buildQuestionReviewStats(Student student) {
+        List<QuestionAnswerStat> rawStats = userAnswerRepository.aggregateByQuestionForStudent(student.getStudId());
+        if (rawStats.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Question> questionsById = questionRepository
+            .findAllById(rawStats.stream().map(QuestionAnswerStat::getQuestionId).collect(Collectors.toList()))
+            .stream()
+            .collect(Collectors.toMap(Question::getQuestionId, Function.identity()));
+
+        return rawStats.stream()
+            .filter(stat -> questionsById.containsKey(stat.getQuestionId())) // 삭제된 문제 방어
+            .map(stat -> {
+                boolean recentlyIncorrect = stat.getLastIncorrectAt() != null
+                    && stat.getLastIncorrectAt().equals(stat.getLastAttemptedAt());
+                double accuracyRate = stat.getAttemptCount() == 0 ? 0.0
+                    : (double) stat.getCorrectCount() / stat.getAttemptCount();
+
+                return new QuestionReviewStat(stat, questionsById.get(stat.getQuestionId()),
+                    recentlyIncorrect, classifyPriority(stat.getIncorrectCount(), accuracyRate, recentlyIncorrect));
+            })
+            .sorted(PRIORITY_ORDER)
+            .collect(Collectors.toList());
+    }
+
+    // 복습 우선순위 정렬: 반복 오답 수 desc → 최근 오답 여부 desc → 마지막 풀이일 asc(오래된 것
+    // 먼저) → 문제 ID asc(생성 순서 근사 — Question에 별도 생성일 컬럼이 없어 IDENTITY 채번
+    // 순서를 대신 쓴다).
+    private static final Comparator<QuestionReviewStat> PRIORITY_ORDER = Comparator
+        .comparingLong(QuestionReviewStat::getIncorrectCount).reversed()
+        .thenComparing(QuestionReviewStat::isRecentlyIncorrect, Comparator.reverseOrder())
+        .thenComparing(QuestionReviewStat::getLastAttemptedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+        .thenComparing(s -> s.getQuestion().getQuestionId());
+
+    // HIGH 조건을 먼저 검사한다(계획 문서의 HIGH/MEDIUM 항목이 서로 배타적이지 않게 쓰여 있어,
+    // MEDIUM은 HIGH가 아닌 나머지 정답률 구간(50~75%)으로 단순화했다).
+    private ReviewPriority classifyPriority(long incorrectCount, double accuracyRate, boolean recentlyIncorrect) {
+        boolean repeatIncorrect = incorrectCount >= 2;
+        if (recentlyIncorrect || repeatIncorrect || accuracyRate < 0.5) {
+            return ReviewPriority.HIGH;
+        }
+        if (accuracyRate < 0.75) {
+            return ReviewPriority.MEDIUM;
+        }
+        return ReviewPriority.LOW;
+    }
+
+    // 집계 결과(stat)의 getter는 그대로 위임하고, 여기서는 파생 값만 보관한다.
+    @Getter
+    @RequiredArgsConstructor
+    private static class QuestionReviewStat {
+        @Delegate
+        private final QuestionAnswerStat stat;
+        private final Question question;
+        private final boolean recentlyIncorrect;
+        private final ReviewPriority reviewPriority;
+    }
+
+    private IncorrectNoteGroup getOwnedGroup(Long groupId, Student student) {
+        IncorrectNoteGroup group = groupRepository.findById(groupId)
+            .orElseThrow(() -> new ResourceNotFoundException("오답노트를 찾을 수 없습니다."));
+        if (!group.getStudent().getStudId().equals(student.getStudId())) {
+            throw new CourseAccessException("본인 오답노트 그룹만 접근할 수 있습니다.");
+        }
+        return group;
+    }
+
+    // question이 요청 학생 본인의 퀴즈에 속하는지 확인한다. 이 검증이 없으면 다른 학생의
+    // 문제 ID를 알아내 자신의 오답노트 그룹에 추가할 수 있었다. 공유게시판 문제는
+    // SharedQuizService의 접근 규칙(게시 중·이미 풂·이미 담음)을 통과하면 허용한다.
+    private void validateQuestionOwnership(Question question, Student student) {
+        QuizSet quizSet = question.getQuizSet();
+        boolean owner = quizSet != null && quizSet.getStudent() != null
+                && quizSet.getStudent().getStudId().equals(student.getStudId());
+        if (!owner && !sharedQuizService.canAccessQuestion(question, student)) {
+            throw new CourseAccessException("본인 퀴즈의 문제만 오답노트에 추가할 수 있습니다.");
+        }
     }
 }

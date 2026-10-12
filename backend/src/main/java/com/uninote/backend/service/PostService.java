@@ -2,6 +2,8 @@ package com.uninote.backend.service;
 
 import com.uninote.backend.domain.*;
 import com.uninote.backend.dto.*;
+import com.uninote.backend.exception.CourseAccessException;
+import com.uninote.backend.exception.ResourceNotFoundException;
 import com.uninote.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,10 +21,13 @@ public class PostService {
     private final CourseRepository courseRepository;
     private final StudentRepository studentRepository;
     private final CommentRepository commentRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
     public List<PostResponse> getPosts(Long courseId, String studentNum) {
         Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid course ID"));
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid course ID"));
+        Student student = studentRepository.getByStudentNum(studentNum);
+        validateEnrollment(student, courseId);
 
         return postRepository.findByCourseOrderByCreatedAtDesc(course).stream()
                 .map(post -> convertToResponse(post, studentNum))
@@ -32,9 +37,9 @@ public class PostService {
     @Transactional
     public PostResponse savePost(Long courseId, String studentNum, PostRequest request) {
         Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid course ID"));
-        Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid student number"));
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid course ID"));
+        Student student = studentRepository.getByStudentNum(studentNum);
+        validateEnrollment(student, courseId);
 
         Post post = new Post();
         post.setCourse(course);
@@ -50,9 +55,9 @@ public class PostService {
     @Transactional
     public void addComment(Long postId, String studentNum, String content) {
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid post ID"));
-        Student student = studentRepository.findByStudentNum(studentNum)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid student number"));
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid post ID"));
+        Student student = studentRepository.getByStudentNum(studentNum);
+        validateEnrollment(student, post.getCourse().getCourseId());
 
         Comment comment = Comment.builder()
                 .content(content)
@@ -66,12 +71,9 @@ public class PostService {
     @Transactional
     public void updateComment(Long commentId, String studentNum, String content) {
         Comment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid comment ID"));
-        
-        // 작성자 본인 확인
-        if (!comment.getStudent().getStudentNum().trim().equals(studentNum.trim())) {
-            throw new IllegalArgumentException("작성자 본인만 수정할 수 있습니다.");
-        }
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid comment ID"));
+
+        requireAuthor(comment.getStudent(), studentNum, "작성자 본인만 수정할 수 있습니다.");
         
         comment.setContent(content);
     }
@@ -79,12 +81,9 @@ public class PostService {
     @Transactional
     public void deleteComment(Long commentId, String studentNum) {
         Comment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid comment ID"));
-        
-        // 작성자 본인 확인
-        if (!comment.getStudent().getStudentNum().trim().equals(studentNum.trim())) {
-            throw new IllegalArgumentException("작성자 본인만 삭제할 수 있습니다.");
-        }
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid comment ID"));
+
+        requireAuthor(comment.getStudent(), studentNum, "작성자 본인만 삭제할 수 있습니다.");
         
         commentRepository.delete(comment);
     }
@@ -92,12 +91,9 @@ public class PostService {
     @Transactional
     public void deletePost(Long postId, String studentNum) {
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid post ID"));
-        
-        // 작성자 본인 확인
-        if (!post.getStudent().getStudentNum().equals(studentNum)) {
-            throw new IllegalArgumentException("작성자 본인만 삭제할 수 있습니다.");
-        }
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid post ID"));
+
+        requireAuthor(post.getStudent(), studentNum, "작성자 본인만 삭제할 수 있습니다.");
         
         postRepository.delete(post);
     }
@@ -105,12 +101,9 @@ public class PostService {
     @Transactional
     public PostResponse updatePost(Long postId, String studentNum, PostRequest request) {
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid post ID"));
-        
-        // 작성자 본인 확인
-        if (!post.getStudent().getStudentNum().equals(studentNum)) {
-            throw new IllegalArgumentException("작성자 본인만 수정할 수 있습니다.");
-        }
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid post ID"));
+
+        requireAuthor(post.getStudent(), studentNum, "작성자 본인만 수정할 수 있습니다.");
         
         post.setTitle(request.getTitle());
         post.setContent(request.getContent());
@@ -118,42 +111,52 @@ public class PostService {
         return convertToResponse(post, studentNum);
     }
 
-    private PostResponse convertToResponse(Post post, String studentNum) {
-        String authorName = "익명";
-        boolean isPostAuthor = false;
-        
-        if (post.getStudent() != null && studentNum != null) {
-            isPostAuthor = post.getStudent().getStudentNum().trim().equals(studentNum.trim());
-            authorName = "익명 " + (post.getStudent().getStudId() % 100);
+    private void validateEnrollment(Student student, Long courseId) {
+        if (!enrollmentRepository.existsByStudentAndCourse_CourseId(student, courseId)) {
+            throw new CourseAccessException("해당 강의를 수강하지 않습니다.");
         }
+    }
 
-        List<CommentResponse> comments = post.getComments().stream()
-                .map(c -> {
-                    boolean isCommentAuthor = c.getStudent() != null && studentNum != null && 
-                            c.getStudent().getStudentNum().trim().equals(studentNum.trim());
-                    String commentAuthorName = (c.getStudent() != null) ? 
-                            "익명 " + (c.getStudent().getStudId() % 100) : "익명";
-                    
-                    return CommentResponse.builder()
-                        .commentId(c.getCommentId())
-                        .content(c.getContent())
-                        .authorName(commentAuthorName)
-                        .isAuthor(isCommentAuthor)
-                        .createdAt(c.getCreatedAt())
-                        .build();
-                })
-                .collect(Collectors.toList());
+    private void requireAuthor(Student author, String studentNum, String message) {
+        if (!isAuthor(author, studentNum)) {
+            throw new CourseAccessException(message);
+        }
+    }
 
+    private static boolean isAuthor(Student author, String studentNum) {
+        return author != null && studentNum != null
+                && author.getStudentNum().trim().equals(studentNum.trim());
+    }
+
+    // 공유게시판(SharedQuizService)도 같은 익명 표기 규칙을 쓴다.
+    static String anonymousName(Student author) {
+        return author == null ? "익명" : "익명 " + (author.getStudId() % 100);
+    }
+
+    // 댓글을 뺀 게시글 응답. 대시보드(DashboardService)의 최근 게시글도 이 변환을 쓴다.
+    static PostResponse.PostResponseBuilder summaryBuilder(Post post, String studentNum) {
         return PostResponse.builder()
                 .postId(post.getPostId())
                 .courseId(post.getCourse().getCourseId())
                 .courseName(post.getCourse().getCourseName())
                 .title(post.getTitle())
                 .content(post.getContent())
-                .authorName(authorName)
-                .isAuthor(isPostAuthor)
-                .createdAt(post.getCreatedAt())
-                .comments(comments)
-                .build();
+                .authorName(anonymousName(post.getStudent()))
+                .author(isAuthor(post.getStudent(), studentNum))
+                .createdAt(post.getCreatedAt());
+    }
+
+    private PostResponse convertToResponse(Post post, String studentNum) {
+        List<CommentResponse> comments = post.getComments().stream()
+                .map(c -> CommentResponse.builder()
+                        .commentId(c.getCommentId())
+                        .content(c.getContent())
+                        .authorName(anonymousName(c.getStudent()))
+                        .author(isAuthor(c.getStudent(), studentNum))
+                        .createdAt(c.getCreatedAt())
+                        .build())
+                .collect(Collectors.toList());
+
+        return summaryBuilder(post, studentNum).comments(comments).build();
     }
 }

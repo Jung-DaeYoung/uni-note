@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { GripVertical, Trash2, Copy, Sparkles } from 'lucide-react';
+import { GripVertical, Trash2, Copy } from 'lucide-react';
 
 const BlockHandle = ({ editor }) => {
-  const [pos, setPos] = useState({ top: -100, left: 0 });
+  const [top, setTop] = useState(-100);
   const [currentNode, setCurrentNode] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const containerRef = useRef(null);
@@ -25,15 +25,13 @@ const BlockHandle = ({ editor }) => {
           if (dom instanceof HTMLElement) {
             const rect = dom.getBoundingClientRect();
             const editorRect = view.dom.getBoundingClientRect();
-
-            setPos({
-              top: rect.top - editorRect.top,
-              left: 0,
-            });
+            setTop(rect.top - editorRect.top);
             setCurrentNode({ node, pos: start - 1 });
           }
         }
-      } catch (e) {}
+      } catch {
+        // 위치 계산 중 DOM 접근 실패는 무시한다.
+      }
     }
   }, [editor, isMenuOpen]);
 
@@ -47,19 +45,14 @@ const BlockHandle = ({ editor }) => {
 
   // 메뉴 외부 클릭 시 닫기
   useEffect(() => {
+    if (!isMenuOpen) return;
     const handleClickOutside = (event) => {
       if (containerRef.current && !containerRef.current.contains(event.target)) {
         setIsMenuOpen(false);
       }
     };
-    if (isMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isMenuOpen]);
 
   // 드래그 시작 시 데이터 설정
@@ -106,47 +99,31 @@ const BlockHandle = ({ editor }) => {
     setIsMenuOpen(false);
   };
 
-  const handleAiAction = () => {
-    if (!currentNode || !currentNode.node) return;
-    const data = {
-      id: currentNode.node.attrs?.id,
-      type: currentNode.node.type?.name,
-      text: currentNode.node.textContent
-    };
-    console.log("AI 연동 데이터:", data);
-    alert(`블록 ID: ${data.id}\nAI 기능을 요청합니다.`);
-    setIsMenuOpen(false);
-  };
-
   return (
     <div
       ref={containerRef}
       className="absolute z-20 transition-all duration-100 group"
-      style={{ top: pos.top, left: pos.left }}
+      style={{ top, left: 0 }}
     >
       <button
         draggable="true"
         onDragStart={handleDragStart}
         onClick={selectBlock}
-        className="p-1 hover:bg-slate-100 rounded cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-600"
+        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded cursor-grab active:cursor-grabbing text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300"
       >
         <GripVertical size={16} />
       </button>
 
       {isMenuOpen && (
-        <div className="absolute left-8 top-0 w-48 bg-white border border-slate-200 rounded-xl shadow-xl p-1 animate-in fade-in zoom-in duration-100">
-          <div className="px-3 py-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 mb-1">
+        <div className="absolute left-8 top-0 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-1 animate-in fade-in zoom-in duration-100">
+          <div className="px-3 py-1.5 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-b border-slate-50 dark:border-slate-800 mb-1">
             Block ID: {currentNode?.node.attrs.id}
           </div>
-          <button onClick={duplicateBlock} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-lg">
+          <button onClick={duplicateBlock} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg">
             <Copy size={14} /> 복제하기
           </button>
-          <button onClick={deleteBlock} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg">
+          <button onClick={deleteBlock} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg">
             <Trash2 size={14} /> 삭제하기
-          </button>
-          <div className="h-[1px] bg-slate-100 my-1" />
-          <button onClick={handleAiAction} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-black text-blue-600 hover:bg-blue-50 rounded-lg group/ai">
-            <Sparkles size={14} className="group-hover/ai:animate-pulse" /> AI 요약/질문
           </button>
         </div>
       )}

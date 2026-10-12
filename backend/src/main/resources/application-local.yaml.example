@@ -1,0 +1,22 @@
+# 로컬 개발용 설정 예시 파일입니다.
+# 이 파일을 `application-local.yaml`로 복사한 뒤 실제 값을 채워 넣으세요.
+# `application-local.yaml`은 backend/.gitignore에 의해 Git에 커밋되지 않습니다.
+#
+# 사용 방법:
+#   1) cp application-local.yaml.example application-local.yaml
+#   2) 아래 값을 실제 로컬 DB/JWT 값으로 채운다.
+#   3) 서버 실행 시 SPRING_PROFILES_ACTIVE=local 환경 변수를 지정한다.
+#      예) SPRING_PROFILES_ACTIVE=local ./gradlew.bat bootRun
+#
+# 또는 application-local.yaml을 만들지 않고 아래 환경 변수를 직접 지정해도 됩니다.
+#   DB_USERNAME, DB_PASSWORD, JWT_SECRET, JWT_EXPIRATION
+# jwt.secret은 JJWT의 HMAC-SHA 요구사항에 따라 최소 256비트(32바이트) 이상이어야 합니다.
+
+spring:
+  datasource:
+    username: your_local_db_username
+    password: your_local_db_password
+
+jwt:
+  secret: replace_with_a_random_secret_at_least_32_bytes_long
+  expiration: 86400000

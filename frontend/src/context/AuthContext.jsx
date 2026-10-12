@@ -1,28 +1,71 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { registerLogoutHandler } from '../api/client';
 
 const AuthContext = createContext(null);
 
-export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(localStorage.getItem('token'));
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
-
-  const login = (newToken) => {
-    localStorage.setItem('token', newToken);
-    setToken(newToken);
-    setIsAuthenticated(true);
-  };
-
-  const logout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setIsAuthenticated(false);
-  };
-
-  return (
-    <AuthContext.Provider value={{ token, isAuthenticated, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+// JWT는 검증 없이 payload만 디코드한다(만료 시각 확인용 - 서버가 어차피 서명을 검증한다).
+const decodeJwtPayload = (token) => {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(base64));
+  } catch {
+    return null;
+  }
 };
 
+const isTokenValid = (token) => {
+  if (!token) return false;
+  const payload = decodeJwtPayload(token);
+  return typeof payload?.exp === 'number' && payload.exp * 1000 > Date.now();
+};
+
+export const AuthProvider = ({ children }) => {
+  // token은 항상 isTokenValid()를 통과한 값만 들어오므로(초기화·login·storage 동기화 모두
+  // 이 조건을 거침), isAuthenticated를 별도 상태로 두지 않고 token으로부터 파생시킨다.
+  const [token, setToken] = useState(() => {
+    const stored = localStorage.getItem('token');
+    if (isTokenValid(stored)) return stored;
+    // 이미 만료된 토큰이 로컬에 남아있으면 정리한다.
+    localStorage.removeItem('token');
+    return null;
+  });
+  const isAuthenticated = token !== null;
+
+  const login = useCallback((newToken) => {
+    if (!isTokenValid(newToken)) return;
+    localStorage.setItem('token', newToken);
+    setToken(newToken);
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('token');
+    setToken(null);
+  }, []);
+
+  useEffect(() => {
+    // client.js의 401 처리가 이 logout()을 그대로 호출하도록 등록해 로그아웃 경로를 하나로 합친다.
+    registerLogoutHandler(logout);
+  }, [logout]);
+
+  useEffect(() => {
+    // 다른 탭에서 로그인/로그아웃하면 localStorage 변경이 storage 이벤트로 전달된다.
+    const handleStorage = (event) => {
+      if (event.key !== 'token') return;
+      setToken(isTokenValid(event.newValue) ? event.newValue : null);
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  const value = useMemo(
+    () => ({ isAuthenticated, login, logout }),
+    [isAuthenticated, login, logout]
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+// Provider와 그 짝인 훅을 같은 파일에 두는 관례이며, 이 훅 하나만을 위해 파일을
+// 분리하면 Context/Provider/훅 세 파일로 흩어져 오히려 추적하기 어려워진다.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

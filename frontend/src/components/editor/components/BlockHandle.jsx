@@ -16,17 +16,20 @@ const BlockHandle = ({ editor }) => {
 
     if (posAtCoords) {
       try {
-        const $pos = view.state.doc.resolve(posAtCoords.pos);
-        const node = $pos.node(1); 
-        const start = $pos.start(1);
+        const { doc } = view.state;
+        const $pos = doc.resolve(posAtCoords.inside >= 0 ? posAtCoords.inside : posAtCoords.pos);
+        // 이미지/PDF 같은 atom 블록은 depth 0으로 해석되어 node(1)이 없으므로,
+        // 그 위치의 노드를 그대로 쓴다(그렇지 않으면 핸들이 직전 블록에 남아 엉뚱한 블록을 지운다).
+        const pos = $pos.depth > 0 ? $pos.before(1) : $pos.pos;
+        const node = doc.nodeAt(pos);
 
         if (node) {
-          const dom = view.nodeDOM(start - 1);
+          const dom = view.nodeDOM(pos);
           if (dom instanceof HTMLElement) {
             const rect = dom.getBoundingClientRect();
             const editorRect = view.dom.getBoundingClientRect();
             setTop(rect.top - editorRect.top);
-            setCurrentNode({ node, pos: start - 1 });
+            setCurrentNode({ node, pos });
           }
         }
       } catch {

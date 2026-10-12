@@ -3,7 +3,7 @@ import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
 import React from 'react';
 import { FileText, Download, ExternalLink } from 'lucide-react';
 import { API_BASE_URL } from '../../../api/client';
-import { isAllowedFileUrl } from '../hooks/useNoteUploads';
+import { resolveFileUrl } from '../hooks/useNoteUploads';
 
 // Tiptap 확장은 NodeView 컴포넌트를 같은 파일에 정의하는 것이 관례이며, 이 확장 하나만을
 // 위해 컴포넌트를 별도 파일로 분리하면 각 확장 파일마다 대응 파일이 늘어나는 비용이 더 크다.
@@ -12,7 +12,8 @@ const PdfBlockComponent = ({ node }) => {
   const { src, title } = node.attrs;
   // src는 노트 콘텐츠(JSON)에 저장된 값을 그대로 신뢰하지 않고, 우리 서버가 실제로
   // 서빙하는 경로인지 렌더링 시점에 다시 검증한다(스킴/오리진 조작 방지).
-  const isSrcTrusted = isAllowedFileUrl(src);
+  const resolvedSrc = resolveFileUrl(src);
+  const isSrcTrusted = resolvedSrc !== null;
 
   const handleDownload = (e) => {
     e.preventDefault();
@@ -52,7 +53,7 @@ const PdfBlockComponent = ({ node }) => {
         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {isSrcTrusted ? (
             <a
-              href={src}
+              href={resolvedSrc}
               target="_blank"
               rel="noopener noreferrer"
               className="p-2 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"

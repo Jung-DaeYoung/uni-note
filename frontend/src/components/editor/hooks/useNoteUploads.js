@@ -13,17 +13,23 @@ const ALLOWED_PDF_MIME_TYPES = ['application/pdf'];
 // javascript:/data: 스킴이나 임의의 외부 origin으로 조작된 URL은 렌더링하지 않기 위함.
 const ALLOWED_FILE_PATH_PREFIXES = ['/api/upload/view/', '/api/upload/download/', '/uploads/'];
 
-export const isAllowedFileUrl = (url) => {
-  if (!url) return false;
+// 노트 JSON에는 업로드 당시의 API_BASE_URL이 붙은 절대 URL이 저장되어 있어(예: localhost:8080),
+// 배포 주소가 달라지면 origin이 어긋난다. 저장값은 그대로 두고 렌더링할 때만 허용 경로를
+// 현재 서버(API_BASE_URL) 기준으로 다시 만든다. origin을 항상 우리 서버로 고정하므로
+// 외부 origin으로 조작된 URL도 외부로 나가지 않는다. 허용되지 않은 경로면 null.
+export const resolveFileUrl = (url) => {
+  if (!url) return null;
   try {
-    const serverOrigin = new URL(API_BASE_URL).origin;
     const parsed = new URL(url, API_BASE_URL);
-    if (parsed.origin !== serverOrigin) return false;
-    return ALLOWED_FILE_PATH_PREFIXES.some((prefix) => parsed.pathname.startsWith(prefix));
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (!ALLOWED_FILE_PATH_PREFIXES.some((prefix) => parsed.pathname.startsWith(prefix))) return null;
+    return new URL(API_BASE_URL).origin + parsed.pathname + parsed.search;
   } catch {
-    return false;
+    return null;
   }
 };
+
+export const isAllowedFileUrl = (url) => resolveFileUrl(url) !== null;
 
 const getExtension = (filename) => {
   if (!filename || !filename.includes('.')) return '';

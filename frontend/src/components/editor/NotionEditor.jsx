@@ -36,7 +36,7 @@ import SourceHighlight from './extensions/SourceHighlight.js';
 import SuggestionList from './components/SuggestionList.jsx';
 import BlockHandle from './components/BlockHandle.jsx';
 import CodeBlockComponent from './components/CodeBlockComponent';
-import useNoteUploads, { isAllowedFileUrl } from './hooks/useNoteUploads';
+import useNoteUploads, { isAllowedFileUrl, resolveFileUrl } from './hooks/useNoteUploads';
 import useNoteAutosave from './hooks/useNoteAutosave';
 import useSourceBlockScroll from './hooks/useSourceBlockScroll';
 
@@ -64,8 +64,8 @@ const Image = BaseImage.extend({
           return isAllowedFileUrl(src) ? src : null;
         },
         renderHTML: (attributes) => {
-          if (!isAllowedFileUrl(attributes.src)) return {};
-          return { src: attributes.src };
+          const src = resolveFileUrl(attributes.src);
+          return src ? { src } : {};
         },
       },
     };

@@ -6,6 +6,9 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localho
 
 const client = axios.create({
   baseURL: `${API_BASE_URL}/api`,
+  // ngrok 무료 도메인은 브라우저 요청에 경고 페이지(ERR_NGROK_6024)를 끼워 넣는다. 이 헤더가 있으면
+  // 통과한다(ngrok이 아닌 서버에서는 무시됨). ponytail: 상시 서버로 이전하면 제거.
+  headers: { 'ngrok-skip-browser-warning': 'true' },
 });
 
 // 401 처리를 AuthContext의 logout()으로 위임하기 위한 등록 지점.

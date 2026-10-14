@@ -14,6 +14,19 @@
 
 `DashboardResponse.courses`는 수강 강의 다음에 본인이 만든 강의를 붙여 반환한다. `CourseResponse`는 `courseId`, `courseName`, `courseCode`, `professorName`, `userCreated`를 가지며, 직접 생성 강의는 `courseCode`·`professorName`이 null이다. 직접 생성 강의에서는 노트·AI 퀴즈·오답노트를 그대로 쓸 수 있고(노트 API는 수강 또는 강의 소유자를 허용), 게시판은 403, 노트·퀴즈 공유는 400이다.
 
+## 마이페이지
+
+| Method | Endpoint | 인증 | 요청 | 응답 |
+|---|---|---:|---|---|
+| GET | `/mypage` | 예 | 없음 | `MyPageResponse`. 인증된 학번 본인의 데이터만 |
+
+`MyPageResponse`는 `profile { name, studentNum }`, `semester { label, startDate, endDate }`, `summary { noteCount, quizSetCount, attemptCount, incorrectNoteCount, postCount, commentCount, sharedCount }`, `heatmap [{ date, count }]`를 가진다.
+
+- 학기는 서울 날짜 기준 달력 규칙으로 정한다. 1학기는 3/1~6/30, 2학기는 9/1~12/31이다. 7~8월에는 그해 1학기, 1~2월에는 전년도 2학기를 반환한다.
+- `summary`는 전체 누적이다. `commentCount`는 강의 게시판·공유 노트·공유 시험 댓글의 합이고, `sharedCount`는 공유 노트와 공유 시험의 합이다.
+- `heatmap`은 학기 범위에서 활동이 있는 날만 날짜 오름차순으로 담는다. 활동은 노트 생성·수정, 게시글, 댓글, AI 퀴즈 생성, 퀴즈 풀이(복습 재풀이 포함), 오답노트 담기, 노트·시험 공유다.
+- 노트는 생성일에 1회로 센다. 마지막 수정일이 생성일과 다르면 그날 1회를 더 센다. 삭제되거나 공유를 내린 활동은 집계하지 않는다.
+
 ## 노트
 
 | Method | Endpoint | 인증 | 요청 | 응답 |

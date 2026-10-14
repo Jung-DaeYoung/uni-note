@@ -14,7 +14,8 @@ import {
   FileText,
   Plus,
   Moon,
-  Sun
+  Sun,
+  User
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCourses } from '../../context/CourseContext';
@@ -213,6 +214,16 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
           >
             <BarChart3 size={18} />
             <span className="text-sm font-bold">오답노트</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/mypage')}
+            className={`w-full flex items-center gap-3 py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap mb-2 ${
+              location.pathname === '/mypage' ? 'border-blue-500 bg-blue-500/5 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <User size={18} />
+            <span className="text-sm font-bold">마이페이지</span>
           </button>
 
           <div className="h-[1px] bg-slate-800 my-4 mx-2" />

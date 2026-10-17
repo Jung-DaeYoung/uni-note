@@ -9,7 +9,7 @@
 #      예) SPRING_PROFILES_ACTIVE=local ./gradlew.bat bootRun
 #
 # 또는 application-local.yaml을 만들지 않고 아래 환경 변수를 직접 지정해도 됩니다.
-#   DB_USERNAME, DB_PASSWORD, JWT_SECRET, JWT_EXPIRATION
+#   DB_USERNAME, DB_PASSWORD, JWT_SECRET, JWT_EXPIRATION, FILE_SIGNING_SECRET(선택)
 # jwt.secret은 JJWT의 HMAC-SHA 요구사항에 따라 최소 256비트(32바이트) 이상이어야 합니다.
 
 spring:
@@ -20,3 +20,8 @@ spring:
 jwt:
   secret: replace_with_a_random_secret_at_least_32_bytes_long
   expiration: 86400000
+
+# 선택. 업로드 파일 URL 서명 키로, 비우면 jwt.secret을 쓴다.
+# jwt.secret을 바꾼 뒤에도 기존 노트의 이미지·PDF가 보이려면 여기에 이전 jwt.secret을 넣는다.
+# file:
+#   signing-secret: previous_jwt_secret

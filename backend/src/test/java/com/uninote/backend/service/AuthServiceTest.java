@@ -2,6 +2,7 @@ package com.uninote.backend.service;
 
 import com.uninote.backend.domain.Student;
 import com.uninote.backend.dto.LoginRequest;
+import com.uninote.backend.exception.TooManyRequestsException;
 import com.uninote.backend.repository.StudentRepository;
 import com.uninote.backend.security.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,6 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,7 +26,10 @@ class AuthServiceTest {
     private final JwtUtil jwtUtil = mock(JwtUtil.class);
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    private final AuthService authService = new AuthService(studentRepository, jwtUtil, passwordEncoder);
+    private final Clock clock = mock(Clock.class);
+    private Instant now = Instant.parse("2026-10-17T12:00:00Z");
+
+    private final AuthService authService = new AuthService(studentRepository, jwtUtil, passwordEncoder, clock);
 
     private Student student;
 
@@ -31,6 +38,14 @@ class AuthServiceTest {
         student = new Student();
         student.setStudId(1L);
         student.setStudentNum("20240001");
+        when(clock.instant()).thenAnswer(inv -> now);
+    }
+
+    private static LoginRequest request(String studentNum, String password) {
+        LoginRequest request = new LoginRequest();
+        request.setStudentNum(studentNum);
+        request.setPassword(password);
+        return request;
     }
 
     @Test
@@ -112,5 +127,67 @@ class AuthServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
 
         verifyNoInteractions(jwtUtil);
+    }
+
+    @Test
+    void unknownStudentNumAndWrongPasswordGetTheSameMessage() {
+        student.setPassword(passwordEncoder.encode("correct-password"));
+        when(studentRepository.findByStudentNum("20240001")).thenReturn(Optional.of(student));
+        when(studentRepository.findByStudentNum("unknown")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.login(request("unknown", "anything")))
+                .hasMessage(AuthService.LOGIN_FAILED_MESSAGE);
+        assertThatThrownBy(() -> authService.login(request("20240001", "wrong-password")))
+                .hasMessage(AuthService.LOGIN_FAILED_MESSAGE);
+    }
+
+    @Test
+    void locksStudentNumAfterRepeatedFailuresUntilWindowPasses() {
+        student.setPassword(passwordEncoder.encode("correct-password"));
+        when(studentRepository.findByStudentNum("20240001")).thenReturn(Optional.of(student));
+        when(jwtUtil.generateToken("20240001")).thenReturn("token-value");
+        for (int i = 0; i < AuthService.MAX_FAILED_LOGINS; i++) {
+            assertThatThrownBy(() -> authService.login(request("20240001", "wrong-password")))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        // 맞는 비밀번호여도 잠긴 동안은 막는다.
+        assertThatThrownBy(() -> authService.login(request("20240001", "correct-password")))
+                .isInstanceOf(TooManyRequestsException.class)
+                .hasMessageContaining("15분 후");
+
+        now = now.plus(AuthService.LOGIN_WINDOW).plusSeconds(1);
+        assertThat(authService.login(request("20240001", "correct-password"))).isEqualTo("token-value");
+    }
+
+    @Test
+    void unknownStudentNumIsLockedTheSameWay() {
+        when(studentRepository.findByStudentNum("unknown")).thenReturn(Optional.empty());
+        for (int i = 0; i < AuthService.MAX_FAILED_LOGINS; i++) {
+            assertThatThrownBy(() -> authService.login(request("unknown", "x")))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        assertThatThrownBy(() -> authService.login(request("unknown", "x")))
+                .isInstanceOf(TooManyRequestsException.class);
+    }
+
+    @Test
+    void successfulLoginClearsEarlierFailures() {
+        student.setPassword(passwordEncoder.encode("correct-password"));
+        when(studentRepository.findByStudentNum("20240001")).thenReturn(Optional.of(student));
+        when(jwtUtil.generateToken("20240001")).thenReturn("token-value");
+        for (int i = 0; i < AuthService.MAX_FAILED_LOGINS - 1; i++) {
+            assertThatThrownBy(() -> authService.login(request("20240001", "wrong-password")))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        authService.login(request("20240001", "correct-password"));
+
+        now = now.plus(Duration.ofMinutes(1));
+        for (int i = 0; i < AuthService.MAX_FAILED_LOGINS - 1; i++) {
+            assertThatThrownBy(() -> authService.login(request("20240001", "wrong-password")))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThat(authService.login(request("20240001", "correct-password"))).isEqualTo("token-value");
     }
 }

@@ -6,7 +6,7 @@
 
 | Method | Endpoint | 인증 | 요청 | 응답 |
 |---|---|---:|---|---|
-| POST | `/auth/login` | 아니오 | `{ studentNum, password }` | `{ token, studentNum }` |
+| POST | `/auth/login` | 아니오 | `{ studentNum, password }` — 학번이 없거나 비밀번호가 틀리면 같은 메시지("학번 또는 비밀번호가 올바르지 않습니다.")로 401. 같은 학번으로 15분 안에 5번 실패하면 15분 동안 429 | `{ token, studentNum }` |
 | GET | `/dashboard/courses` | 예 | 없음 | `DashboardResponse` |
 | POST | `/courses` | 예 | `{ courseName }` (최대 100자) | `CourseResponse`. 본인 소유 직접 생성 강의를 만든다 |
 | PUT | `/courses/{courseId}` | 예 | `{ courseName }` | `CourseResponse`. 본인이 만든 강의만, 학교 강의는 403 |

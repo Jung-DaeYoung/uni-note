@@ -21,6 +21,12 @@ jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION}
 
+file:
+  # 업로드 파일 URL 서명 키(FileAccessSigner). 비우면 jwt.secret을 쓴다.
+  # 서명된 URL이 노트 본문에 저장되므로 JWT_SECRET을 교체할 때는 FILE_SIGNING_SECRET에
+  # 이전 JWT secret을 넣어야 기존 이미지·PDF가 깨지지 않는다(PLANS.md P0-2 재설계 전까지).
+  signing-secret: ${FILE_SIGNING_SECRET:${jwt.secret}}
+
 cors:
   # 콤마로 구분된 허용 origin 목록. 배포 환경에서는 실제 프론트 origin으로 덮어쓴다.
   allowed-origins: http://localhost:5173

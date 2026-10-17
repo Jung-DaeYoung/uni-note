@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Editor } from '@tiptap/react';
 import { noteSchemaExtensions } from './NotionEditor';
-import { insertKeywordExplanation } from './insertKeywordExplanation';
+import { explanationParagraphs, insertKeywordExplanation } from './insertKeywordExplanation';
 
 let editor;
 const makeEditor = (...paragraphs) => {
@@ -47,5 +47,10 @@ describe('insertKeywordExplanation', () => {
     const blocks = topLevel();
     expect(blocks.map(b => b.type).slice(0, 2)).toEqual(['paragraph', 'blockquote']);
     expect(texts(blocks[1])[0]).toBe('LRU: 교체 알고리즘');
+  });
+
+  it('미리보기 문단은 실제로 넣는 문단과 같은 규칙을 쓴다', () => {
+    expect(explanationParagraphs({ keyword: 'JWT', text: ' 토큰이다.\n \n\n서명한다. ', label: '전공 심화' }))
+      .toEqual(['JWT: 토큰이다.', '서명한다.', 'AI 생성 설명 · 전공 심화']);
   });
 });

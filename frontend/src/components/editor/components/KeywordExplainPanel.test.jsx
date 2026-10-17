@@ -117,24 +117,37 @@ describe('KeywordExplainPanel', () => {
     expect(onMakeQuiz).toHaveBeenCalledWith(target);
   });
 
-  it('설명을 만든 노트가 아니면 삽입 버튼을 끄고 안내한다', async () => {
+  it('설명을 만든 노트가 아니면 적용 버튼을 끄고 안내한다', async () => {
     client.post.mockResolvedValueOnce({ data: explanation });
     render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={vi.fn()} onOpenMention={vi.fn()} onMakeQuiz={vi.fn()} canInsert={false} onInsert={vi.fn()} />);
 
-    expect(await screen.findByRole('button', { name: '노트에 삽입' })).toBeDisabled();
-    expect(screen.getByText('설명을 만든 노트에서만 삽입할 수 있습니다')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '노트에 적용' })).toBeDisabled();
+    expect(screen.getByText('설명을 만든 노트에서만 적용할 수 있습니다')).toBeInTheDocument();
   });
 
-  it('노트에 삽입은 현재 탭의 설명과 탭 이름을 넘기고, 성공하면 안내한다', async () => {
+  it('노트에 적용은 현재 탭의 설명과 탭 이름을 넘기고, 적용되면 안내한다', async () => {
     const user = userEvent.setup();
-    const onInsert = vi.fn().mockReturnValue(true);
+    const onInsert = vi.fn().mockResolvedValue(true);
     client.post.mockResolvedValueOnce({ data: explanation });
     render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={vi.fn()} onOpenMention={vi.fn()} onMakeQuiz={vi.fn()} canInsert onInsert={onInsert} />);
 
     await user.click(await screen.findByRole('tab', { name: '쉬운 설명' }));
-    await user.click(screen.getByRole('button', { name: '노트에 삽입' }));
+    await user.click(screen.getByRole('button', { name: '노트에 적용' }));
 
     expect(onInsert).toHaveBeenCalledWith({ text: '쉬운 설명', label: '쉬운 설명' });
-    expect(screen.getByText('노트에 삽입했습니다')).toBeInTheDocument();
+    expect(await screen.findByText('노트에 적용했습니다')).toBeInTheDocument();
+  });
+
+  it('사용자가 적용하지 않기로 하면 적용 안내를 띄우지 않는다', async () => {
+    const user = userEvent.setup();
+    const onInsert = vi.fn().mockResolvedValue(false);
+    client.post.mockResolvedValueOnce({ data: explanation });
+    render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={vi.fn()} onOpenMention={vi.fn()} onMakeQuiz={vi.fn()} canInsert onInsert={onInsert} />);
+
+    await user.click(await screen.findByRole('button', { name: '노트에 적용' }));
+
+    expect(onInsert).toHaveBeenCalled();
+    expect(screen.queryByText('노트에 적용했습니다')).not.toBeInTheDocument();
+    expect(screen.getByText('적용 전에 넣을 내용을 확인합니다')).toBeInTheDocument();
   });
 });

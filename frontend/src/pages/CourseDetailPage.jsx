@@ -15,7 +15,7 @@ import {
 import AppLayout from '../components/layout/AppLayout';
 import NotionEditor from '../components/editor/NotionEditor';
 import KeywordExplainPanel from '../components/editor/components/KeywordExplainPanel';
-import { insertKeywordExplanation } from '../components/editor/insertKeywordExplanation';
+import { explanationParagraphs, insertKeywordExplanation } from '../components/editor/insertKeywordExplanation';
 import QuizConfigModal from '../components/editor/components/QuizConfigModal';
 import CBTPlayer from '../components/editor/components/CBTPlayer';
 import { NoteTreeProvider } from '../context/NoteTreeContext';
@@ -88,10 +88,19 @@ const CourseDetailPage = () => {
   const editorRef = useRef(null);
   const handleEditorReady = useCallback((editor) => { editorRef.current = editor; }, []);
 
-  const insertExplanation = ({ text, label }) => {
+  // 넣을 내용을 미리 보여 주고, 사용자가 "적용"을 고를 때만 노트를 바꾼다.
+  const insertExplanation = async ({ text, label }) => {
+    const explanation = { blockId: keywordTarget.blockId, keyword: keywordTarget.keyword, text, label };
+    const ok = await confirm({
+      title: '설명을 노트에 적용할까요?',
+      message: `선택한 블록 바로 아래에 인용 블록으로 들어갑니다.\n\n${explanationParagraphs(explanation).join('\n')}`,
+      variant: 'share',
+      confirmLabel: '적용',
+      cancelLabel: '적용 안 함',
+    });
     const editor = editorRef.current;
-    if (!editor || editor.isDestroyed) return false;
-    return insertKeywordExplanation(editor, { blockId: keywordTarget.blockId, keyword: keywordTarget.keyword, text, label });
+    if (!ok || !editor || editor.isDestroyed) return false;
+    return insertKeywordExplanation(editor, explanation);
   };
 
   const openKeywordQuiz = ({ noteId: presetNoteId, blockId, keyword }) => {

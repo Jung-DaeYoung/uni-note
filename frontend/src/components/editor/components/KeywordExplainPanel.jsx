@@ -10,7 +10,7 @@ const TABS = [
 ];
 
 // 오른쪽 고정 패널(CourseBoardPanel과 같은 자리). 키워드가 바뀌면 부모가 key로 새로 마운트해 탭을 초기화한다.
-// canInsert: 설명을 만든 노트를 지금 편집 중인지. onInsert({ text, label })는 삽입 성공 여부를 돌려준다.
+// canInsert: 설명을 만든 노트를 지금 편집 중인지. onInsert({ text, label })는 사용자 확인 후 적용 여부를 돌려준다(Promise 가능).
 const KeywordExplainPanel = ({ target, onClose, onSelectKeyword, onOpenMention, onMakeQuiz, canInsert, onInsert }) => {
   const { data, loading, error, retry } = useKeywordExplanation(target);
   const mentions = useKeywordMentions(target);
@@ -93,14 +93,14 @@ const KeywordExplainPanel = ({ target, onClose, onSelectKeyword, onOpenMention, 
                 <button
                   type="button"
                   disabled={!canInsert}
-                  onClick={() => { if (onInsert({ text: data[tab], label: tabLabel })) setInsertedTab(tab); }}
+                  onClick={async () => { if (await onInsert({ text: data[tab], label: tabLabel })) setInsertedTab(tab); }}
                   className="px-2 py-1 rounded-md text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none"
                 >
-                  노트에 삽입
+                  노트에 적용
                 </button>
                 <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                  {!canInsert ? '설명을 만든 노트에서만 삽입할 수 있습니다'
-                    : insertedTab === tab ? '노트에 삽입했습니다' : '이 탭의 설명을 선택한 블록 뒤에 넣습니다'}
+                  {!canInsert ? '설명을 만든 노트에서만 적용할 수 있습니다'
+                    : insertedTab === tab ? '노트에 적용했습니다' : '적용 전에 넣을 내용을 확인합니다'}
                 </span>
               </div>
             </div>

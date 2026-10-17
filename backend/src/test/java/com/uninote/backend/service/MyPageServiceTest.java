@@ -1,8 +1,13 @@
 package com.uninote.backend.service;
 
+import com.uninote.backend.domain.Course;
+import com.uninote.backend.domain.Enrollment;
 import com.uninote.backend.domain.Student;
 import com.uninote.backend.dto.MyPageResponse;
+import com.uninote.backend.repository.CourseRepository;
+import com.uninote.backend.repository.EnrollmentRepository;
 import com.uninote.backend.repository.MyPageActivityRepository;
+import com.uninote.backend.repository.NoteRepository;
 import com.uninote.backend.repository.StudentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,7 +35,11 @@ class MyPageServiceTest {
     private final MyPageActivityRepository activityRepository = mock(MyPageActivityRepository.class);
     // 2026-10-14 10:00 KST (= 01:00 UTC). 시스템 기본 시간대가 UTC여도 서울 기준 날짜로 학기를 정해야 한다.
     private final Clock clock = Clock.fixed(Instant.parse("2026-10-14T01:00:00Z"), ZoneId.of("UTC"));
-    private final MyPageService service = new MyPageService(studentRepository, activityRepository, clock);
+    private final EnrollmentRepository enrollmentRepository = mock(EnrollmentRepository.class);
+    private final CourseRepository courseRepository = mock(CourseRepository.class);
+    private final NoteRepository noteRepository = mock(NoteRepository.class);
+    private final MyPageService service = new MyPageService(studentRepository, activityRepository,
+            enrollmentRepository, courseRepository, noteRepository, clock);
 
     private Student student;
 
@@ -66,6 +76,9 @@ class MyPageServiceTest {
         assertThat(res.semester().label()).isEqualTo("2026년 2학기");
         assertThat(res.summary()).isEqualTo(new MyPageResponse.Summary(0, 0, 0, 0, 0, 0, 0));
         assertThat(res.heatmap()).isEmpty();
+        assertThat(res.courseProgress()).isEmpty();
+        assertThat(res.recentActivities()).isEmpty();
+        assertThat(res.myContents()).isEqualTo(new MyPageResponse.MyContents(List.of(), List.of(), List.of()));
     }
 
     @Test
@@ -120,5 +133,65 @@ class MyPageServiceTest {
         assertThat(summary.noteCount()).isEqualTo(5);
         assertThat(summary.commentCount()).isEqualTo(6);
         assertThat(summary.sharedCount()).isEqualTo(5);
+    }
+
+    @Test
+    void courseProgressIncludesOwnedCoursesAndZeroForInactiveCourses() {
+        Course enrolled = course(10L, "운영체제");
+        Course owned = course(20L, "내 스터디");
+        Enrollment enrollment = new Enrollment();
+        enrollment.setCourse(enrolled);
+        when(enrollmentRepository.findByStudent(student)).thenReturn(List.of(enrollment));
+        when(courseRepository.findByOwner_StudIdAndUserCreatedTrueOrderByCourseIdAsc(1L)).thenReturn(List.of(owned));
+        LocalDateTime noteAt = LocalDateTime.of(2026, 10, 1, 9, 0);
+        LocalDateTime attemptAt = LocalDateTime.of(2026, 10, 3, 9, 0);
+        when(activityRepository.countNotesByCourse(student)).thenReturn(rows(new Object[]{10L, 3L, noteAt}));
+        when(activityRepository.countAttemptsByCourse(student)).thenReturn(rows(new Object[]{10L, 2L, attemptAt}));
+
+        assertThat(service.getMyPage("2021001").courseProgress()).containsExactly(
+                new MyPageResponse.CourseProgress(10L, "운영체제", 3, 0, 2, attemptAt),
+                new MyPageResponse.CourseProgress(20L, "내 스터디", 0, 0, 0, null));
+    }
+
+    @Test
+    void recentActivitiesMergeSourcesNewestFirstAndKeepTwenty() {
+        LocalDateTime base = LocalDateTime.of(2026, 10, 1, 0, 0);
+        List<Object[]> notes = new ArrayList<>();
+        for (int i = 0; i < 20; i++) notes.add(new Object[]{"노트" + i, base.plusHours(i), 1L, (long) i});
+        when(activityRepository.findRecentNoteCreations(eq(student), any())).thenReturn(notes);
+        when(activityRepository.findRecentIncorrectItems(eq(student), any())).thenReturn(rows(
+                new Object[]{"가".repeat(50), base.plusDays(5), 1L, 99L}));
+
+        List<MyPageResponse.Activity> activities = service.getMyPage("2021001").recentActivities();
+
+        assertThat(activities).hasSize(20);
+        assertThat(activities.get(0)).isEqualTo(new MyPageResponse.Activity(
+                "INCORRECT_NOTE_ADDED", "가".repeat(40) + "…", base.plusDays(5), 1L, 99L));
+        assertThat(activities.get(1).title()).isEqualTo("노트19");
+        // 가장 오래된 노트0은 20건 제한으로 빠진다.
+        assertThat(activities).extracting(MyPageResponse.Activity::title).doesNotContain("노트0");
+    }
+
+    @Test
+    void myContentsMapsSharedRows() {
+        LocalDateTime at = LocalDateTime.of(2026, 10, 2, 9, 0);
+        when(activityRepository.findRecentSharedNotes(eq(student), any())).thenReturn(rows(new Object[]{"공유 노트", at, 1L, 3L}));
+        when(activityRepository.findRecentSharedQuizzes(eq(student), any())).thenReturn(rows(new Object[]{"공유 시험", at, 1L, 5L}));
+
+        MyPageResponse.MyContents contents = service.getMyPage("2021001").myContents();
+
+        assertThat(contents.sharedNotes()).containsExactly(new MyPageResponse.SharedNote(3L, "공유 노트", at));
+        assertThat(contents.sharedQuizzes()).containsExactly(new MyPageResponse.SharedQuizItem(5L, "공유 시험", at));
+    }
+
+    private static Course course(Long id, String name) {
+        Course course = new Course();
+        course.setCourseId(id);
+        course.setCourseName(name);
+        return course;
+    }
+
+    private static List<Object[]> rows(Object[]... rows) {
+        return List.of(rows);
     }
 }

@@ -27,13 +27,11 @@ export const ConfirmProvider = ({ children }) => {
   const requestRef = useRef(null);
   const titleId = useId();
 
-  // resolve는 요청당 한 번만 호출된다. ref를 먼저 비워 ESC·클릭이 겹쳐도 중복 resolve되지 않는다.
+  // Promise의 resolve는 두 번째 호출부터 무시되므로 ESC·클릭이 겹쳐도 결과는 한 번만 정해진다.
   const close = useCallback((result) => {
-    const current = requestRef.current;
-    if (!current) return;
+    requestRef.current?.resolve(result);
     requestRef.current = null;
     setRequest(null);
-    current.resolve(result);
   }, []);
 
   const confirm = useCallback((options) => new Promise((resolve) => {

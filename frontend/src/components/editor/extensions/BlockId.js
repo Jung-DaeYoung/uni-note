@@ -47,8 +47,7 @@ export default Extension.create({
               seen.add(id);
               return;
             }
-            let newId = createId();
-            while (seen.has(newId)) newId = createId();
+            const newId = createId();
             seen.add(newId);
             tr.setNodeAttribute(pos, 'id', newId);
           });

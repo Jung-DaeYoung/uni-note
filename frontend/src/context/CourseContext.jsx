@@ -7,9 +7,6 @@ const CourseContext = createContext({
   courses: [],
   recentPosts: [],
   recentNotes: [],
-  createCourse: async () => {},
-  renameCourse: async () => {},
-  deleteCourse: async () => {},
 });
 
 // Provider와 그 짝인 훅을 같은 파일에 두는 관례이며, 이 훅 하나만을 위해 파일을

@@ -10,12 +10,8 @@ const NOT_FOUND_MESSAGE = '원문 블록을 찾을 수 없습니다. 노트가 �
 const findBlockPos = (doc, blockId) => {
   let found = null;
   doc.descendants((node, pos) => {
-    if (found !== null) return false;
-    if (node.attrs?.id === blockId) {
-      found = pos;
-      return false;
-    }
-    return true;
+    if (node.attrs?.id === blockId) found = pos;
+    return found === null;
   });
   return found;
 };

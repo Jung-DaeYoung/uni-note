@@ -41,6 +41,7 @@ public class IncorrectNoteService {
     // 연속 정답이 간격 수만큼 쌓이면 졸업해 오늘의 복습에서 빠진다.
     // ponytail: 고정 간격표다. 개인별 난이도 보정(SM-2 등)이 필요해지면 그때 바꾼다.
     private static final int[] REVIEW_INTERVAL_DAYS = {1, 3, 7, 14, 30};
+    private static final int MAX_REVIEW_WITHIN_DAYS = 13;
 
     @Transactional(readOnly = true)
     public List<IncorrectNoteGroupResponse> getMyGroups(Student student) {
@@ -266,14 +267,16 @@ public class IncorrectNoteService {
             classifyPriority(incorrect, accuracyRate, recentlyIncorrect));
     }
 
+    // withinDays > 0이면 오늘부터 그 일수 안에 복습일이 오는 문제까지 포함한다(이번 주 복습 생성 모드, P2-4).
     @Transactional(readOnly = true)
-    public List<TodayReviewQuestionResponse> getTodayReview(Student student, int limit, Long courseId) {
-        if (limit < 1 || limit > 100) {
-            throw new InvalidRequestException("limit은 1 이상 100 이하여야 합니다.");
+    public List<TodayReviewQuestionResponse> getTodayReview(Student student, int limit, Long courseId, int withinDays) {
+        validateLimit(limit);
+        if (withinDays < 0 || withinDays > MAX_REVIEW_WITHIN_DAYS) {
+            throw new InvalidRequestException("withinDays는 0 이상 " + MAX_REVIEW_WITHIN_DAYS + " 이하여야 합니다.");
         }
 
         List<QuestionReviewStat> stats = buildQuestionReviewStats(student);
-        Map<Long, ReviewSchedule> due = dueReviews(stats, student);
+        Map<Long, ReviewSchedule> due = dueReviews(stats, student, withinDays);
 
         // 정렬은 기존 복습 우선순위(PRIORITY_ORDER)를 그대로 쓰고, 대상만 "복습일이 된 문제"로 거른다.
         return stats.stream()
@@ -294,8 +297,31 @@ public class IncorrectNoteService {
             .collect(Collectors.toList());
     }
 
-    // 오늘 복습할 문제(questionId → 일정). 한 번이라도 틀렸고, 졸업하지 않았고, 복습일이 오늘 이전인 문제만 담는다.
+    // 한 번 이상 틀린 문제를 마지막 오답이 최근인 순으로 반환한다(최근 틀린 문제 유사 생성 모드, P2-4).
+    @Transactional(readOnly = true)
+    public List<QuestionResponse> getRecentIncorrect(Student student, int limit, Long courseId) {
+        validateLimit(limit);
+        return buildQuestionReviewStats(student).stream()
+            .filter(s -> s.getLastIncorrectAt() != null)
+            .filter(s -> courseId == null || courseId.equals(s.getCourseId()))
+            .sorted(Comparator.comparing(QuestionReviewStat::getLastIncorrectAt).reversed())
+            .limit(limit)
+            .map(s -> questionResponseMapper.toResponse(s.getQuestion()))
+            .collect(Collectors.toList());
+    }
+
+    private static void validateLimit(int limit) {
+        if (limit < 1 || limit > 100) {
+            throw new InvalidRequestException("limit은 1 이상 100 이하여야 합니다.");
+        }
+    }
+
     private Map<Long, ReviewSchedule> dueReviews(List<QuestionReviewStat> stats, Student student) {
+        return dueReviews(stats, student, 0);
+    }
+
+    // 복습할 문제(questionId → 일정). 한 번이라도 틀렸고, 졸업하지 않았고, 복습일이 오늘 + withinDays 이전인 문제만 담는다.
+    private Map<Long, ReviewSchedule> dueReviews(List<QuestionReviewStat> stats, Student student, int withinDays) {
         if (stats.isEmpty()) {
             return Map.of();
         }
@@ -309,7 +335,7 @@ public class IncorrectNoteService {
             }
             LocalDate next = s.getLastAttemptedAt() == null ? today
                 : s.getLastAttemptedAt().toLocalDate().plusDays(REVIEW_INTERVAL_DAYS[streak]);
-            if (!next.isAfter(today)) {
+            if (!next.isAfter(today.plusDays(withinDays))) {
                 due.put(s.getQuestionId(), new ReviewSchedule(next, streak));
             }
         }

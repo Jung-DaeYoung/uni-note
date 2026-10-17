@@ -289,7 +289,7 @@ class IncorrectNoteServiceTest {
                 questionWithId(1L), questionWithId(2L), questionWithId(3L), questionWithId(999L), questionWithId(10L)));
         stubQuestionResponseMapperToEchoQuestionId();
 
-        List<TodayReviewQuestionResponse> result = incorrectNoteService.getTodayReview(owner, 10, null);
+        List<TodayReviewQuestionResponse> result = incorrectNoteService.getTodayReview(owner, 10, null, 0);
 
         assertThat(result).extracting(r -> r.getQuestion().getQuestionId())
                 .containsExactly(1L, 2L, 10L, 999L, 3L);
@@ -305,7 +305,7 @@ class IncorrectNoteServiceTest {
         when(questionRepository.findAllById(any())).thenReturn(List.of(
                 questionWithId(1L), questionWithId(2L), questionWithId(3L)));
 
-        List<TodayReviewQuestionResponse> result = incorrectNoteService.getTodayReview(owner, 2, null);
+        List<TodayReviewQuestionResponse> result = incorrectNoteService.getTodayReview(owner, 2, null, 0);
 
         assertThat(result).hasSize(2);
     }
@@ -319,7 +319,7 @@ class IncorrectNoteServiceTest {
         ));
         when(questionRepository.findAllById(any())).thenReturn(List.of(questionWithId(1L), questionWithId(2L)));
 
-        List<TodayReviewQuestionResponse> result = incorrectNoteService.getTodayReview(owner, 10, 100L);
+        List<TodayReviewQuestionResponse> result = incorrectNoteService.getTodayReview(owner, 10, 100L, 0);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getCourseId()).isEqualTo(100L);
@@ -327,13 +327,13 @@ class IncorrectNoteServiceTest {
 
     @Test
     void getTodayReviewRejectsNonPositiveLimit() {
-        assertThatThrownBy(() -> incorrectNoteService.getTodayReview(owner, 0, null))
+        assertThatThrownBy(() -> incorrectNoteService.getTodayReview(owner, 0, null, 0))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
     @Test
     void getTodayReviewRejectsTooLargeLimit() {
-        assertThatThrownBy(() -> incorrectNoteService.getTodayReview(owner, 101, null))
+        assertThatThrownBy(() -> incorrectNoteService.getTodayReview(owner, 101, null, 0))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
@@ -346,9 +346,47 @@ class IncorrectNoteServiceTest {
         ));
         when(questionRepository.findAllById(any())).thenReturn(List.of(question));
 
-        List<TodayReviewQuestionResponse> result = incorrectNoteService.getTodayReview(owner, 10, null);
+        List<TodayReviewQuestionResponse> result = incorrectNoteService.getTodayReview(owner, 10, null, 0);
 
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getTodayReviewWithinDaysIncludesUpcomingReviews() {
+        // 오늘 틀린 문제는 내일 복습 예정이라 오늘 기준으로는 빠지고, 이번 주(6일) 기준으로는 들어간다.
+        LocalDateTime today = LocalDateTime.of(2024, 1, 12, 9, 0);
+        when(userAnswerRepository.aggregateByQuestionForStudent(owner.getStudId())).thenReturn(List.of(
+                rawStat(1L, null, null, QuestionType.SHORT_ANSWER, 1, 0, 1, today, today)));
+        when(questionRepository.findAllById(any())).thenReturn(List.of(questionWithId(1L)));
+
+        assertThat(incorrectNoteService.getTodayReview(owner, 10, null, 0)).isEmpty();
+        assertThat(incorrectNoteService.getTodayReview(owner, 10, null, 6)).hasSize(1);
+    }
+
+    @Test
+    void getTodayReviewRejectsOutOfRangeWithinDays() {
+        assertThatThrownBy(() -> incorrectNoteService.getTodayReview(owner, 10, null, -1))
+                .isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(() -> incorrectNoteService.getTodayReview(owner, 10, null, 14))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void getRecentIncorrectSortsByLastIncorrectAndFiltersCourse() {
+        when(userAnswerRepository.aggregateByQuestionForStudent(owner.getStudId())).thenReturn(List.of(
+                rawStat(1L, 100L, "강의A", QuestionType.SHORT_ANSWER, 3, 1, 2, YESTERDAY, YESTERDAY.minusDays(3)),
+                rawStat(2L, 100L, "강의A", QuestionType.SHORT_ANSWER, 1, 0, 1, YESTERDAY, YESTERDAY),
+                rawStat(3L, 100L, "강의A", QuestionType.SHORT_ANSWER, 2, 2, 0, YESTERDAY, null),
+                rawStat(4L, 200L, "강의B", QuestionType.SHORT_ANSWER, 1, 0, 1, YESTERDAY, YESTERDAY)
+        ));
+        when(questionRepository.findAllById(any())).thenReturn(List.of(
+                questionWithId(1L), questionWithId(2L), questionWithId(3L), questionWithId(4L)));
+        stubQuestionResponseMapperToEchoQuestionId();
+
+        assertThat(incorrectNoteService.getRecentIncorrect(owner, 10, 100L))
+                .extracting(QuestionResponse::getQuestionId)
+                .containsExactly(2L, 1L);
+        assertThat(incorrectNoteService.getRecentIncorrect(owner, 1, null)).hasSize(1);
     }
 
     // 고정 시계(2024-01-12) 기준 어제 풀이. 오답 직후 간격(1일)이 지나 오늘 복습 대상이 된다.
@@ -373,7 +411,7 @@ class IncorrectNoteServiceTest {
         when(userAnswerRepository.aggregateByQuestionForStudent(owner.getStudId())).thenReturn(List.of(stat));
         when(questionRepository.findAllById(any())).thenReturn(List.of(question));
         when(userAnswerRepository.findAnswerHistoryForStudent(owner.getStudId())).thenReturn(answers);
-        return incorrectNoteService.getTodayReview(owner, 10, null);
+        return incorrectNoteService.getTodayReview(owner, 10, null, 0);
     }
 
     @Test

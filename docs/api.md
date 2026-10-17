@@ -57,7 +57,7 @@
 
 | Method | Endpoint | 인증 | 요청 | 응답 |
 |---|---|---:|---|---|
-| POST | `/quiz/generate` | 예 | `{ noteIds, typeCounts, difficulty, blockSelections?, learningObjectives?, focusConcepts? }` — `blockSelections: [{ noteId, blockIds }]`(선택)에 있는 노트는 해당 블록과 하위 블록만, 나머지 `noteIds` 노트는 전체로 생성. `noteId`는 `noteIds`에 포함되어야 하며 전체 블록은 최대 500개. `learningObjectives`(선택)는 문항이 평가할 학습 목표로 최대 5개, 항목당 1~100자. `focusConcepts`(선택)는 집중 출제할 개념(개념별 통계의 `conceptTag`)으로 최대 5개, 항목당 1~30자이며 같은 문제를 반복하지 않도록 비교·적용·오개념 판별 형태로 출제된다 | `QuizResponse` |
+| POST | `/quiz/generate` | 예 | `{ noteIds, typeCounts, difficulty, blockSelections?, learningObjectives?, focusConcepts?, referenceQuestions?, coverAllNotes? }` — `blockSelections: [{ noteId, blockIds }]`(선택)에 있는 노트는 해당 블록과 하위 블록만, 나머지 `noteIds` 노트는 전체로 생성. `noteId`는 `noteIds`에 포함되어야 하며 전체 블록은 최대 500개. `learningObjectives`(선택)는 문항이 평가할 학습 목표로 최대 5개, 항목당 1~100자. `focusConcepts`(선택)는 집중 출제할 개념(개념별 통계의 `conceptTag`)으로 최대 5개, 항목당 1~30자이며 같은 문제를 반복하지 않도록 비교·적용·오개념 판별 형태로 출제된다. `referenceQuestions`(선택)는 학습자가 틀린 문제 원문으로 최대 10개, 항목당 1~500자이며 같은 개념을 다른 형태로 바꿔 출제한다. `coverAllNotes`(선택)가 true이고 출처가 있는 노트가 2개 이상이며 총 문항 수 이상이면 노트마다 1문항 이상 출제하도록 요청하고, 빠진 노트가 있으면 1회 재생성한다(그래도 빠지면 그대로 저장) | `QuizResponse` |
 | GET | `/quiz/my` | 예 | 없음 | `QuizSetResponse[]` |
 | GET | `/quiz/{quizSetId}` | 예 | 없음 | `QuizSetDetailResponse` |
 | DELETE | `/quiz/{quizSetId}` | 예 | 없음 | 빈 응답 |
@@ -117,7 +117,8 @@
 | GET | `/quiz/incorrect/statistics/types` | 예 | 없음 | `QuestionTypeIncorrectStatResponse[]` |
 | GET | `/quiz/incorrect/statistics/blocks` | 예 | 없음 | `SourceBlockStatResponse[]` (출처 블록별 풀이 통계, 취약 블록 먼저) |
 | GET | `/quiz/incorrect/statistics/concepts` | 예 | 없음 | `ConceptStatResponse[]` (강의·개념 태그별 풀이 통계, 취약 개념 먼저) |
-| GET | `/quiz/incorrect/review-today` | 예 | query `limit`(기본 10), `courseId`(선택) | `TodayReviewQuestionResponse[]` (간격 반복: 한 번이라도 틀린 문제 중 `nextReviewAt`이 오늘 이전인 문제. 마지막 오답 이후 연속 정답 `streak`에 따라 1·3·7·14·30일 간격, 5회 연속 정답이면 제외) |
+| GET | `/quiz/incorrect/review-today` | 예 | query `limit`(기본 10), `courseId`(선택), `withinDays`(기본 0, 0~13: 오늘 + 이 일수까지 복습일이 오는 문제 포함) | `TodayReviewQuestionResponse[]` (간격 반복: 한 번이라도 틀린 문제 중 `nextReviewAt`이 오늘 이전인 문제. 마지막 오답 이후 연속 정답 `streak`에 따라 1·3·7·14·30일 간격, 5회 연속 정답이면 제외) |
+| GET | `/quiz/incorrect/recent` | 예 | query `limit`(기본 10, 1~100), `courseId`(선택) | `QuestionResponse[]` (한 번 이상 틀린 문제, 마지막 오답이 최근인 순) |
 
 `ConceptStatResponse`는 `conceptTag`, `courseId`, `courseName`, `questionCount`, `attemptCount`, `correctCount`, `incorrectCount`, `accuracyRate`, `reviewPriority`를 가진다. 같은 표기도 강의가 다르면 다른 개념으로 집계하고, 태그는 대소문자를 무시해 묶어 가장 먼저 만든 문제의 표기를 쓴다. 태그가 여럿인 문제는 각 태그에 풀이가 모두 더해지고, 태그가 없는 문제는 제외된다. 취약도(`reviewPriority`)와 정렬은 출처 블록 통계와 같다.
 

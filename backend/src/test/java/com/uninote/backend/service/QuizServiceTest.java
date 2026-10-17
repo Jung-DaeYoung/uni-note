@@ -667,6 +667,60 @@ class QuizServiceTest {
         return requestFor(List.of(10L), Map.of(QuestionType.MULTIPLE_CHOICE, 1));
     }
 
+    // 모의고사 모드(P2-4): 노트 10L(b1), 11L(b2)에 출처가 있고 노트마다 1문항 이상을 요청한다.
+    private QuizRequest stubCoverAllNotes() {
+        Note note10 = ownedNote(10L);
+        Note note11 = ownedNote(11L);
+        when(noteRepository.findAllById(List.of(10L, 11L))).thenReturn(List.of(note10, note11));
+        when(quizAiGenerationService.prepareInput(any(), any(), any())).thenReturn(new QuizGenerationInput(
+                "[[REF:10/b1]] LRU [[REF:11/b2]] FIFO", List.of(), Map.of(10L, Set.of("b1"), 11L, Set.of("b2"))));
+        QuizRequest request = requestFor(List.of(10L, 11L), Map.of(QuestionType.MULTIPLE_CHOICE, 2));
+        request.setCoverAllNotes(true);
+        return request;
+    }
+
+    private QuestionResponse multipleChoiceFromNote11(String text) {
+        QuestionResponse q = multipleChoice(text, "FIFO");
+        q.setSourceNoteId(11L);
+        q.setSourceBlockId("b2");
+        return q;
+    }
+
+    @Test
+    void generateQuizRegeneratesOnceWhenNoteIsNotCovered(CapturedOutput output) {
+        QuizRequest request = stubCoverAllNotes();
+        QuizResponse onlyNote10 = aiResponseWith(multipleChoice("LRU란?", "LRU"), multipleChoice("LRU 장점은?", "LRU"));
+        QuizResponse bothNotes = aiResponseWith(multipleChoice("LRU란?", "LRU"), multipleChoiceFromNote11("FIFO란?"));
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(onlyNote10, bothNotes);
+
+        assertThat(quizService.generateQuiz(request, owner)).isSameAs(bothNotes);
+        verify(quizAiGenerationService, times(2)).requestQuiz(any(), any());
+        assertThat(output.getOut()).contains("uncoveredNotes=0");
+    }
+
+    @Test
+    void generateQuizKeepsFirstResultWhenRegeneratedResultAlsoMissesNote(CapturedOutput output) {
+        QuizRequest request = stubCoverAllNotes();
+        QuizResponse first = aiResponseWith(multipleChoice("LRU란?", "LRU"), multipleChoice("LRU 장점은?", "LRU"));
+        QuizResponse second = aiResponseWith(multipleChoice("LRU 단점은?", "LRU"), multipleChoice("LRU 구현은?", "LRU"));
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(first, second);
+
+        assertThat(quizService.generateQuiz(request, owner)).isSameAs(first);
+        verify(quizAiGenerationService, times(2)).requestQuiz(any(), any());
+        assertThat(output.getOut()).contains("quiz.generation status=SUCCESS").contains("uncoveredNotes=1");
+    }
+
+    @Test
+    void generateQuizDoesNotCheckCoverageWithoutCoverAllNotes() {
+        QuizRequest request = stubCoverAllNotes();
+        request.setCoverAllNotes(null);
+        QuizResponse onlyNote10 = aiResponseWith(multipleChoice("LRU란?", "LRU"), multipleChoice("LRU 장점은?", "LRU"));
+        when(quizAiGenerationService.requestQuiz(any(), any())).thenReturn(onlyNote10);
+
+        assertThat(quizService.generateQuiz(request, owner)).isSameAs(onlyNote10);
+        verify(quizAiGenerationService, times(1)).requestQuiz(any(), any());
+    }
+
     @Test
     void generateQuizSavesWithoutRegenerationWhenNoHistoryDuplicate(CapturedOutput output) {
         QuizRequest request = stubHistory("이전 문제");

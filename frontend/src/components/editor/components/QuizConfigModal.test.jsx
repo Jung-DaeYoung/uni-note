@@ -207,6 +207,119 @@ describe('QuizConfigModal', () => {
     alertSpy.mockRestore();
   });
 
+  describe('생성 모드', () => {
+    const noteWithBlock = {
+      noteId: 2,
+      content: JSON.stringify({ type: 'doc', content: [
+        { type: 'heading', attrs: { id: 't2', level: 1 }, content: [{ type: 'text', text: '자식 제목' }] },
+        { type: 'paragraph', attrs: { id: 'c2' }, content: [{ type: 'text', text: 'LRU 설명' }] },
+      ] }),
+    };
+    const question = (type, questionText, sourceNoteId, sourceBlockId, conceptTags) =>
+      ({ type, questionText, sourceNoteId, sourceBlockId, conceptTags });
+    const modeButton = (name) => screen.getByRole('radio', { name: new RegExp(`^${name}`) });
+
+    it('최근 틀린 문제 모드는 출처 블록·개념·유형별 수·문제 원문으로 설정을 채운다', async () => {
+      const user = userEvent.setup();
+      client.get.mockImplementation((url) => {
+        if (url === '/quiz/incorrect/recent') return Promise.resolve({ data: [
+          question('SHORT_ANSWER', ' LRU란? ', 2, 'c2', ['LRU']),
+          question('OX', 'FIFO는 가장 오래된 페이지를 교체한다', 99, 'x', ['FIFO', 'LRU']), // 다른 강의 노트
+          question('SHORT_ANSWER', 'OPT란?', null, null, []), // 출처 미검증
+        ] });
+        if (url === '/notes/2') return Promise.resolve({ data: noteWithBlock });
+        return Promise.reject(new Error(`unexpected ${url}`));
+      });
+      client.post.mockResolvedValueOnce({ data: { quizSetId: 7 } });
+      const { onClose } = renderModal({ currentNoteId: 1 });
+
+      await user.click(modeButton('최근 틀린 문제'));
+      expect(client.get).toHaveBeenCalledWith('/quiz/incorrect/recent', { params: { courseId: '1', limit: 10 } });
+      expect(await screen.findByText('틀린 문제 3개를 다른 형태로 바꿔 출제합니다')).toBeInTheDocument();
+      expect(modeButton('최근 틀린 문제')).toHaveAttribute('aria-checked', 'true');
+
+      const generate = screen.getByRole('button', { name: '문제 생성 시작' });
+      await waitFor(() => expect(generate).toBeEnabled());
+      await user.click(generate);
+
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(client.post.mock.calls[0][1]).toEqual({
+        noteIds: [2],
+        blockSelections: [{ noteId: 2, blockIds: ['c2'] }],
+        typeCounts: { OX: 1, SHORT_ANSWER: 2 },
+        difficulty: 'NORMAL',
+        focusConcepts: ['LRU', 'FIFO'],
+        referenceQuestions: ['LRU란?', 'FIFO는 가장 오래된 페이지를 교체한다', 'OPT란?'],
+      });
+    });
+
+    it('이번 주 복습 모드는 6일 안에 복습할 문제를 불러오고, 출처가 없으면 범위를 유지한다', async () => {
+      const user = userEvent.setup();
+      client.get.mockResolvedValueOnce({ data: [{ question: question('OX', 'LRU는 최근 사용 순이다', null, null, ['LRU']) }] });
+      client.post.mockResolvedValueOnce({ data: { quizSetId: 7 } });
+      renderModal({ currentNoteId: 1 });
+
+      await user.click(modeButton('이번 주 복습'));
+      expect(client.get).toHaveBeenCalledWith('/quiz/incorrect/review-today',
+        { params: { courseId: '1', limit: 10, withinDays: 6 } });
+      await screen.findByText('틀린 문제 1개를 다른 형태로 바꿔 출제합니다');
+      await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+
+      await waitFor(() => expect(client.post).toHaveBeenCalled());
+      expect(client.post.mock.calls[0][1]).toMatchObject({
+        noteIds: [1],
+        typeCounts: { OX: 1 },
+        focusConcepts: ['LRU'],
+        referenceQuestions: ['LRU는 최근 사용 순이다'],
+      });
+    });
+
+    it('틀린 문제가 없으면 안내하고 직접 설정 모드를 유지한다', async () => {
+      const user = userEvent.setup();
+      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+      client.get.mockResolvedValueOnce({ data: [] });
+      renderModal({ currentNoteId: 1 });
+
+      await user.click(modeButton('최근 틀린 문제'));
+
+      await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('이 강의에서 틀린 문제가 없습니다.'));
+      expect(modeButton('직접 설정')).toHaveAttribute('aria-checked', 'true');
+      alertSpy.mockRestore();
+    });
+
+    it('모의고사 모드는 강의 노트 전체·혼합 문항·노트별 출제로 설정한다', async () => {
+      const user = userEvent.setup();
+      client.post.mockResolvedValueOnce({ data: { quizSetId: 7 } });
+      renderModal({ currentNoteId: 1 });
+
+      await user.click(modeButton('모의고사'));
+      expect(screen.getByText('선택한 노트마다 1문항 이상 출제합니다')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+
+      await waitFor(() => expect(client.post).toHaveBeenCalled());
+      expect(client.post.mock.calls[0][1]).toEqual({
+        noteIds: [1, 2],
+        typeCounts: { MULTIPLE_CHOICE: 10, OX: 5, SHORT_ANSWER: 5 },
+        difficulty: 'NORMAL',
+        coverAllNotes: true,
+      });
+    });
+
+    it('직접 설정으로 돌아가면 채운 설정은 남기고 노트별 출제 요청은 뺀다', async () => {
+      const user = userEvent.setup();
+      client.post.mockResolvedValueOnce({ data: { quizSetId: 7 } });
+      renderModal({ currentNoteId: 1 });
+
+      await user.click(modeButton('모의고사'));
+      await user.click(modeButton('직접 설정'));
+      await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+
+      await waitFor(() => expect(client.post).toHaveBeenCalled());
+      expect(client.post.mock.calls[0][1]).not.toHaveProperty('coverAllNotes');
+      expect(client.post.mock.calls[0][1].noteIds).toEqual([1, 2]);
+    });
+  });
+
   it('학습 목표가 5개를 넘거나 한 줄이 100자를 넘으면 생성 버튼이 비활성화된다', async () => {
     const user = userEvent.setup();
     renderModal({ currentNoteId: 1 });

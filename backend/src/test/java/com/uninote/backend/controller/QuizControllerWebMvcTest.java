@@ -279,6 +279,27 @@ class QuizControllerWebMvcTest {
         verify(quizService, never()).generateQuiz(any(), any());
     }
 
+    // 11개 이상, 501자 이상
+    @ParameterizedTest
+    @ValueSource(ints = {11, 0})
+    void 잘못된referenceQuestions는400을반환한다(int count) throws Exception {
+        Object questions = count == 0 ? java.util.List.of("a".repeat(501))
+                : java.util.Collections.nCopies(count, "LRU란?");
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("noteIds", java.util.List.of(1L));
+        body.put("typeCounts", Map.of("SHORT_ANSWER", 3));
+        body.put("difficulty", "NORMAL");
+        body.put("referenceQuestions", questions);
+
+        mockMvc.perform(post("/api/quiz/generate")
+                        .header("Authorization", bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+        verify(quizService, never()).generateQuiz(any(), any());
+    }
+
     @Test
     void focusConcepts5개와30자는DTO검증을통과한다() throws Exception {
         generateWithFocusConcepts(java.util.List.of("a".repeat(30), "2", "3", "4", "5")).andExpect(status().isOk());

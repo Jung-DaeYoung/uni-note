@@ -34,6 +34,11 @@ public class QuizRequest {
     // 길이는 개념 태그 정규화 상한(QuizQualityValidator.MAX_CONCEPT_TAG_LENGTH)과 같다.
     @Size(max = 5)
     private List<@NotBlank @Size(max = 30) String> focusConcepts;
+    // 선택 필드. 학습자가 틀린 문제 원문으로, 같은 개념을 다른 형태로 바꿔 출제한다(P2-4 생성 모드).
+    @Size(max = 10)
+    private List<@NotBlank @Size(max = 500) String> referenceQuestions;
+    // 선택 필드. true면 출처가 있는 노트마다 1문항 이상 내도록 한다(모의고사 모드).
+    private Boolean coverAllNotes;
     // 선택 필드. 노트별로 블록(과 하위 블록)만 문제 범위로 쓴다. 여기 없는 noteIds의 노트는
     // 노트 전체를 사용하며, 생략하거나 비어 있으면 모든 노트를 전체로 쓴다.
     // noteId는 noteIds에 포함되어야 한다(QuizService에서 검증).

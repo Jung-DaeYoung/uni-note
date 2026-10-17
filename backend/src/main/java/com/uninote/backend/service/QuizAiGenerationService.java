@@ -48,7 +48,7 @@ public class QuizAiGenerationService {
     public static final String MODEL_NAME = "gemini-2.5-flash";
     // 생성 결과 로그(quiz.generation)에 남는 prompt·response schema 버전.
     // requestQuiz의 prompt 문자열이나 schema를 바꿀 때마다 올린다.
-    public static final String PROMPT_VERSION = "2026-10-17.3";
+    public static final String PROMPT_VERSION = "2026-10-17.4";
 
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
@@ -135,6 +135,33 @@ public class QuizAiGenerationService {
                "문항 대부분이 위 개념을 다루도록 출제하라. 단순한 정의 확인을 반복하지 말고 개념 비교, 사례 적용, 흔한 오개념 판별처럼 다른 형태로 물어라. 노트에 근거가 없는 개념은 건너뛰어라.\n";
     }
 
+    // 틀린 문제를 바꿔 출제(P2-4 생성 모드). 그대로 복사하면 이력 중복 검사(P1-4)가 재생성한다.
+    // 문구를 바꾸면 PROMPT_VERSION을 올린다.
+    static String referenceQuestionInstruction(List<String> questions) {
+        if (questions == null || questions.isEmpty()) return "";
+        String list = questions.stream().map(q -> "- " + q.trim()).collect(Collectors.joining("\n"));
+        return "학습자가 최근 틀린 문제:\n" + list + "\n" +
+               "위 문제가 평가한 개념을 다시 평가하되 문장, 보기, 상황을 바꿔라. 원래 문제가 정의를 물었다면 비교나 사례 적용으로, 비교를 물었다면 오개념 판별처럼 다른 형태로 물어라. 위 문제를 그대로 옮기지 마라.\n";
+    }
+
+    // 모의고사 모드에서 노트마다 1문항 이상 낼 노트. 출처(REF)가 있는 노트가 2개 이상이고
+    // 총 문항 수로 모두 덮을 수 있을 때만 대상이며, 그 외에는 빈 집합이다.
+    static Set<Long> notesToCover(QuizRequest request, QuizGenerationInput input) {
+        Set<Long> noteIds = input.allowedSources().keySet();
+        int total = request.getTypeCounts().values().stream().mapToInt(Integer::intValue).sum();
+        if (!Boolean.TRUE.equals(request.getCoverAllNotes()) || noteIds.size() < 2 || noteIds.size() > total) {
+            return Set.of();
+        }
+        return noteIds;
+    }
+
+    // 문구를 바꾸면 PROMPT_VERSION을 올린다.
+    static String coverageInstruction(Set<Long> noteIds) {
+        if (noteIds.isEmpty()) return "";
+        String list = noteIds.stream().sorted().map(String::valueOf).collect(Collectors.joining(", "));
+        return "다음 각 noteId에서 1문항 이상 출제하라: " + list + ".\n";
+    }
+
     public QuizResponse requestQuiz(QuizRequest request, QuizGenerationInput input) {
         String typeInstruction = request.getTypeCounts().entrySet().stream()
             .map(e -> e.getKey() + " " + e.getValue() + "문제")
@@ -146,7 +173,7 @@ public class QuizAiGenerationService {
             "모든 문항(question)은 반드시 제공된 출처 중 하나를 근거로 생성해야 하며, 해당 문항의 근거가 된 noteId와 blockId를 'sourceNoteId'와 'sourceBlockId' 필드에 정확히 기입하라.\n" +
             "난이도: %s. 문항은 %s로 출제하라.\n" +
             "유형별 문제 수 배분: %s.\n" +
-            "%s%s" +
+            "%s%s%s%s" +
             "응답 구조: { \"title\": \"제목\", \"difficulty\": \"%s\", \"questions\": [ { \"type\": \"유형\", \"questionText\": \"내용\", \"options\": [\"A\", \"B\"], \"correctAnswer\": \"정답\", \"explanation\": \"해설\", \"sourceNoteId\": 1, \"sourceBlockId\": \"b1\", \"conceptTags\": [\"개념\"] } ] }.\n" +
             "--- 엄격 준수 사항 ---\n" +
             "1. JSON 응답 내의 어떠한 숫자 값(또는 숫자로 이루어진 문자열)도 500자를 초과할 수 없다.\n" +
@@ -162,7 +189,9 @@ public class QuizAiGenerationService {
             "텍스트 내용: %s",
             request.getDifficulty(), difficultyGuide(request.getDifficulty()), typeInstruction,
             learningObjectiveInstruction(request.getLearningObjectives()),
-            focusConceptInstruction(request.getFocusConcepts()), request.getDifficulty(), input.text()
+            focusConceptInstruction(request.getFocusConcepts()),
+            referenceQuestionInstruction(request.getReferenceQuestions()),
+            coverageInstruction(notesToCover(request, input)), request.getDifficulty(), input.text()
         );
 
         List<Map<String, Object>> parts = new ArrayList<>();

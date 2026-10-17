@@ -261,6 +261,40 @@ class QuizAiGenerationServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void requestQuizPromptAddsReferenceQuestionsAndCoverageOnlyWhenGiven() throws Exception {
+        when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
+        QuizRequest request = simpleRequest(List.of(1L, 2L));
+        request.setReferenceQuestions(List.of(" LRU란? "));
+        request.setCoverAllNotes(true);
+        QuizGenerationInput input = new QuizGenerationInput("[[REF:2/b2]] FIFO [[REF:1/b1]] LRU", List.of(),
+                Map.of(1L, Set.of("b1"), 2L, Set.of("b2")));
+
+        service.requestQuiz(request, input);
+
+        List<Map<String, Object>> contents = (List<Map<String, Object>>) lastRequestBody().get("contents");
+        String prompt = (String) ((List<Map<String, Object>>) contents.get(0).get("parts")).get(0).get("text");
+        assertThat(prompt).contains("문제.\n학습자가 최근 틀린 문제:\n- LRU란?\n"
+                + "위 문제가 평가한 개념을 다시 평가하되 문장, 보기, 상황을 바꿔라. 원래 문제가 정의를 물었다면 비교나 사례 적용으로, 비교를 물었다면 오개념 판별처럼 다른 형태로 물어라. 위 문제를 그대로 옮기지 마라.\n"
+                + "다음 각 noteId에서 1문항 이상 출제하라: 1, 2.\n응답 구조:");
+        assertThat(QuizAiGenerationService.referenceQuestionInstruction(null)).isEmpty();
+    }
+
+    @Test
+    void notesToCoverRequiresFlagTwoNotesAndEnoughQuestions() {
+        QuizGenerationInput twoNotes = new QuizGenerationInput("t", List.of(), Map.of(1L, Set.of("b1"), 2L, Set.of("b2")));
+        QuizRequest request = simpleRequest(List.of(1L, 2L)); // 객관식 5문항
+
+        assertThat(QuizAiGenerationService.notesToCover(request, twoNotes)).isEmpty();
+        request.setCoverAllNotes(true);
+        assertThat(QuizAiGenerationService.notesToCover(request, twoNotes)).containsExactlyInAnyOrder(1L, 2L);
+        assertThat(QuizAiGenerationService.notesToCover(request,
+                new QuizGenerationInput("t", List.of(), Map.of(1L, Set.of("b1"))))).isEmpty();
+        request.setTypeCounts(Map.of(QuestionType.MULTIPLE_CHOICE, 1));
+        assertThat(QuizAiGenerationService.notesToCover(request, twoNotes)).isEmpty();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void requestQuizPromptIncludesGuideForRequestedDifficulty() throws Exception {
         when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
 

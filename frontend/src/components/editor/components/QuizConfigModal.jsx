@@ -17,6 +17,20 @@ const MAX_OBJECTIVE_LENGTH = 100;
 // QuizRequest.focusConcepts의 @Size(max = 5)와 동일.
 const MAX_FOCUS_CONCEPTS = 5;
 
+// QuizRequest.referenceQuestions의 @Size(max = 10) / 항목 @Size(max = 500)와 동일.
+const MAX_REFERENCE_QUESTIONS = 10;
+const MAX_REFERENCE_LENGTH = 500;
+// 모의고사 모드의 유형별 문항 수(총 MAX_TOTAL_QUESTIONS 이내).
+const MOCK_EXAM_COUNTS = { MULTIPLE_CHOICE: 10, OX: 5, SHORT_ANSWER: 5 };
+
+// 생성 모드(P2-4). 모드는 아래 설정을 채우기만 하고, 학생은 채워진 설정을 고친 뒤 생성할 수 있다.
+const GENERATION_MODES = [
+  { value: 'CUSTOM', label: '직접 설정', description: '범위와 문항을 직접 고릅니다' },
+  { value: 'RECENT', label: '최근 틀린 문제', description: '틀린 문제를 바꿔 다시 출제' },
+  { value: 'REVIEW', label: '이번 주 복습', description: '복습할 차례인 문제를 바꿔 출제' },
+  { value: 'MOCK', label: '모의고사', description: '강의 노트 전체에서 고르게 출제' },
+];
+
 // 학습 목표 입력은 한 줄에 하나. 빈 줄은 무시한다.
 const parseObjectives = (text) => text.split('\n').map(line => line.trim()).filter(Boolean);
 
@@ -422,6 +436,39 @@ const QuestionTypeSection = ({ activeTypes, typeCounts, onToggleType, onChangeCo
   </div>
 );
 
+const ModeSection = ({ mode, onSelect, loading, referenceCount, coverAllNotes }) => (
+  <div>
+    <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">생성 모드</label>
+    <div role="radiogroup" aria-label="생성 모드 선택" className="mt-2 grid grid-cols-2 gap-2">
+      {GENERATION_MODES.map(opt => (
+        <button
+          key={opt.value}
+          type="button"
+          role="radio"
+          aria-checked={mode === opt.value}
+          onClick={() => onSelect(opt.value)}
+          disabled={loading}
+          className={`p-3 rounded-lg border text-left transition-colors disabled:opacity-50 ${
+            mode === opt.value
+              ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 dark:border-blue-500/60'
+              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+          }`}
+        >
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{opt.label}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{opt.description}</p>
+        </button>
+      ))}
+    </div>
+    {loading && <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">불러오는 중...</p>}
+    {referenceCount > 0 && (
+      <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">틀린 문제 {referenceCount}개를 다른 형태로 바꿔 출제합니다</p>
+    )}
+    {coverAllNotes && (
+      <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">선택한 노트마다 1문항 이상 출제합니다</p>
+    )}
+  </div>
+);
+
 const DifficultySection = ({ difficulty, onChange }) => (
   <div>
     <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">난이도</label>
@@ -525,6 +572,10 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
   const [blocksByNote, setBlocksByNote] = useState({});
   const [openBlockPanelIds, setOpenBlockPanelIds] = useState([]);
   const [weakLoading, setWeakLoading] = useState(false);
+  const [mode, setMode] = useState('CUSTOM');
+  const [modeLoading, setModeLoading] = useState(false);
+  const [referenceQuestions, setReferenceQuestions] = useState([]);
+  const [coverAllNotes, setCoverAllNotes] = useState(false);
   // 같은 노트의 목록을 다시 불러올 때 늦게 도착한 이전 응답이 목록을 덮어쓰지 않게 한다.
   const blockRequestSeqRef = useRef(new Map());
 
@@ -543,6 +594,9 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
       setOpenBlockPanelIds([]);
       // 다른 노트의 저장본이 모달을 닫은 사이 바뀌었을 수 있으므로 캐시도 비운다.
       setBlocksByNote({});
+      setMode('CUSTOM');
+      setReferenceQuestions([]);
+      setCoverAllNotes(false);
     }
   }, [isOpen, currentNoteId]);
 
@@ -636,19 +690,95 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
         .forEach(stat => {
           weakByNote[stat.noteId] = [...(weakByNote[stat.noteId] || []), stat.blockId];
         });
-      const noteIds = Object.keys(weakByNote).map(Number);
-      if (noteIds.length === 0) {
+      if (Object.keys(weakByNote).length === 0) {
         alert('이 강의의 노트에서 자주 틀린 블록이 없습니다.');
         return;
       }
-      setSelectedIds([]);
-      setBlockSelections(weakByNote);
-      setOpenBlockPanelIds(noteIds);
-      noteIds.forEach(noteId => loadBlocks(noteId));
+      applyBlockSelections(weakByNote);
     } catch (error) {
       alert(error.response?.data?.message || '취약 블록을 불러오지 못했습니다.');
     } finally {
       setWeakLoading(false);
+    }
+  };
+
+  // 블록 범위를 { noteId: blockId[] }로 바꾸고, 저장본 블록 목록을 읽어 사라진 블록을 뺀다.
+  const applyBlockSelections = (byNote) => {
+    const noteIds = Object.keys(byNote).map(Number);
+    setSelectedIds([]);
+    setBlockSelections(byNote);
+    setOpenBlockPanelIds(noteIds);
+    noteIds.forEach(noteId => loadBlocks(noteId));
+  };
+
+  // 틀린 문제들로 설정을 채운다: 범위 = 출처 블록, 개념 = 개념 태그, 유형별 수 = 틀린 문제의 유형별 수,
+  // 참고 문제 = 문제 원문. 출처가 없거나 다른 강의 노트인 문제는 범위에 쓰지 않는다.
+  const applyIncorrectQuestions = (questions) => {
+    const picked = questions.slice(0, MAX_REFERENCE_QUESTIONS);
+    const treeNoteIds = new Set(collectNoteIds(noteTree));
+    const byNote = {};
+    picked
+      .filter(q => q.sourceBlockId && treeNoteIds.has(q.sourceNoteId))
+      .forEach(q => {
+        byNote[q.sourceNoteId] = [...new Set([...(byNote[q.sourceNoteId] || []), q.sourceBlockId])];
+      });
+    if (Object.keys(byNote).length > 0) applyBlockSelections(byNote);
+
+    const counts = {};
+    picked.forEach(q => { counts[q.type] = (counts[q.type] || 0) + 1; });
+    setTypeCounts(prev => ({ ...prev, ...counts }));
+    setActiveTypes(Object.fromEntries(Object.keys(TYPE_LABELS).map(type => [type, Boolean(counts[type])])));
+    setFocusConcepts([...new Set(picked.flatMap(q => q.conceptTags || []))].slice(0, MAX_FOCUS_CONCEPTS));
+    setReferenceQuestions(picked.map(q => q.questionText.trim().slice(0, MAX_REFERENCE_LENGTH)));
+    setCoverAllNotes(false);
+  };
+
+  const applyMockExam = () => {
+    const noteIds = collectNoteIds(noteTree);
+    if (noteIds.length > MAX_NOTES_PER_QUIZ) {
+      alert(`노트가 많아 앞의 ${MAX_NOTES_PER_QUIZ}개만 선택했습니다.`);
+    }
+    setSelectedIds(noteIds.slice(0, MAX_NOTES_PER_QUIZ));
+    setBlockSelections({});
+    setOpenBlockPanelIds([]);
+    setTypeCounts(MOCK_EXAM_COUNTS);
+    setActiveTypes({ MULTIPLE_CHOICE: true, OX: true, SHORT_ANSWER: true });
+    setDifficulty('NORMAL');
+    setFocusConcepts([]);
+    setReferenceQuestions([]);
+    setCoverAllNotes(true);
+  };
+
+  const selectMode = async (nextMode) => {
+    if (nextMode === 'CUSTOM') {
+      setReferenceQuestions([]);
+      setCoverAllNotes(false);
+      setMode(nextMode);
+      return;
+    }
+    if (nextMode === 'MOCK') {
+      applyMockExam();
+      setMode(nextMode);
+      return;
+    }
+    setModeLoading(true);
+    try {
+      const params = { courseId, limit: MAX_REFERENCE_QUESTIONS };
+      const questions = nextMode === 'RECENT'
+        ? (await client.get('/quiz/incorrect/recent', { params })).data || []
+        // 이번 주: 오늘부터 6일 뒤까지 복습일이 오는 문제
+        : ((await client.get('/quiz/incorrect/review-today', { params: { ...params, withinDays: 6 } })).data || [])
+          .map(item => item.question);
+      if (questions.length === 0) {
+        alert(nextMode === 'RECENT' ? '이 강의에서 틀린 문제가 없습니다.' : '이번 주에 복습할 문제가 없습니다.');
+        return;
+      }
+      applyIncorrectQuestions(questions);
+      setMode(nextMode);
+    } catch (error) {
+      alert(error.response?.data?.message || '틀린 문제를 불러오지 못했습니다.');
+    } finally {
+      setModeLoading(false);
     }
   };
 
@@ -769,6 +899,8 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
       // 학습 목표가 없으면 필드를 보내지 않아 기존 payload와 같다.
       ...(objectives.length > 0 && { learningObjectives: objectives }),
       ...(focusConcepts.length > 0 && { focusConcepts }),
+      ...(referenceQuestions.length > 0 && { referenceQuestions }),
+      ...(coverAllNotes && { coverAllNotes: true }),
     };
 
     try {
@@ -825,6 +957,13 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
             fieldset은 안쪽에서 disabled 상속(로딩 중 입력 일괄 비활성화) 역할만 한다. */}
         <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
           <fieldset disabled={loading} className="p-4 space-y-4 border-0 m-0 min-w-0">
+            <ModeSection
+              mode={mode}
+              onSelect={selectMode}
+              loading={modeLoading}
+              referenceCount={referenceQuestions.length}
+              coverAllNotes={coverAllNotes}
+            />
             <NoteScopeSection
               noteTree={noteTree}
               scope={{

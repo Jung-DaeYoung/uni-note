@@ -73,8 +73,17 @@ public class IncorrectNoteController {
     public ResponseEntity<List<TodayReviewQuestionResponse>> getTodayReview(
             @RequestParam(defaultValue = "10") int limit,
             @RequestParam(required = false) Long courseId,
+            @RequestParam(defaultValue = "0") int withinDays,
             Principal principal) {
-        return ResponseEntity.ok(incorrectNoteService.getTodayReview(getStudent(principal), limit, courseId));
+        return ResponseEntity.ok(incorrectNoteService.getTodayReview(getStudent(principal), limit, courseId, withinDays));
+    }
+
+    @GetMapping("/recent")
+    public ResponseEntity<List<QuestionResponse>> getRecentIncorrect(
+            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(required = false) Long courseId,
+            Principal principal) {
+        return ResponseEntity.ok(incorrectNoteService.getRecentIncorrect(getStudent(principal), limit, courseId));
     }
 
     private Student getStudent(Principal principal) {

@@ -10,6 +10,12 @@ const MAX_QUESTIONS_PER_TYPE = 20;
 const MAX_TOTAL_QUESTIONS = 30;
 // QuizService.MAX_SELECTED_BLOCKS와 동일(모든 노트를 합친 선택 블록 수 상한).
 const MAX_SELECTED_BLOCKS = 500;
+// QuizRequest.learningObjectives의 @Size(max = 5) / 항목 @Size(max = 100)와 동일.
+const MAX_LEARNING_OBJECTIVES = 5;
+const MAX_OBJECTIVE_LENGTH = 100;
+
+// 학습 목표 입력은 한 줄에 하나. 빈 줄은 무시한다.
+const parseObjectives = (text) => text.split('\n').map(line => line.trim()).filter(Boolean);
 
 const TYPE_LABELS = {
   MULTIPLE_CHOICE: '객관식',
@@ -438,6 +444,22 @@ const DifficultySection = ({ difficulty, onChange }) => (
   </div>
 );
 
+const LearningObjectivesSection = ({ value, onChange }) => (
+  <div>
+    <label htmlFor="quiz-learning-objectives" className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+      학습 목표 <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(선택, 한 줄에 하나·최대 {MAX_LEARNING_OBJECTIVES}개)</span>
+    </label>
+    <textarea
+      id="quiz-learning-objectives"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      rows={3}
+      placeholder={'예) 페이지 교체 알고리즘의 차이를 비교할 수 있다'}
+      className="mt-2 w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500 resize-y"
+    />
+  </div>
+);
+
 const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStatus = 'synced' }) => {
   const { noteTree } = useNoteTree();
   const [selectedIds, setSelectedIds] = useState([parseInt(currentNoteId)]);
@@ -453,6 +475,7 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
     SHORT_ANSWER: true
   });
   const [difficulty, setDifficulty] = useState('NORMAL');
+  const [objectivesText, setObjectivesText] = useState('');
   const [loading, setLoading] = useState(false);
   // 노트별 범위: selectedIds는 "전체" 노트, blockSelections는 { noteId: blockId[] }로 "일부 블록" 노트다.
   // 한 노트가 두 곳에 동시에 있지 않도록 유지한다.
@@ -641,6 +664,7 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
   const isCurrentPartial = partialNoteIds.includes(currentId);
 
   const summaryEntries = buildSummaryEntries(noteTree, selectedIds, blockSelections);
+  const objectives = parseObjectives(objectivesText);
 
   const disabledReason =
     selectedNoteCount === 0 ? '노트를 하나 이상 선택하세요' :
@@ -652,6 +676,8 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
     activeTypeCount === 0 ? '문제 유형을 하나 이상 선택하세요' :
     totalQuestions === 0 ? '각 유형의 문항 수를 확인하세요' :
     totalQuestions > MAX_TOTAL_QUESTIONS ? `총 문항 수는 ${MAX_TOTAL_QUESTIONS}개를 초과할 수 없습니다` :
+    objectives.length > MAX_LEARNING_OBJECTIVES ? `학습 목표는 최대 ${MAX_LEARNING_OBJECTIVES}개까지 입력할 수 있습니다` :
+    objectives.some(o => o.length > MAX_OBJECTIVE_LENGTH) ? `학습 목표는 한 줄에 ${MAX_OBJECTIVE_LENGTH}자까지 입력할 수 있습니다` :
     null;
 
   const isGenerateDisabled = loading || disabledReason !== null;
@@ -677,7 +703,9 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
         })),
       }),
       typeCounts: counts,
-      difficulty
+      difficulty,
+      // 학습 목표가 없으면 필드를 보내지 않아 기존 payload와 같다.
+      ...(objectives.length > 0 && { learningObjectives: objectives }),
     };
 
     try {
@@ -762,6 +790,7 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
               onStepCount={stepCount}
             />
             <DifficultySection difficulty={difficulty} onChange={setDifficulty} />
+            <LearningObjectivesSection value={objectivesText} onChange={setObjectivesText} />
           </fieldset>
         </div>
 

@@ -258,6 +258,7 @@ public class SharedQuizService {
             c.setOptions(q.getOptions());
             c.setCorrectAnswer(q.getCorrectAnswer());
             c.setExplanation(q.getExplanation());
+            c.setConceptTags(q.getConceptTags());
             copy.getQuestions().add(c);
         }
         return copy;

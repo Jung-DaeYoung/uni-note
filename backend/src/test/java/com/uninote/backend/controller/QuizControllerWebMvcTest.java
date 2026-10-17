@@ -211,6 +211,43 @@ class QuizControllerWebMvcTest {
         verify(quizService).generateQuiz(any(), any());
     }
 
+    private org.springframework.test.web.servlet.ResultActions generateWithObjectives(Object objectives) throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("noteIds", java.util.List.of(1L));
+        body.put("typeCounts", Map.of("SHORT_ANSWER", 3));
+        body.put("difficulty", "NORMAL");
+        body.put("learningObjectives", objectives);
+
+        return mockMvc.perform(post("/api/quiz/generate")
+                .header("Authorization", bearerToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)));
+    }
+
+    static java.util.stream.Stream<Object> invalidLearningObjectives() {
+        return java.util.stream.Stream.of(
+                java.util.List.of("1", "2", "3", "4", "5", "6"),
+                java.util.List.of("a".repeat(101)),
+                java.util.List.of("목표", " ")
+        );
+    }
+
+    // 6개 이상, 101자 이상, 공백 항목
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("invalidLearningObjectives")
+    void 잘못된learningObjectives는400을반환한다(Object objectives) throws Exception {
+        generateWithObjectives(objectives)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+        verify(quizService, never()).generateQuiz(any(), any());
+    }
+
+    @Test
+    void learningObjectives5개와100자는DTO검증을통과한다() throws Exception {
+        generateWithObjectives(java.util.List.of("a".repeat(100), "2", "3", "4", "5")).andExpect(status().isOk());
+        verify(quizService).generateQuiz(any(), any());
+    }
+
     @Test
     void typeCounts값20은DTO검증을통과한다() throws Exception {
         generateWithShortAnswerCount(20).andExpect(status().isOk());

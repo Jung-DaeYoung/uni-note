@@ -148,6 +148,37 @@ describe('QuizConfigModal', () => {
     expect(onGenerated.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
   });
 
+  it('학습 목표는 빈 줄을 빼고 줄 단위 배열로 payload에 담는다', async () => {
+    const user = userEvent.setup();
+    client.post.mockResolvedValueOnce({ data: { quizSetId: 99 } });
+    renderModal({ currentNoteId: 1 });
+
+    await user.type(screen.getByLabelText(/학습 목표/), '  LRU와 FIFO를 비교할 수 있다 {enter}{enter}페이지 폴트를 설명할 수 있다');
+    await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+
+    await waitFor(() => expect(client.post).toHaveBeenCalledWith('/quiz/generate', {
+      noteIds: [1],
+      typeCounts: { MULTIPLE_CHOICE: 2, OX: 2, SHORT_ANSWER: 1 },
+      difficulty: 'NORMAL',
+      learningObjectives: ['LRU와 FIFO를 비교할 수 있다', '페이지 폴트를 설명할 수 있다'],
+    }));
+  });
+
+  it('학습 목표가 5개를 넘거나 한 줄이 100자를 넘으면 생성 버튼이 비활성화된다', async () => {
+    const user = userEvent.setup();
+    renderModal({ currentNoteId: 1 });
+    const textarea = screen.getByLabelText(/학습 목표/);
+
+    await user.type(textarea, '1{enter}2{enter}3{enter}4{enter}5{enter}6');
+    expect(screen.getByRole('button', { name: '문제 생성 시작' })).toBeDisabled();
+    expect(screen.getByText('학습 목표는 최대 5개까지 입력할 수 있습니다')).toBeInTheDocument();
+
+    await user.clear(textarea);
+    await user.click(textarea);
+    await user.paste('가'.repeat(101));
+    expect(screen.getByText('학습 목표는 한 줄에 100자까지 입력할 수 있습니다')).toBeInTheDocument();
+  });
+
   it('생성 실패 시 서버가 보낸 메시지를 표시하고 모달을 닫지 않는다', async () => {
     const user = userEvent.setup();
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});

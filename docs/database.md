@@ -37,9 +37,17 @@ ALTER TABLE courses
 | Entity / 테이블 | 주요 필드 | 관계 |
 |---|---|---|
 | `QuizSet` / `quiz_sets` | `quizSetId` PK, `title`, `difficulty`, `sourceNotes`, 생성 시각 | `Course` N:1, `Student` N:1, `Question` 1:N, `QuizAttempt` 1:N |
-| `Question` / `questions` | `questionId` PK, `type`, `questionText`, `options`, `correctAnswer`, `explanation`, `sourceNoteId`, `sourceBlockId` | `QuizSet` N:1 |
+| `Question` / `questions` | `questionId` PK, `type`, `questionText`, `options`, `correctAnswer`, `explanation`, `sourceNoteId`, `sourceBlockId`, `conceptTags` | `QuizSet` N:1 |
 | `QuizAttempt` / `quiz_attempts` | `attemptId` PK, `score`, `status`, `startTime`, `endTime` | `QuizSet` N:1, `Student` N:1, `UserAnswer` 1:N |
 | `UserAnswer` / `user_answers` | `userAnswerId` PK, `submittedAnswer`, `isCorrect` | `QuizAttempt` N:1, `Question` N:1 |
+
+`Question.options`와 `conceptTags`는 JSON 문자열 배열(TEXT)이다. `conceptTags`는 문항이 평가하는 핵심 개념(최대 3개)이고, 도입 전에 만든 문제는 null이다.
+
+운영(`ddl-auto: validate`) 배포 전 실행할 DDL:
+
+```sql
+ALTER TABLE questions ADD COLUMN concept_tags TEXT NULL;
+```
 
 ## CBT 시험 공유게시판
 

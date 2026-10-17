@@ -36,4 +36,8 @@ public class Question {
 
     private Long sourceNoteId;
     private String sourceBlockId;
+
+    // 문항이 평가하는 핵심 개념(JSON 문자열 배열, 최대 3개). 태그 도입 전 문제는 null이다.
+    @Column(columnDefinition = "TEXT")
+    private String conceptTags;
 }

@@ -12,7 +12,9 @@ import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 // AI가 반환한 퀴즈를 저장 전에 검증하고, 통과하면 저장 가능한 형태로 정규화한다.
 // 비교 정규화는 객관식 채점 규칙(QuizService.isAnswerCorrect, CBTPlayer.jsx)과 같은 trim + 소문자 비교다.
@@ -24,6 +26,9 @@ public class QuizQualityValidator {
     static final int MAX_COLUMN_LENGTH = 255;
     static final int MIN_MULTIPLE_CHOICE_OPTIONS = 2;
     static final String DEFAULT_TITLE = "AI 생성 퀴즈";
+    // 프롬프트는 1~3개·20자 이내를 요구한다. 길이는 약간 여유를 둔다.
+    static final int MAX_CONCEPT_TAGS = 3;
+    static final int MAX_CONCEPT_TAG_LENGTH = 30;
 
     public record Result(List<String> errors, int unverifiedCount) {
         public boolean valid() {
@@ -31,7 +36,7 @@ public class QuizQualityValidator {
         }
     }
 
-    // 치명 오류가 없으면 response를 제자리에서 정규화한다(정답 치환, OX 대문자, 출처 정리, 제목·난이도).
+    // 치명 오류가 없으면 response를 제자리에서 정규화한다(정답 치환, OX 대문자, 출처 정리, 개념 태그, 제목·난이도).
     // 치명 오류가 있으면 response를 건드리지 않고 사유만 반환한다.
     public Result validate(QuizResponse response, QuizRequest request, Map<Long, Set<String>> allowedSources) {
         List<String> errors = new ArrayList<>();
@@ -70,6 +75,7 @@ public class QuizQualityValidator {
         for (int i = 0; i < questions.size(); i++) {
             QuestionResponse q = questions.get(i);
             q.setCorrectAnswer(resolvedAnswers.get(i));
+            q.setConceptTags(normalizeConceptTags(q.getConceptTags()));
             if (!isVerifiedSource(q, allowedSources)) {
                 q.setSourceNoteId(null);
                 q.setSourceBlockId(null);
@@ -172,6 +178,20 @@ public class QuizQualityValidator {
         }
         String trimmed = title.trim();
         return trimmed.length() > MAX_COLUMN_LENGTH ? trimmed.substring(0, MAX_COLUMN_LENGTH) : trimmed;
+    }
+
+    // 개념 태그는 재생성 사유로 쓰지 않고 정리만 한다: 공백 정리, 빈 값·너무 긴 값 제거,
+    // 대소문자 무시 중복 제거(처음 표기 유지), 최대 MAX_CONCEPT_TAGS개.
+    static List<String> normalizeConceptTags(List<String> tags) {
+        if (tags == null) return new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        return tags.stream()
+                .filter(Objects::nonNull)
+                .map(tag -> tag.trim().replaceAll("\\s+", " "))
+                .filter(tag -> !tag.isEmpty() && tag.length() <= MAX_CONCEPT_TAG_LENGTH)
+                .filter(tag -> seen.add(normalize(tag)))
+                .limit(MAX_CONCEPT_TAGS)
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     // 문항·보기 비교 정규화. 이력 대비 중복 검사(QuizService)도 같은 규칙을 쓴다.

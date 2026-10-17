@@ -137,6 +137,7 @@ class QuizServiceTest {
         q.setCorrectAnswer(answer);
         q.setSourceNoteId(10L);
         q.setSourceBlockId("b1");
+        q.setConceptTags(List.of("LRU"));
         return q;
     }
 
@@ -500,6 +501,7 @@ class QuizServiceTest {
         verify(questionRepository).save(saved.capture());
         assertThat(saved.getValue().getCorrectAnswer()).isEqualTo("LRU");
         assertThat(saved.getValue().getSourceBlockId()).isEqualTo("b1");
+        assertThat(saved.getValue().getConceptTags()).isEqualTo("[\"LRU\"]");
         verify(quizSetRepository).save(any(QuizSet.class));
     }
 

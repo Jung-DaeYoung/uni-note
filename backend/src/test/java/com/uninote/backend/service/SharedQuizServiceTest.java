@@ -72,6 +72,7 @@ class SharedQuizServiceTest {
         q.setCorrectAnswer("A");
         q.setSourceNoteId(100L);
         q.setSourceBlockId("b1");
+        q.setConceptTags("[\"LRU\"]");
         origin.setQuestions(new ArrayList<>(List.of(q)));
 
         snapshot = new QuizSet();
@@ -109,6 +110,7 @@ class SharedQuizServiceTest {
             assertThat(c.getQuestionText()).isEqualTo("LRU는?");
             assertThat(c.getSourceNoteId()).isNull();
             assertThat(c.getSourceBlockId()).isNull();
+            assertThat(c.getConceptTags()).isEqualTo("[\"LRU\"]");
             assertThat(c.getQuizSet()).isSameAs(copy);
         });
     }

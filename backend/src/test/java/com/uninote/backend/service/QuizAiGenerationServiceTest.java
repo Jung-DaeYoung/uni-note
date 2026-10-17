@@ -177,7 +177,10 @@ class QuizAiGenerationServiceTest {
         Map<String, Object> type = (Map<String, Object>) ((Map<String, Object>) item.get("properties")).get("type");
         assertThat(type.get("enum")).isEqualTo(List.of("MULTIPLE_CHOICE", "SHORT_ANSWER", "OX"));
         assertThat((List<String>) item.get("required")).containsExactlyInAnyOrder(
-                "type", "questionText", "correctAnswer", "explanation", "sourceNoteId", "sourceBlockId");
+                "type", "questionText", "correctAnswer", "explanation", "conceptTags", "sourceNoteId", "sourceBlockId");
+        Map<String, Object> conceptTags =
+                (Map<String, Object>) ((Map<String, Object>) item.get("properties")).get("conceptTags");
+        assertThat(conceptTags).isEqualTo(Map.of("type", "ARRAY", "items", Map.of("type", "STRING")));
     }
 
     @Test
@@ -188,7 +191,7 @@ class QuizAiGenerationServiceTest {
         service.requestQuiz(simpleRequest(List.of(1L)), new QuizGenerationInput("(Image Content) ", List.of(), Map.of()));
 
         assertThat((List<String>) questionItemSchema(lastResponseSchema()).get("required"))
-                .containsExactlyInAnyOrder("type", "questionText", "correctAnswer", "explanation");
+                .containsExactlyInAnyOrder("type", "questionText", "correctAnswer", "explanation", "conceptTags");
     }
 
     // prompt 문구가 의도치 않게 바뀌지 않도록 고정한다. 바꿀 때는 PROMPT_VERSION도 함께 올린다.
@@ -209,14 +212,32 @@ class QuizAiGenerationServiceTest {
                 "모든 문항(question)은 반드시 제공된 출처 중 하나를 근거로 생성해야 하며, 해당 문항의 근거가 된 noteId와 blockId를 'sourceNoteId'와 'sourceBlockId' 필드에 정확히 기입하라.\n" +
                 "난이도: NORMAL. 문항은 개념을 설명하거나 두 개념을 비교하는 문제로 출제하라.\n" +
                 "유형별 문제 수 배분: MULTIPLE_CHOICE 5문제.\n" +
-                "응답 구조: { \"title\": \"제목\", \"difficulty\": \"NORMAL\", \"questions\": [ { \"type\": \"유형\", \"questionText\": \"내용\", \"options\": [\"A\", \"B\"], \"correctAnswer\": \"정답\", \"explanation\": \"해설\", \"sourceNoteId\": 1, \"sourceBlockId\": \"b1\" } ] }.\n" +
+                "응답 구조: { \"title\": \"제목\", \"difficulty\": \"NORMAL\", \"questions\": [ { \"type\": \"유형\", \"questionText\": \"내용\", \"options\": [\"A\", \"B\"], \"correctAnswer\": \"정답\", \"explanation\": \"해설\", \"sourceNoteId\": 1, \"sourceBlockId\": \"b1\", \"conceptTags\": [\"개념\"] } ] }.\n" +
                 "--- 엄격 준수 사항 ---\n" +
                 "1. JSON 응답 내의 어떠한 숫자 값(또는 숫자로 이루어진 문자열)도 500자를 초과할 수 없다.\n" +
                 "2. 설명(explanation)이나 정답(correctAnswer)에 불필요하게 긴 숫자 나열, 복잡한 수식, 또는 로우 데이터(raw data)를 포함하지 마라.\n" +
                 "3. 텍스트 중심의 간결하고 명확한 설명을 제공하라.\n" +
                 "4. 반드시 마크다운 없이 오직 JSON 객체로만 응답하라.\n" +
                 "5. 주관식(SHORT_ANSWER) 정답(correctAnswer)은 하나의 단어나 짧은 구(20자 이내)로 하고, 설명이나 서술을 요구하지 마라. 난이도가 높아도 사고 과정은 문제에 담고 정답은 짧게 하라.\n" +
+                "6. 각 문항이 평가하는 핵심 개념을 conceptTags에 1~3개 적어라. 노트에 쓰인 용어 그대로 20자 이내의 짧은 명사구로 쓰고, 같은 개념은 세트 안에서 항상 같은 표기를 써라.\n" +
                 "텍스트 내용: [[REF:1/b1]] 페이지 교체 ");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void requestQuizPromptListsLearningObjectivesOnlyWhenGiven() throws Exception {
+        when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
+        QuizRequest request = simpleRequest(List.of(1L));
+        request.setLearningObjectives(List.of(" LRU와 FIFO를 비교할 수 있다 ", "페이지 폴트를 설명할 수 있다"));
+
+        service.requestQuiz(request, textInput());
+
+        List<Map<String, Object>> contents = (List<Map<String, Object>>) lastRequestBody().get("contents");
+        String prompt = (String) ((List<Map<String, Object>>) contents.get(0).get("parts")).get(0).get("text");
+        assertThat(prompt).contains("문제.\n학습 목표:\n- LRU와 FIFO를 비교할 수 있다\n- 페이지 폴트를 설명할 수 있다\n"
+                + "가능한 한 각 문항이 위 학습 목표 중 하나를 평가하도록 출제하라. 단, 노트에 근거가 없는 목표는 건너뛰고 내용을 지어내지 마라.\n응답 구조:");
+        assertThat(QuizAiGenerationService.learningObjectiveInstruction(List.of())).isEmpty();
+        assertThat(QuizAiGenerationService.learningObjectiveInstruction(null)).isEmpty();
     }
 
     @Test

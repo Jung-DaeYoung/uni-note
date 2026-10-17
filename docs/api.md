@@ -57,7 +57,7 @@
 
 | Method | Endpoint | 인증 | 요청 | 응답 |
 |---|---|---:|---|---|
-| POST | `/quiz/generate` | 예 | `{ noteIds, typeCounts, difficulty, blockSelections? }` — `blockSelections: [{ noteId, blockIds }]`(선택)에 있는 노트는 해당 블록과 하위 블록만, 나머지 `noteIds` 노트는 전체로 생성. `noteId`는 `noteIds`에 포함되어야 하며 전체 블록은 최대 500개 | `QuizResponse` |
+| POST | `/quiz/generate` | 예 | `{ noteIds, typeCounts, difficulty, blockSelections?, learningObjectives? }` — `blockSelections: [{ noteId, blockIds }]`(선택)에 있는 노트는 해당 블록과 하위 블록만, 나머지 `noteIds` 노트는 전체로 생성. `noteId`는 `noteIds`에 포함되어야 하며 전체 블록은 최대 500개. `learningObjectives`(선택)는 문항이 평가할 학습 목표로 최대 5개, 항목당 1~100자 | `QuizResponse` |
 | GET | `/quiz/my` | 예 | 없음 | `QuizSetResponse[]` |
 | GET | `/quiz/{quizSetId}` | 예 | 없음 | `QuizSetDetailResponse` |
 | DELETE | `/quiz/{quizSetId}` | 예 | 없음 | 빈 응답 |
@@ -68,6 +68,8 @@
 | GET | `/quiz/{quizSetId}/attempts` | 예 | 없음 | `QuizAttemptResponse[]` |
 
 `userAnswers[]`의 항목은 `questionId`, `submittedAnswer`, `isCorrect`를 가진다.
+
+문제 응답(`QuestionResponse`)은 `questionId`, `type`, `questionText`, `options`, `correctAnswer`, `explanation`, `sourceNoteId`, `sourceBlockId`, `conceptTags`를 가진다. `conceptTags`는 문항이 평가하는 핵심 개념(최대 3개)이며 AI가 생성하고 서버가 공백·중복을 정리한다. 태그 도입 전 문제는 빈 배열이다. 공유 시험 스냅샷에도 복사된다.
 
 `QuizSetResponse.shared`는 원본 퀴즈를 CBT 시험 공유게시판에 올렸는지 나타낸다. `POST /quiz/attempts`는 본인 퀴즈 외에 게시 중인 공유 스냅샷(수강 중인 강의)도 받는다. 가상 세션(`quizSetId` 음수/없음)의 문제는 본인 문제, 게시 중인 공유 문제, 이미 풀었거나 오답노트에 담은 문제를 허용한다.
 

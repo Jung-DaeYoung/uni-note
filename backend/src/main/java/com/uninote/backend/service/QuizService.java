@@ -329,6 +329,7 @@ public class QuizService {
             question.setExplanation(qr.getExplanation());
             question.setSourceNoteId(qr.getSourceNoteId());
             question.setSourceBlockId(qr.getSourceBlockId());
+            question.setConceptTags(writeJson(qr.getConceptTags()));
 
             Question savedQuestion = questionRepository.save(question);
             qr.setQuestionId(savedQuestion.getQuestionId()); // ID 주입

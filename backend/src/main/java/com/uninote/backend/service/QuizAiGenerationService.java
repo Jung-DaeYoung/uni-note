@@ -48,7 +48,7 @@ public class QuizAiGenerationService {
     public static final String MODEL_NAME = "gemini-2.5-flash";
     // 생성 결과 로그(quiz.generation)에 남는 prompt·response schema 버전.
     // requestQuiz의 prompt 문자열이나 schema를 바꿀 때마다 올린다.
-    public static final String PROMPT_VERSION = "2026-10-03.2";
+    public static final String PROMPT_VERSION = "2026-10-17.1";
 
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
@@ -117,6 +117,15 @@ public class QuizAiGenerationService {
         };
     }
 
+    // 학습 목표(P2-1)가 있으면 문항이 목표를 평가하도록 지시한다. 출처 규칙이 우선이므로
+    // 노트에 근거가 없는 목표 때문에 내용을 지어내지 않게 한다. 문구를 바꾸면 PROMPT_VERSION을 올린다.
+    static String learningObjectiveInstruction(List<String> objectives) {
+        if (objectives == null || objectives.isEmpty()) return "";
+        String list = objectives.stream().map(o -> "- " + o.trim()).collect(Collectors.joining("\n"));
+        return "학습 목표:\n" + list + "\n" +
+               "가능한 한 각 문항이 위 학습 목표 중 하나를 평가하도록 출제하라. 단, 노트에 근거가 없는 목표는 건너뛰고 내용을 지어내지 마라.\n";
+    }
+
     public QuizResponse requestQuiz(QuizRequest request, QuizGenerationInput input) {
         String typeInstruction = request.getTypeCounts().entrySet().stream()
             .map(e -> e.getKey() + " " + e.getValue() + "문제")
@@ -128,7 +137,8 @@ public class QuizAiGenerationService {
             "모든 문항(question)은 반드시 제공된 출처 중 하나를 근거로 생성해야 하며, 해당 문항의 근거가 된 noteId와 blockId를 'sourceNoteId'와 'sourceBlockId' 필드에 정확히 기입하라.\n" +
             "난이도: %s. 문항은 %s로 출제하라.\n" +
             "유형별 문제 수 배분: %s.\n" +
-            "응답 구조: { \"title\": \"제목\", \"difficulty\": \"%s\", \"questions\": [ { \"type\": \"유형\", \"questionText\": \"내용\", \"options\": [\"A\", \"B\"], \"correctAnswer\": \"정답\", \"explanation\": \"해설\", \"sourceNoteId\": 1, \"sourceBlockId\": \"b1\" } ] }.\n" +
+            "%s" +
+            "응답 구조: { \"title\": \"제목\", \"difficulty\": \"%s\", \"questions\": [ { \"type\": \"유형\", \"questionText\": \"내용\", \"options\": [\"A\", \"B\"], \"correctAnswer\": \"정답\", \"explanation\": \"해설\", \"sourceNoteId\": 1, \"sourceBlockId\": \"b1\", \"conceptTags\": [\"개념\"] } ] }.\n" +
             "--- 엄격 준수 사항 ---\n" +
             "1. JSON 응답 내의 어떠한 숫자 값(또는 숫자로 이루어진 문자열)도 500자를 초과할 수 없다.\n" +
             "2. 설명(explanation)이나 정답(correctAnswer)에 불필요하게 긴 숫자 나열, 복잡한 수식, 또는 로우 데이터(raw data)를 포함하지 마라.\n" +
@@ -136,9 +146,11 @@ public class QuizAiGenerationService {
             "4. 반드시 마크다운 없이 오직 JSON 객체로만 응답하라.\n" +
             // 주관식 채점은 정규화 후 정확 일치라 서술형 정답은 맞힐 수 없다(P2-6 1차).
             "5. 주관식(SHORT_ANSWER) 정답(correctAnswer)은 하나의 단어나 짧은 구(20자 이내)로 하고, 설명이나 서술을 요구하지 마라. 난이도가 높아도 사고 과정은 문제에 담고 정답은 짧게 하라.\n" +
+            // 개념별 취약 분석(P2-3)의 집계 단위가 된다. 같은 개념이 다른 표기로 흩어지지 않게 한다.
+            "6. 각 문항이 평가하는 핵심 개념을 conceptTags에 1~3개 적어라. 노트에 쓰인 용어 그대로 20자 이내의 짧은 명사구로 쓰고, 같은 개념은 세트 안에서 항상 같은 표기를 써라.\n" +
             "텍스트 내용: %s",
             request.getDifficulty(), difficultyGuide(request.getDifficulty()), typeInstruction,
-            request.getDifficulty(), input.text()
+            learningObjectiveInstruction(request.getLearningObjectives()), request.getDifficulty(), input.text()
         );
 
         List<Map<String, Object>> parts = new ArrayList<>();
@@ -147,7 +159,7 @@ public class QuizAiGenerationService {
 
         // 출처 태그가 하나도 없는 입력(미디어만 있는 노트 등)에서 출처를 필수로 요구하면
         // 모델이 존재하지 않는 출처를 지어내므로, REF를 붙인 경우에만 필수로 둔다.
-        List<String> questionRequired = new ArrayList<>(List.of("type", "questionText", "correctAnswer", "explanation"));
+        List<String> questionRequired = new ArrayList<>(List.of("type", "questionText", "correctAnswer", "explanation", "conceptTags"));
         if (!input.allowedSources().isEmpty()) {
             questionRequired.addAll(List.of("sourceNoteId", "sourceBlockId"));
         }
@@ -168,7 +180,8 @@ public class QuizAiGenerationService {
                             "correctAnswer", Map.of("type", "STRING"),
                             "explanation", Map.of("type", "STRING"),
                             "sourceNoteId", Map.of("type", "NUMBER"),
-                            "sourceBlockId", Map.of("type", "STRING")
+                            "sourceBlockId", Map.of("type", "STRING"),
+                            "conceptTags", Map.of("type", "ARRAY", "items", Map.of("type", "STRING"))
                         ),
                         "required", questionRequired
                     )

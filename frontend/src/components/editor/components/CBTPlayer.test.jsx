@@ -84,4 +84,29 @@ describe('CBTPlayer 제출', () => {
 
     expect(await screen.findByText('1 / 1 점')).toBeInTheDocument();
   });
+
+  it('결과 화면에 개념 태그를 표시하고, 태그가 없는 문제는 표시하지 않는다', async () => {
+    const user = userEvent.setup();
+    const taggedQuiz = {
+      ...quizData,
+      questions: [
+        { ...quizData.questions[0], conceptTags: ['LRU', '페이지 교체'] },
+        { questionId: 2, type: 'OX', questionText: 'Q2', correctAnswer: 'X', explanation: '설명2', conceptTags: [] },
+      ],
+    };
+    render(
+      <MemoryRouter>
+        <CBTPlayer quizData={taggedQuiz} onClose={() => {}} courseId={1} />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByText('O'));
+    await user.click(screen.getByText('다음 문제'));
+    await user.click(screen.getByText('X'));
+    await user.click(screen.getByText('제출하고 채점하기'));
+
+    expect(await screen.findByText('#LRU')).toBeInTheDocument();
+    expect(screen.getByText('#페이지 교체')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('개념 태그')).toHaveLength(1);
+  });
 });

@@ -197,6 +197,15 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
                       ))
                     )}
                   </div>
+                  {q.conceptTags?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5" aria-label="개념 태그">
+                      {q.conceptTags.map(tag => (
+                        <span key={tag} className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg text-xs text-slate-600 dark:text-slate-300 font-medium">
                     <span className="font-bold">해설: </span>{q.explanation}
                   </div>

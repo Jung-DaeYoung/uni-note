@@ -24,6 +24,11 @@ public class QuizRequest {
     private Map<QuestionType, @NotNull @Min(1) @Max(20) Integer> typeCounts;
     @NotNull
     private QuizDifficulty difficulty;
+
+    // 선택 필드. 문항이 평가할 학습 목표를 프롬프트에 넣는다. 생략하거나 비어 있으면 기존과 같다.
+    // QuizConfigModal의 MAX_LEARNING_OBJECTIVES / MAX_OBJECTIVE_LENGTH와 같게 유지한다.
+    @Size(max = 5)
+    private List<@NotBlank @Size(max = 100) String> learningObjectives;
     // 선택 필드. 노트별로 블록(과 하위 블록)만 문제 범위로 쓴다. 여기 없는 noteIds의 노트는
     // 노트 전체를 사용하며, 생략하거나 비어 있으면 모든 노트를 전체로 쓴다.
     // noteId는 noteIds에 포함되어야 한다(QuizService에서 검증).

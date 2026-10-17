@@ -8,6 +8,7 @@ import com.uninote.backend.dto.QuizResponse;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -240,5 +241,21 @@ class QuizQualityValidatorTest {
 
         assertThat(blankTitle.getTitle()).isEqualTo(QuizQualityValidator.DEFAULT_TITLE);
         assertThat(longTitle.getTitle()).hasSize(QuizQualityValidator.MAX_COLUMN_LENGTH);
+    }
+
+    @Test
+    void conceptTagsAreTrimmedDedupedAndCappedWithoutFailingValidation() {
+        QuestionResponse q = mc("Q1", "LRU");
+        q.setConceptTags(Arrays.asList("  LRU  알고리즘 ", "lru 알고리즘", "", null, "가".repeat(31), "페이지 폴트", "FIFO", "OPT"));
+        QuestionResponse noTags = ox("Q2", "O");
+        noTags.setConceptTags(null);
+        QuizResponse response = response(q, noTags);
+
+        QuizQualityValidator.Result result = validator.validate(response,
+                request(Map.of(QuestionType.MULTIPLE_CHOICE, 1, QuestionType.OX, 1)), allowedSources);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(q.getConceptTags()).containsExactly("LRU 알고리즘", "페이지 폴트", "FIFO");
+        assertThat(noTags.getConceptTags()).isEmpty();
     }
 }

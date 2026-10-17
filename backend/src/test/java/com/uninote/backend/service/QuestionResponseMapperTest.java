@@ -26,6 +26,7 @@ class QuestionResponseMapperTest {
         question.setExplanation("설명");
         question.setSourceNoteId(10L);
         question.setSourceBlockId("b1");
+        question.setConceptTags(objectMapper.writeValueAsString(List.of("LRU", "페이지 교체")));
 
         QuestionResponse response = mapper.toResponse(question);
 
@@ -37,6 +38,7 @@ class QuestionResponseMapperTest {
         assertThat(response.getExplanation()).isEqualTo("설명");
         assertThat(response.getSourceNoteId()).isEqualTo(10L);
         assertThat(response.getSourceBlockId()).isEqualTo("b1");
+        assertThat(response.getConceptTags()).containsExactly("LRU", "페이지 교체");
     }
 
     @Test
@@ -50,5 +52,7 @@ class QuestionResponseMapperTest {
         QuestionResponse response = mapper.toResponse(question);
 
         assertThat(response.getOptions()).isEmpty();
+        // 태그 도입 전 문제는 conceptTags가 null이다.
+        assertThat(response.getConceptTags()).isEmpty();
     }
 }

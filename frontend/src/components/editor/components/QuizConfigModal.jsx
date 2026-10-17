@@ -16,6 +16,8 @@ const MAX_OBJECTIVE_LENGTH = 100;
 
 // QuizRequest.focusConcepts의 @Size(max = 5)와 동일.
 const MAX_FOCUS_CONCEPTS = 5;
+// QuizRequest.focusConcepts 항목 @Size(max = 30)와 동일.
+const MAX_FOCUS_CONCEPT_LENGTH = 30;
 
 // QuizRequest.referenceQuestions의 @Size(max = 10) / 항목 @Size(max = 500)와 동일.
 const MAX_REFERENCE_QUESTIONS = 10;
@@ -546,7 +548,8 @@ const FocusConceptSection = ({ concepts, onLoad, onRemove, loading }) => (
   </div>
 );
 
-const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated, saveStatus = 'synced' }) => {
+// preset({ noteId, blockId, keyword })이 있으면 열 때 그 블록(없으면 노트 전체)을 범위로, 키워드를 집중 개념으로 채운다.
+const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated, saveStatus = 'synced', preset = null }) => {
   const { noteTree } = useNoteTree();
   const [selectedIds, setSelectedIds] = useState([parseInt(currentNoteId)]);
   const [expandedIds, setExpandedIds] = useState([parseInt(currentNoteId)]); // 현재 노트의 부모들은 펼쳐진 상태로 시작하는 것이 좋지만, 일단 현재 노드만 포함
@@ -586,19 +589,22 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
   // 그 시점의 currentNoteId로 다시 동기화한다.
   useEffect(() => {
     if (isOpen) {
-      const id = parseInt(currentNoteId);
+      const id = preset ? preset.noteId : parseInt(currentNoteId);
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedIds([id]);
+      setSelectedIds(preset?.blockId ? [] : [id]);
       setExpandedIds([id]);
-      setBlockSelections({});
+      setBlockSelections(preset?.blockId ? { [id]: [preset.blockId] } : {});
       setOpenBlockPanelIds([]);
       // 다른 노트의 저장본이 모달을 닫은 사이 바뀌었을 수 있으므로 캐시도 비운다.
       setBlocksByNote({});
       setMode('CUSTOM');
       setReferenceQuestions([]);
       setCoverAllNotes(false);
+      if (preset) {
+        setFocusConcepts(preset.keyword.length <= MAX_FOCUS_CONCEPT_LENGTH ? [preset.keyword] : []);
+      }
     }
-  }, [isOpen, currentNoteId]);
+  }, [isOpen, currentNoteId, preset]);
 
   if (!isOpen) return null;
 
@@ -889,9 +895,10 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
       ...(partialNoteIds.length > 0 && {
         blockSelections: partialNoteIds.map(noteId => ({
           noteId,
-          blockIds: (blocksByNote[noteId]?.blocks || [])
-            .map(block => block.id)
-            .filter(id => blockSelections[noteId].includes(id)),
+          // 블록 목록을 불러오지 않은 노트(preset 등)는 선택값을 그대로 보낸다. 없는 블록은 서버가 400으로 알린다.
+          blockIds: blocksByNote[noteId]?.blocks
+            ? blocksByNote[noteId].blocks.map(block => block.id).filter(id => blockSelections[noteId].includes(id))
+            : blockSelections[noteId],
         })),
       }),
       typeCounts: counts,

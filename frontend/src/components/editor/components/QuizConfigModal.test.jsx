@@ -320,6 +320,43 @@ describe('QuizConfigModal', () => {
     });
   });
 
+  describe('키워드 preset', () => {
+    const renderWithPreset = (preset) => render(
+      <NoteTreeProvider noteTree={noteTree}>
+        <QuizConfigModal isOpen currentNoteId={1} courseId="1" onClose={vi.fn()} onGenerated={vi.fn()} preset={preset} />
+      </NoteTreeProvider>
+    );
+
+    it('블록과 키워드가 있으면 그 블록만 범위로, 키워드를 집중 개념으로 보낸다', async () => {
+      const user = userEvent.setup();
+      client.post.mockResolvedValueOnce({ data: { quizSetId: 7 } });
+      renderWithPreset({ noteId: 2, blockId: 'c2', keyword: 'LRU' });
+
+      expect(screen.getByText('LRU')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+
+      await waitFor(() => expect(client.post).toHaveBeenCalled());
+      expect(client.post.mock.calls[0][1]).toMatchObject({
+        noteIds: [2],
+        blockSelections: [{ noteId: 2, blockIds: ['c2'] }],
+        focusConcepts: ['LRU'],
+      });
+    });
+
+    it('블록이 없으면 노트 전체를, 30자를 넘는 키워드는 집중 개념에서 뺀다', async () => {
+      const user = userEvent.setup();
+      client.post.mockResolvedValueOnce({ data: { quizSetId: 7 } });
+      renderWithPreset({ noteId: 2, blockId: null, keyword: 'a'.repeat(31) });
+
+      await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+
+      await waitFor(() => expect(client.post).toHaveBeenCalled());
+      expect(client.post.mock.calls[0][1].noteIds).toEqual([2]);
+      expect(client.post.mock.calls[0][1]).not.toHaveProperty('blockSelections');
+      expect(client.post.mock.calls[0][1]).not.toHaveProperty('focusConcepts');
+    });
+  });
+
   it('학습 목표가 5개를 넘거나 한 줄이 100자를 넘으면 생성 버튼이 비활성화된다', async () => {
     const user = userEvent.setup();
     renderModal({ currentNoteId: 1 });

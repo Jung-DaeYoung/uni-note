@@ -2,17 +2,21 @@ package com.uninote.backend.controller;
 
 import com.uninote.backend.dto.KeywordExplainRequest;
 import com.uninote.backend.dto.KeywordExplainResponse;
+import com.uninote.backend.dto.KeywordMentionResponse;
 import com.uninote.backend.repository.StudentRepository;
 import com.uninote.backend.service.KeywordService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Principal;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/keywords")
@@ -26,5 +30,14 @@ public class KeywordController {
                                                           Principal principal) {
         return ResponseEntity.ok(keywordService.explain(request,
                 studentRepository.getByStudentNum(principal.getName())));
+    }
+
+    // 파라미터 누락·길이는 서비스에서 400(INVALID_REQUEST)으로 검증한다.
+    @GetMapping("/mentions")
+    public ResponseEntity<List<KeywordMentionResponse>> findMentions(@RequestParam(required = false) String keyword,
+                                                                     @RequestParam(required = false) Long courseId,
+                                                                     Principal principal) {
+        return ResponseEntity.ok(keywordService.findMentions(
+                studentRepository.getByStudentNum(principal.getName()), keyword, courseId));
     }
 }

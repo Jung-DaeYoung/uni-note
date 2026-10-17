@@ -1,15 +1,22 @@
 package com.uninote.backend.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.uninote.backend.domain.Note;
 import com.uninote.backend.domain.Student;
 import com.uninote.backend.dto.KeywordExplainRequest;
 import com.uninote.backend.dto.KeywordExplainResponse;
+import com.uninote.backend.dto.KeywordMentionResponse;
 import com.uninote.backend.exception.ExternalServiceException;
+import com.uninote.backend.exception.InvalidRequestException;
+import com.uninote.backend.repository.NoteRepository;
 import com.uninote.backend.exception.TooManyRequestsException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -17,9 +24,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,6 +49,11 @@ public class KeywordService {
     static final int MAX_RELATED_KEYWORDS = 5;
     static final int MAX_RESOURCES = 3;
     static final int MAX_SEARCH_QUERY_LENGTH = 100;
+
+    // KeywordExplainRequest.keyword와 같은 상한. 언급 검색은 결과 수와 미리보기 앞뒤 글자 수만 둔다.
+    static final int MAX_KEYWORD_LENGTH = 80;
+    static final int MAX_MENTIONS = 10;
+    static final int PREVIEW_RADIUS = 40;
 
     // 외부 검색 API가 없어 AI가 만든 URL은 실제 페이지인지 확인할 수 없다. 그래서 AI에게서는
     // 검색어와 사이트만 받고, 링크는 이 목록의 검색 URL로만 만든다.
@@ -83,6 +97,7 @@ public class KeywordService {
 
     private final GeminiClient geminiClient;
     private final NoteService noteService;
+    private final NoteRepository noteRepository;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final Map<Long, Deque<Instant>> recentRequests = new ConcurrentHashMap<>();
@@ -111,6 +126,57 @@ public class KeywordService {
             logResult(start, student, keyword, context, e.getErrorCode());
             throw e;
         }
+    }
+
+    // 같은 강의의 내 노트에서 키워드가 든 최상위 블록을 찾는다. 후보 노트는 검색용 평문(searchContent)으로 고르고,
+    // 평문에는 블록 구분이 없으므로 블록 id·미리보기는 노트 본문(Tiptap JSON)에서 만든다.
+    @Transactional(readOnly = true)
+    public List<KeywordMentionResponse> findMentions(Student student, String rawKeyword, Long courseId) {
+        String keyword = rawKeyword == null ? "" : rawKeyword.trim();
+        if (keyword.isEmpty() || keyword.length() > MAX_KEYWORD_LENGTH || courseId == null) {
+            throw new InvalidRequestException("키워드(1~" + MAX_KEYWORD_LENGTH + "자)와 강의를 지정해 주세요.");
+        }
+        String needle = keyword.toLowerCase(Locale.ROOT);
+        String pattern = needle.replace("!", "!!").replace("%", "!%").replace("_", "!_");
+        List<KeywordMentionResponse> mentions = new ArrayList<>();
+        for (Note note : noteRepository.searchByContent(student.getStudId(), courseId, pattern,
+                PageRequest.of(0, MAX_MENTIONS))) {
+            JsonNode blocks;
+            try {
+                blocks = objectMapper.readTree(note.getContent()).path("content");
+            } catch (Exception e) {
+                // 읽기 전용 검색이라 깨진 노트 하나로 전체를 실패시키지 않는다.
+                log.warn("키워드 언급 검색: 노트 {} 본문을 해석하지 못해 건너뜁니다.", note.getNoteId());
+                continue;
+            }
+            for (JsonNode block : blocks) {
+                String text = collectText(block).replaceAll("\\s+", " ").trim();
+                int index = text.toLowerCase(Locale.ROOT).indexOf(needle);
+                if (index < 0) continue;
+                String blockId = block.path("attrs").path("id").asText(null);
+                mentions.add(new KeywordMentionResponse(note.getNoteId(), note.getTitle(), blockId,
+                        preview(text, index, keyword.length())));
+                if (mentions.size() >= MAX_MENTIONS) return mentions;
+            }
+        }
+        return mentions;
+    }
+
+    private static String collectText(JsonNode node) {
+        if ("text".equals(node.path("type").asText())) {
+            return node.path("text").asText("");
+        }
+        StringBuilder text = new StringBuilder();
+        for (JsonNode child : node.path("content")) {
+            text.append(collectText(child)).append(' ');
+        }
+        return text.toString();
+    }
+
+    static String preview(String text, int index, int length) {
+        int start = Math.max(0, index - PREVIEW_RADIUS);
+        int end = Math.min(text.length(), index + length + PREVIEW_RADIUS);
+        return (start > 0 ? "…" : "") + text.substring(start, end) + (end < text.length() ? "…" : "");
     }
 
     // 문맥은 학습자가 보낸 값이라 사실로 단정하지 않고, 그 안의 지시문도 따르지 않게 한다.

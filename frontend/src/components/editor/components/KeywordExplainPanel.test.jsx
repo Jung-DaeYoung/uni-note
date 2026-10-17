@@ -7,7 +7,7 @@ import { clearKeywordCache } from '../../../hooks/useKeywordExplanation';
 import client from '../../../api/client';
 
 vi.mock('../../../api/client', () => ({
-  default: { post: vi.fn() },
+  default: { post: vi.fn(), get: vi.fn() },
 }));
 
 const target = { keyword: 'JWT', context: 'JWT는 토큰이다.', blockId: 'p1', noteId: 10, courseId: 1 };
@@ -29,6 +29,8 @@ const explanation = {
 describe('KeywordExplainPanel', () => {
   beforeEach(() => {
     client.post.mockReset();
+    client.get.mockReset();
+    client.get.mockResolvedValue({ data: [] });
     clearKeywordCache();
   });
 
@@ -36,7 +38,7 @@ describe('KeywordExplainPanel', () => {
     const user = userEvent.setup();
     const onSelectKeyword = vi.fn();
     client.post.mockResolvedValueOnce({ data: explanation });
-    render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={onSelectKeyword} />);
+    render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={onSelectKeyword} onOpenMention={vi.fn()} onMakeQuiz={vi.fn()} />);
 
     expect(screen.getByText('설명을 만드는 중...')).toBeInTheDocument();
     expect(await screen.findByText('요약 설명')).toBeInTheDocument();
@@ -60,7 +62,7 @@ describe('KeywordExplainPanel', () => {
     client.post
       .mockRejectedValueOnce({ response: { data: { message: '키워드 설명은 10분에 20회까지 요청할 수 있습니다.' } } })
       .mockResolvedValueOnce({ data: explanation });
-    render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={vi.fn()} />);
+    render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={vi.fn()} onOpenMention={vi.fn()} onMakeQuiz={vi.fn()} />);
 
     expect(await screen.findByText('키워드 설명은 10분에 20회까지 요청할 수 있습니다.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '다시 시도' }));
@@ -71,11 +73,11 @@ describe('KeywordExplainPanel', () => {
 
   it('같은 키워드·문맥을 다시 열면 캐시를 써서 요청하지 않는다', async () => {
     client.post.mockResolvedValueOnce({ data: explanation });
-    const { unmount } = render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={vi.fn()} />);
+    const { unmount } = render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={vi.fn()} onOpenMention={vi.fn()} onMakeQuiz={vi.fn()} />);
     await screen.findByText('요약 설명');
     unmount();
 
-    render(<KeywordExplainPanel target={{ ...target }} onClose={vi.fn()} onSelectKeyword={vi.fn()} />);
+    render(<KeywordExplainPanel target={{ ...target }} onClose={vi.fn()} onSelectKeyword={vi.fn()} onOpenMention={vi.fn()} onMakeQuiz={vi.fn()} />);
 
     expect(await screen.findByText('요약 설명')).toBeInTheDocument();
     expect(client.post).toHaveBeenCalledTimes(1);
@@ -85,9 +87,33 @@ describe('KeywordExplainPanel', () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     client.post.mockResolvedValueOnce({ data: explanation });
-    render(<KeywordExplainPanel target={target} onClose={onClose} onSelectKeyword={vi.fn()} />);
+    render(<KeywordExplainPanel target={target} onClose={onClose} onSelectKeyword={vi.fn()} onOpenMention={vi.fn()} onMakeQuiz={vi.fn()} />);
 
     await user.click(screen.getByRole('button', { name: '키워드 설명 닫기' }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('같은 강의의 노트 언급을 보여 주고, 누르면 그 언급을 넘긴다', async () => {
+    const user = userEvent.setup();
+    const onOpenMention = vi.fn();
+    const mention = { noteId: 12, noteTitle: '보안 정리', blockId: 'b3', preview: '…JWT 서명 검증…' };
+    client.post.mockResolvedValueOnce({ data: explanation });
+    client.get.mockResolvedValueOnce({ data: [mention] });
+    render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={vi.fn()} onOpenMention={onOpenMention} onMakeQuiz={vi.fn()} />);
+
+    expect(client.get).toHaveBeenCalledWith('/keywords/mentions', { params: { keyword: 'JWT', courseId: 1 } });
+    await user.click(await screen.findByRole('button', { name: /보안 정리/ }));
+    expect(onOpenMention).toHaveBeenCalledWith(mention);
+  });
+
+  it('언급이 없으면 빈 상태를 보여 주고, 문제 만들기는 현재 대상을 넘긴다', async () => {
+    const user = userEvent.setup();
+    const onMakeQuiz = vi.fn();
+    client.post.mockResolvedValueOnce({ data: explanation });
+    render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={vi.fn()} onOpenMention={vi.fn()} onMakeQuiz={onMakeQuiz} />);
+
+    expect(await screen.findByText('이 강의의 노트에서 찾지 못했습니다')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '문제 만들기' }));
+    expect(onMakeQuiz).toHaveBeenCalledWith(target);
   });
 });

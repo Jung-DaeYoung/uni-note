@@ -73,11 +73,24 @@ const CourseDetailPage = () => {
   const { isBoardOpen, setIsBoardOpen, isBoardMaximized } = board;
 
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
+  // 키워드에서 연 문제 생성 범위({ noteId, blockId, keyword }). 일반 "AI 문제 생성"은 null이다.
+  const [quizPreset, setQuizPreset] = useState(null);
   const [quizResult, setQuizResult] = useState(null);
   const [saveState, setSaveState] = useState({ status: 'synced', retry: () => {} });
   // 키워드 설명 패널 대상: { keyword, context, blockId, noteId, courseId }. 커뮤니티 패널과 동시에 열지 않는다.
+  // 언급을 눌러 다른 노트로 이동해도 패널은 유지한다.
   const [keywordTarget, setKeywordTarget] = useState(null);
   const isSidePanelOpen = isBoardOpen || keywordTarget !== null;
+
+  const openKeywordQuiz = ({ noteId: presetNoteId, blockId, keyword }) => {
+    setQuizPreset({ noteId: presetNoteId, blockId, keyword });
+    setIsQuizModalOpen(true);
+  };
+
+  const openMention = (mention) => {
+    navigate(`/course/${courseId}/note/${mention.noteId}`,
+      mention.blockId ? { state: { sourceBlockId: mention.blockId } } : undefined);
+  };
 
   // noteId가 바뀌면 이전 노트의 저장 상태가 새 노트 헤더에 잠깐이라도 남지 않도록
   // 렌더 중에 상태를 초기화한다(effect가 아닌 렌더 단계에서 처리하는 React 권장 패턴).
@@ -85,7 +98,6 @@ const CourseDetailPage = () => {
   if (noteId !== savedForNoteId) {
     setSavedForNoteId(noteId);
     setSaveState({ status: 'synced', retry: () => {} });
-    setKeywordTarget(null);
   }
 
   // --- Sidebar Content ---
@@ -230,7 +242,11 @@ const CourseDetailPage = () => {
     <NoteTreeProvider noteTree={noteTree}>
       <QuizConfigModal
         isOpen={isQuizModalOpen}
-        onClose={() => setIsQuizModalOpen(false)}
+        onClose={() => {
+          setIsQuizModalOpen(false);
+          setQuizPreset(null);
+        }}
+        preset={quizPreset}
         currentNoteId={noteId}
         courseId={courseId}
         onGenerated={(res) => setQuizResult(res)}
@@ -251,6 +267,7 @@ const CourseDetailPage = () => {
                       setKeywordTarget({ ...selection, noteId: Number(noteId), courseId: Number(courseId) });
                       setIsBoardOpen(false);
                     }}
+                    onKeywordQuiz={(selection) => openKeywordQuiz({ ...selection, noteId: Number(noteId) })}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-40 opacity-20 text-slate-900 dark:text-slate-100">
@@ -270,6 +287,8 @@ const CourseDetailPage = () => {
               target={keywordTarget}
               onClose={() => setKeywordTarget(null)}
               onSelectKeyword={(keyword) => setKeywordTarget(prev => ({ ...prev, keyword }))}
+              onOpenMention={openMention}
+              onMakeQuiz={openKeywordQuiz}
             />
           )}
         </div>

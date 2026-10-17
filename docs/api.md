@@ -127,6 +127,7 @@
 | Method | Endpoint | 인증 | 요청 | 응답 |
 |---|---|---:|---|---|
 | POST | `/keywords/explain` | 예 | `{ keyword, context?, courseId?, noteId?, blockId? }` — `keyword` 1~80자, `context`(선택한 블록의 텍스트) 2,000자 이하. `noteId`가 있으면 본인 노트인지 확인(404/403). 학생별 10분에 20회(초과 시 429) | `KeywordExplainResponse` |
+| GET | `/keywords/mentions` | 예 | query `keyword`(1~80자), `courseId`(필수). 누락·길이 초과는 400 `INVALID_REQUEST` | `KeywordMentionResponse[]` (`noteId`, `noteTitle`, `blockId`, `preview`). 요청 학생의 해당 강의 노트 중 검색용 평문(`searchContent`)에 키워드가 든 노트를 최근 수정 순으로 찾고, 본문의 최상위 블록 단위로 최대 10개. `blockId`가 없는 옛 블록은 null, 미리보기는 일치 위치 앞뒤 40자. `searchContent`가 비어 있는 노트는 찾지 못한다 |
 
 `KeywordExplainResponse`는 `keyword`, `summary`(3줄 요약), `easyExplanation`, `advancedExplanation`, `relatedKeywords`(최대 5개), `resources`(최대 3개, `{ title, url, source, reason }`)를 가진다. `url`은 AI가 만든 주소가 아니라 서버가 허용 사이트(한국어·영어 위키백과, MDN, Google Scholar)의 검색 URL에 AI가 고른 검색어를 넣어 만든 링크다. AI 호출 실패·응답 형식 오류·빈 설명은 503(`EXTERNAL_SERVICE_ERROR`/`AI_RESPONSE_INVALID`)이다.
 

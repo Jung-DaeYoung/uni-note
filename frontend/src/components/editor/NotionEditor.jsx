@@ -176,8 +176,8 @@ const pickFile = (accept, onFile) => {
   input.click();
 };
 
-// onKeywordSelect를 넘기면 텍스트 선택 시 키워드 설명 메뉴를 보여 준다.
-const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChange, onKeywordSelect }) => {
+// onKeywordSelect를 넘기면 텍스트 선택 시 키워드 메뉴(설명, onKeywordQuiz가 있으면 문제 만들기)를 보여 준다.
+const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChange, onKeywordSelect, onKeywordQuiz }) => {
   const navigate = useNavigate();
 
   const { handleImageUpload, handlePdfUpload, uploadStatus, uploadError, clearUploadError } = useNoteUploads();
@@ -421,7 +421,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
         <NoteEditorStyles />
         <div className="relative z-20">
           {editor && <BlockHandle editor={editor} />}
-          {editor && onKeywordSelect && <KeywordSelectionMenu editor={editor} onExplain={onKeywordSelect} />}
+          {editor && onKeywordSelect && <KeywordSelectionMenu editor={editor} onExplain={onKeywordSelect} onQuiz={onKeywordQuiz} />}
           <EditorContent editor={editor} />
         </div>
         <div className="absolute top-0 left-12 w-[1px] h-full bg-red-50/50 dark:bg-red-500/10" />

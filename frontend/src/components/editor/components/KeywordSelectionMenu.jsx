@@ -19,7 +19,8 @@ const getKeywordSelection = (state) => {
   };
 };
 
-const KeywordSelectionMenu = ({ editor, onExplain }) => {
+// onQuiz가 있으면 "문제 만들기"도 보여 준다. 문제 범위는 블록이라 80자 제한을 두지 않는다.
+const KeywordSelectionMenu = ({ editor, onExplain, onQuiz }) => {
   const [menu, setMenu] = useState(null); // { selection, top, left }
 
   useEffect(() => {
@@ -68,6 +69,15 @@ const KeywordSelectionMenu = ({ editor, onExplain }) => {
         <BookOpen size={13} />
         키워드 설명
       </button>
+      {onQuiz && (
+        <button
+          type="button"
+          onClick={() => onQuiz(menu.selection)}
+          className="pl-2 border-l border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400"
+        >
+          문제 만들기
+        </button>
+      )}
       {tooLong && (
         <span className="text-[11px] text-amber-600 dark:text-amber-400">{MAX_KEYWORD_LENGTH}자 이하로 선택하세요</span>
       )}

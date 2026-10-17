@@ -75,4 +75,16 @@ describe('KeywordSelectionMenu', () => {
     expect(screen.getByRole('button', { name: '키워드 설명' })).toBeDisabled();
     expect(screen.getByText('80자 이하로 선택하세요')).toBeInTheDocument();
   });
+
+  it('onQuiz가 있으면 문제 만들기 버튼을 보여 주고, 80자를 넘어도 쓸 수 있다', async () => {
+    const user = userEvent.setup();
+    const onQuiz = vi.fn();
+    makeEditor(doc(['p1', 'a'.repeat(81)]));
+    render(<KeywordSelectionMenu editor={editor} onExplain={vi.fn()} onQuiz={onQuiz} />);
+
+    selectInParagraph(0, 0, 81);
+    await user.click(screen.getByRole('button', { name: '문제 만들기' }));
+
+    expect(onQuiz).toHaveBeenCalledWith({ keyword: 'a'.repeat(81), context: 'a'.repeat(81), blockId: 'p1' });
+  });
 });

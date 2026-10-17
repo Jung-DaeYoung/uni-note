@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { BookOpen, ExternalLink, Loader2, X } from 'lucide-react';
+import { BookOpen, ExternalLink, FileText, Loader2, X } from 'lucide-react';
 import useKeywordExplanation from '../../../hooks/useKeywordExplanation';
+import useKeywordMentions from '../../../hooks/useKeywordMentions';
 
 const TABS = [
   { key: 'summary', label: '3줄 요약' },
@@ -9,8 +10,9 @@ const TABS = [
 ];
 
 // 오른쪽 고정 패널(CourseBoardPanel과 같은 자리). 키워드가 바뀌면 부모가 key로 새로 마운트해 탭을 초기화한다.
-const KeywordExplainPanel = ({ target, onClose, onSelectKeyword }) => {
+const KeywordExplainPanel = ({ target, onClose, onSelectKeyword, onOpenMention, onMakeQuiz }) => {
   const { data, loading, error, retry } = useKeywordExplanation(target);
+  const mentions = useKeywordMentions(target);
   const [tab, setTab] = useState('summary');
 
   return (
@@ -25,14 +27,23 @@ const KeywordExplainPanel = ({ target, onClose, onSelectKeyword }) => {
           </div>
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{target.keyword}</h3>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="키워드 설명 닫기"
-          className="p-1.5 rounded-md text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
-        >
-          <X size={16} />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => onMakeQuiz(target)}
+            className="px-2 py-1 rounded-md text-xs font-semibold text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+          >
+            문제 만들기
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="키워드 설명 닫기"
+            className="p-1.5 rounded-md text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+          >
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
@@ -127,6 +138,34 @@ const KeywordExplainPanel = ({ target, onClose, onSelectKeyword }) => {
             </div>
           </>
         )}
+
+        <div>
+          <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100">노트 언급</h4>
+          {mentions.loading && <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">찾는 중...</p>}
+          {mentions.error && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{mentions.error}</p>}
+          {!mentions.loading && !mentions.error && mentions.mentions.length === 0 && (
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">이 강의의 노트에서 찾지 못했습니다</p>
+          )}
+          {mentions.mentions.length > 0 && (
+            <ul className="mt-2 space-y-1.5">
+              {mentions.mentions.map((mention, index) => (
+                <li key={`${mention.noteId}-${mention.blockId ?? index}`}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenMention(mention)}
+                    className="w-full text-left p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500/50"
+                  >
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-900 dark:text-slate-100">
+                      <FileText size={12} className="shrink-0 text-slate-400" />
+                      {mention.noteTitle || '제목 없는 노트'}
+                    </span>
+                    <span className="block mt-1 text-xs text-slate-600 dark:text-slate-300">{mention.preview}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </aside>
   );

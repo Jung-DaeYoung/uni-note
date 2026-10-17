@@ -1,14 +1,19 @@
 package com.uninote.backend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.uninote.backend.domain.Note;
 import com.uninote.backend.domain.Student;
 import com.uninote.backend.dto.KeywordExplainRequest;
 import com.uninote.backend.dto.KeywordExplainResponse;
+import com.uninote.backend.dto.KeywordMentionResponse;
 import com.uninote.backend.exception.CourseAccessException;
 import com.uninote.backend.exception.ExternalServiceException;
+import com.uninote.backend.exception.InvalidRequestException;
+import com.uninote.backend.repository.NoteRepository;
 import com.uninote.backend.exception.TooManyRequestsException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -33,9 +38,10 @@ class KeywordServiceTest {
 
     private final GeminiClient geminiClient = mock(GeminiClient.class);
     private final NoteService noteService = mock(NoteService.class);
+    private final NoteRepository noteRepository = mock(NoteRepository.class);
     private final Clock clock = mock(Clock.class);
     private final KeywordService keywordService =
-            new KeywordService(geminiClient, noteService, new ObjectMapper(), clock);
+            new KeywordService(geminiClient, noteService, noteRepository, new ObjectMapper(), clock);
 
     private Student student;
 
@@ -137,5 +143,57 @@ class KeywordServiceTest {
                 "https://scholar.google.com/scholar?q=JWT+security");
         assertThat(response.resources().get(0).source()).isEqualTo("en.wikipedia.org");
         assertThat(response.resources().get(0).reason()).isEqualTo("표준 설명");
+    }
+
+    private static Note note(long noteId, String title, String content) {
+        Note note = new Note();
+        note.setNoteId(noteId);
+        note.setTitle(title);
+        note.setContent(content);
+        return note;
+    }
+
+    private static String paragraph(String id, String text) {
+        String attrs = id == null ? "{}" : "{\"id\":\"" + id + "\"}";
+        return "{\"type\":\"paragraph\",\"attrs\":" + attrs + ",\"content\":[{\"type\":\"text\",\"text\":\"" + text + "\"}]}";
+    }
+
+    private static String doc(String... blocks) {
+        return "{\"type\":\"doc\",\"content\":[" + String.join(",", blocks) + "]}";
+    }
+
+    @Test
+    void findMentionsReturnsMatchingTopLevelBlocksWithPreview() {
+        String longText = "가".repeat(50) + " jwt 검증 " + "나".repeat(50);
+        when(noteRepository.searchByContent(1L, 7L, "jwt", PageRequest.of(0, KeywordService.MAX_MENTIONS)))
+                .thenReturn(List.of(
+                        note(10L, "보안", doc(paragraph("p1", "세션 설명"), paragraph("p2", "JWT는   토큰이다"), paragraph(null, "옛 블록의 JWT"))),
+                        note(11L, "깨진 노트", "{not json"),
+                        note(12L, "긴 노트", doc(paragraph("q1", longText)))));
+
+        List<KeywordMentionResponse> mentions = keywordService.findMentions(student, " JWT ", 7L);
+
+        assertThat(mentions).containsExactly(
+                new KeywordMentionResponse(10L, "보안", "p2", "JWT는 토큰이다"),
+                new KeywordMentionResponse(10L, "보안", null, "옛 블록의 JWT"),
+                new KeywordMentionResponse(12L, "긴 노트", "q1", "…" + "가".repeat(39) + " jwt 검증 " + "나".repeat(36) + "…"));
+    }
+
+    @Test
+    void findMentionsStopsAtMaxAndEscapesLikePattern() {
+        String[] blocks = new String[12];
+        for (int i = 0; i < blocks.length; i++) blocks[i] = paragraph("b" + i, "100%_a!b");
+        when(noteRepository.searchByContent(eq(1L), eq(7L), eq("100!%!_a!!b"), any()))
+                .thenReturn(List.of(note(10L, "노트", doc(blocks))));
+
+        assertThat(keywordService.findMentions(student, "100%_A!b", 7L)).hasSize(KeywordService.MAX_MENTIONS);
+    }
+
+    @Test
+    void findMentionsRejectsBlankOrTooLongKeywordAndMissingCourse() {
+        assertThatThrownBy(() -> keywordService.findMentions(student, " ", 7L)).isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(() -> keywordService.findMentions(student, "a".repeat(81), 7L)).isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(() -> keywordService.findMentions(student, "JWT", null)).isInstanceOf(InvalidRequestException.class);
+        verify(noteRepository, never()).searchByContent(any(), any(), anyString(), any());
     }
 }

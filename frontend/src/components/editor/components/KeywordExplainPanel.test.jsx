@@ -116,4 +116,25 @@ describe('KeywordExplainPanel', () => {
     await user.click(screen.getByRole('button', { name: '문제 만들기' }));
     expect(onMakeQuiz).toHaveBeenCalledWith(target);
   });
+
+  it('설명을 만든 노트가 아니면 삽입 버튼을 끄고 안내한다', async () => {
+    client.post.mockResolvedValueOnce({ data: explanation });
+    render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={vi.fn()} onOpenMention={vi.fn()} onMakeQuiz={vi.fn()} canInsert={false} onInsert={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: '노트에 삽입' })).toBeDisabled();
+    expect(screen.getByText('설명을 만든 노트에서만 삽입할 수 있습니다')).toBeInTheDocument();
+  });
+
+  it('노트에 삽입은 현재 탭의 설명과 탭 이름을 넘기고, 성공하면 안내한다', async () => {
+    const user = userEvent.setup();
+    const onInsert = vi.fn().mockReturnValue(true);
+    client.post.mockResolvedValueOnce({ data: explanation });
+    render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={vi.fn()} onOpenMention={vi.fn()} onMakeQuiz={vi.fn()} canInsert onInsert={onInsert} />);
+
+    await user.click(await screen.findByRole('tab', { name: '쉬운 설명' }));
+    await user.click(screen.getByRole('button', { name: '노트에 삽입' }));
+
+    expect(onInsert).toHaveBeenCalledWith({ text: '쉬운 설명', label: '쉬운 설명' });
+    expect(screen.getByText('노트에 삽입했습니다')).toBeInTheDocument();
+  });
 });

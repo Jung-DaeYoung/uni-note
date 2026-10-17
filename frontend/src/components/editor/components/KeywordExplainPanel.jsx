@@ -10,15 +10,18 @@ const TABS = [
 ];
 
 // 오른쪽 고정 패널(CourseBoardPanel과 같은 자리). 키워드가 바뀌면 부모가 key로 새로 마운트해 탭을 초기화한다.
-const KeywordExplainPanel = ({ target, onClose, onSelectKeyword, onOpenMention, onMakeQuiz }) => {
+// canInsert: 설명을 만든 노트를 지금 편집 중인지. onInsert({ text, label })는 삽입 성공 여부를 돌려준다.
+const KeywordExplainPanel = ({ target, onClose, onSelectKeyword, onOpenMention, onMakeQuiz, canInsert, onInsert }) => {
   const { data, loading, error, retry } = useKeywordExplanation(target);
   const mentions = useKeywordMentions(target);
   const [tab, setTab] = useState('summary');
+  const [insertedTab, setInsertedTab] = useState(null);
+  const tabLabel = TABS.find(t => t.key === tab).label;
 
   return (
     <aside
       aria-label="키워드 설명"
-      className="fixed right-0 top-[48px] h-[calc(100vh-48px)] w-[400px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-[-10px_0_30px_rgba(0,0,0,0.03)] z-20 flex flex-col"
+      className="fixed right-0 top-[48px] h-[calc(100vh-48px)] w-[400px] max-w-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-[-10px_0_30px_rgba(0,0,0,0.03)] z-20 flex flex-col"
     >
       <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -86,6 +89,20 @@ const KeywordExplainPanel = ({ target, onClose, onSelectKeyword, onOpenMention, 
                 {data[tab]}
               </p>
               <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">AI가 만든 설명입니다. 중요한 내용은 강의 자료로 확인하세요.</p>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!canInsert}
+                  onClick={() => { if (onInsert({ text: data[tab], label: tabLabel })) setInsertedTab(tab); }}
+                  className="px-2 py-1 rounded-md text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  노트에 삽입
+                </button>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                  {!canInsert ? '설명을 만든 노트에서만 삽입할 수 있습니다'
+                    : insertedTab === tab ? '노트에 삽입했습니다' : '이 탭의 설명을 선택한 블록 뒤에 넣습니다'}
+                </span>
+              </div>
             </div>
 
             <div>

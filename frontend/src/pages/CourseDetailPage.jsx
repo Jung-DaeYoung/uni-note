@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   MessageSquare,
@@ -15,6 +15,7 @@ import {
 import AppLayout from '../components/layout/AppLayout';
 import NotionEditor from '../components/editor/NotionEditor';
 import KeywordExplainPanel from '../components/editor/components/KeywordExplainPanel';
+import { insertKeywordExplanation } from '../components/editor/insertKeywordExplanation';
 import QuizConfigModal from '../components/editor/components/QuizConfigModal';
 import CBTPlayer from '../components/editor/components/CBTPlayer';
 import { NoteTreeProvider } from '../context/NoteTreeContext';
@@ -80,7 +81,18 @@ const CourseDetailPage = () => {
   // 키워드 설명 패널 대상: { keyword, context, blockId, noteId, courseId }. 커뮤니티 패널과 동시에 열지 않는다.
   // 언급을 눌러 다른 노트로 이동해도 패널은 유지한다.
   const [keywordTarget, setKeywordTarget] = useState(null);
+  // 오른쪽 패널은 넓은 화면(xl)에서만 노트 영역을 밀어내고, 좁은 화면에서는 노트 위에 겹쳐 뜬다.
   const isSidePanelOpen = isBoardOpen || keywordTarget !== null;
+
+  // 키워드 설명을 넣을 편집기. NotionEditor가 onEditorReady로 알려 준다.
+  const editorRef = useRef(null);
+  const handleEditorReady = useCallback((editor) => { editorRef.current = editor; }, []);
+
+  const insertExplanation = ({ text, label }) => {
+    const editor = editorRef.current;
+    if (!editor || editor.isDestroyed) return false;
+    return insertKeywordExplanation(editor, { blockId: keywordTarget.blockId, keyword: keywordTarget.keyword, text, label });
+  };
 
   const openKeywordQuiz = ({ noteId: presetNoteId, blockId, keyword }) => {
     setQuizPreset({ noteId: presetNoteId, blockId, keyword });
@@ -258,7 +270,7 @@ const CourseDetailPage = () => {
       <AppLayout sidebarContent={sidebarContent} headerContent={headerContent}>
         <div className="flex h-[calc(100vh-48px)] bg-slate-50 dark:bg-slate-950 overflow-hidden relative font-sans">
           {/* Left: Lecture Note Area */}
-          <main className={`flex-1 overflow-y-auto transition-all duration-500 ease-in-out bg-white dark:bg-slate-950 ${isBoardOpen && isBoardMaximized ? 'opacity-0 invisible' : isSidePanelOpen ? 'mr-[400px]' : 'mr-0'}`}>
+          <main className={`flex-1 overflow-y-auto transition-all duration-500 ease-in-out bg-white dark:bg-slate-950 ${isBoardOpen && isBoardMaximized ? 'opacity-0 invisible' : isSidePanelOpen ? 'xl:mr-[400px]' : 'mr-0'}`}>
             <div className={`mx-auto transition-all duration-500 pt-8 ${isSidePanelOpen ? 'max-w-4xl' : 'max-w-7xl'}`}>
               <div className="px-8 pb-10">
                 {noteId && noteData && noteData.noteId === parseInt(noteId) ? (
@@ -268,6 +280,7 @@ const CourseDetailPage = () => {
                       setIsBoardOpen(false);
                     }}
                     onKeywordQuiz={(selection) => openKeywordQuiz({ ...selection, noteId: Number(noteId) })}
+                    onEditorReady={handleEditorReady}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-40 opacity-20 text-slate-900 dark:text-slate-100">
@@ -289,6 +302,8 @@ const CourseDetailPage = () => {
               onSelectKeyword={(keyword) => setKeywordTarget(prev => ({ ...prev, keyword }))}
               onOpenMention={openMention}
               onMakeQuiz={openKeywordQuiz}
+              canInsert={keywordTarget.noteId === Number(noteId)}
+              onInsert={insertExplanation}
             />
           )}
         </div>

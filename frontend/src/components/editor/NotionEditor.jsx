@@ -177,7 +177,8 @@ const pickFile = (accept, onFile) => {
 };
 
 // onKeywordSelect를 넘기면 텍스트 선택 시 키워드 메뉴(설명, onKeywordQuiz가 있으면 문제 만들기)를 보여 준다.
-const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChange, onKeywordSelect, onKeywordQuiz }) => {
+// onEditorReady(editor)는 편집기가 만들어지거나 사라질 때(null) 호출된다(키워드 설명 삽입용).
+const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChange, onKeywordSelect, onKeywordQuiz, onEditorReady }) => {
   const navigate = useNavigate();
 
   const { handleImageUpload, handlePdfUpload, uploadStatus, uploadError, clearUploadError } = useNoteUploads();
@@ -397,6 +398,12 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
   }, [saveStatus, onSaveStateChange]);
 
   useSourceBlockScroll(editor);
+
+  useEffect(() => {
+    if (!editor || !onEditorReady) return undefined;
+    onEditorReady(editor);
+    return () => onEditorReady(null);
+  }, [editor, onEditorReady]);
 
   return (
     <div className="relative">

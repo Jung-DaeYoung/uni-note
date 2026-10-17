@@ -39,7 +39,7 @@ const CourseBoardPanel = ({
   handleDeletePost,
 }) => {
   return (
-    <aside className={`fixed right-0 top-[48px] h-[calc(100vh-48px)] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-[-10px_0_30px_rgba(0,0,0,0.03)] transition-all duration-500 ease-in-out z-20 flex flex-col ${isBoardOpen ? (isBoardMaximized ? 'w-full translate-x-0' : 'w-[400px] translate-x-0') : 'w-0 translate-x-full'}`}>
+    <aside className={`fixed right-0 top-[48px] max-w-full h-[calc(100vh-48px)] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-[-10px_0_30px_rgba(0,0,0,0.03)] transition-all duration-500 ease-in-out z-20 flex flex-col ${isBoardOpen ? (isBoardMaximized ? 'w-full translate-x-0' : 'w-[400px] translate-x-0') : 'w-0 translate-x-full'}`}>
       <div className={`${isBoardOpen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300 flex flex-col h-full`}>
         {/* Board Header */}
         <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between sticky top-0 z-10">

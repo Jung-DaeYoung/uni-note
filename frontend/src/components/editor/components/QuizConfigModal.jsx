@@ -14,6 +14,9 @@ const MAX_SELECTED_BLOCKS = 500;
 const MAX_LEARNING_OBJECTIVES = 5;
 const MAX_OBJECTIVE_LENGTH = 100;
 
+// QuizRequest.focusConcepts의 @Size(max = 5)와 동일.
+const MAX_FOCUS_CONCEPTS = 5;
+
 // 학습 목표 입력은 한 줄에 하나. 빈 줄은 무시한다.
 const parseObjectives = (text) => text.split('\n').map(line => line.trim()).filter(Boolean);
 
@@ -460,7 +463,43 @@ const LearningObjectivesSection = ({ value, onChange }) => (
   </div>
 );
 
-const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStatus = 'synced' }) => {
+const FocusConceptSection = ({ concepts, onLoad, onRemove, loading }) => (
+  <div>
+    <div className="flex items-center justify-between gap-2">
+      <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+        집중할 개념 <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(선택)</span>
+      </label>
+      <button
+        type="button"
+        onClick={onLoad}
+        disabled={loading}
+        className="text-[11px] font-semibold px-2 py-1 rounded-md border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 disabled:opacity-50"
+      >
+        {loading ? '불러오는 중...' : '취약 개념 불러오기'}
+      </button>
+    </div>
+    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">자주 틀린 개념을 다른 형태의 문제로 다시 출제합니다. 선택한 노트 범위에 있는 개념만 출제됩니다</p>
+    {concepts.length > 0 && (
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {concepts.map(concept => (
+          <span key={concept} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400">
+            {concept}
+            <button
+              type="button"
+              onClick={() => onRemove(concept)}
+              aria-label={`${concept} 개념 제외`}
+              className="p-0.5 rounded-full hover:bg-amber-100 dark:hover:bg-amber-500/20"
+            >
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+      </div>
+    )}
+  </div>
+);
+
+const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated, saveStatus = 'synced' }) => {
   const { noteTree } = useNoteTree();
   const [selectedIds, setSelectedIds] = useState([parseInt(currentNoteId)]);
   const [expandedIds, setExpandedIds] = useState([parseInt(currentNoteId)]); // 현재 노트의 부모들은 펼쳐진 상태로 시작하는 것이 좋지만, 일단 현재 노드만 포함
@@ -476,6 +515,8 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
   });
   const [difficulty, setDifficulty] = useState('NORMAL');
   const [objectivesText, setObjectivesText] = useState('');
+  const [focusConcepts, setFocusConcepts] = useState([]);
+  const [conceptLoading, setConceptLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   // 노트별 범위: selectedIds는 "전체" 노트, blockSelections는 { noteId: blockId[] }로 "일부 블록" 노트다.
   // 한 노트가 두 곳에 동시에 있지 않도록 유지한다.
@@ -563,6 +604,27 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
 
   // 풀이 기록에서 취약(HIGH)한 출처 블록으로 범위를 바꾼다. 다른 강의·삭제된 노트의 블록은
   // 현재 트리에 없으므로 빼고, 저장본에서 사라진 블록은 loadBlocks가 선택에서 뺀다.
+  // 현재 강의의 HIGH 개념을 서버 정렬(취약한 순) 그대로 최대 MAX_FOCUS_CONCEPTS개 가져온다.
+  const loadWeakConcepts = async () => {
+    setConceptLoading(true);
+    try {
+      const response = await client.get('/quiz/incorrect/statistics/concepts');
+      const weak = (response.data || [])
+        .filter(stat => stat.reviewPriority === 'HIGH' && stat.courseId === Number(courseId))
+        .map(stat => stat.conceptTag)
+        .slice(0, MAX_FOCUS_CONCEPTS);
+      if (weak.length === 0) {
+        alert('이 강의에서 자주 틀린 개념이 없습니다.');
+        return;
+      }
+      setFocusConcepts(weak);
+    } catch (error) {
+      alert(error.response?.data?.message || '취약 개념을 불러오지 못했습니다.');
+    } finally {
+      setConceptLoading(false);
+    }
+  };
+
   const selectWeakBlocks = async () => {
     setWeakLoading(true);
     try {
@@ -706,6 +768,7 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
       difficulty,
       // 학습 목표가 없으면 필드를 보내지 않아 기존 payload와 같다.
       ...(objectives.length > 0 && { learningObjectives: objectives }),
+      ...(focusConcepts.length > 0 && { focusConcepts }),
     };
 
     try {
@@ -791,6 +854,12 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, onGenerated, saveStat
             />
             <DifficultySection difficulty={difficulty} onChange={setDifficulty} />
             <LearningObjectivesSection value={objectivesText} onChange={setObjectivesText} />
+            <FocusConceptSection
+              concepts={focusConcepts}
+              onLoad={loadWeakConcepts}
+              onRemove={(concept) => setFocusConcepts(prev => prev.filter(c => c !== concept))}
+              loading={conceptLoading}
+            />
           </fieldset>
         </div>
 

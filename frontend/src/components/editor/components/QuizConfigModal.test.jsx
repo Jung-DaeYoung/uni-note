@@ -26,7 +26,7 @@ const noteTree = [
 const renderModal = ({ currentNoteId = 1, onClose = vi.fn(), onGenerated = vi.fn() } = {}) => {
   render(
     <NoteTreeProvider noteTree={noteTree}>
-      <QuizConfigModal isOpen currentNoteId={currentNoteId} onClose={onClose} onGenerated={onGenerated} />
+      <QuizConfigModal isOpen currentNoteId={currentNoteId} courseId="1" onClose={onClose} onGenerated={onGenerated} />
     </NoteTreeProvider>
   );
   return { onClose, onGenerated };
@@ -162,6 +162,49 @@ describe('QuizConfigModal', () => {
       difficulty: 'NORMAL',
       learningObjectives: ['LRU와 FIFO를 비교할 수 있다', '페이지 폴트를 설명할 수 있다'],
     }));
+  });
+
+  it('취약 개념은 현재 강의의 HIGH 개념만 서버 순서대로 최대 5개 불러와 payload에 담는다', async () => {
+    const user = userEvent.setup();
+    const stat = (conceptTag, courseId, reviewPriority) => ({ conceptTag, courseId, reviewPriority });
+    client.get.mockResolvedValueOnce({ data: [
+      stat('LRU', 1, 'HIGH'),
+      stat('다른 강의 개념', 2, 'HIGH'),
+      stat('FIFO', 1, 'HIGH'),
+      stat('C1', 1, 'HIGH'), stat('C2', 1, 'HIGH'), stat('C3', 1, 'HIGH'), stat('C4', 1, 'HIGH'),
+      stat('잘 아는 개념', 1, 'LOW'),
+    ] });
+    client.post.mockResolvedValueOnce({ data: { quizSetId: 99 } });
+    renderModal({ currentNoteId: 1 });
+
+    await user.click(screen.getByRole('button', { name: '취약 개념 불러오기' }));
+    expect(client.get).toHaveBeenCalledWith('/quiz/incorrect/statistics/concepts');
+    expect(await screen.findByText('LRU')).toBeInTheDocument();
+    expect(screen.queryByText('다른 강의 개념')).not.toBeInTheDocument();
+    expect(screen.queryByText('C4')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'C3 개념 제외' }));
+    await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+
+    await waitFor(() => expect(client.post).toHaveBeenCalledWith('/quiz/generate', expect.objectContaining({
+      focusConcepts: ['LRU', 'FIFO', 'C1', 'C2'],
+    })));
+  });
+
+  it('현재 강의에 취약 개념이 없으면 안내하고 payload에 넣지 않는다', async () => {
+    const user = userEvent.setup();
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    client.get.mockResolvedValueOnce({ data: [{ conceptTag: 'LRU', courseId: 1, reviewPriority: 'LOW' }] });
+    client.post.mockResolvedValueOnce({ data: { quizSetId: 99 } });
+    renderModal({ currentNoteId: 1 });
+
+    await user.click(screen.getByRole('button', { name: '취약 개념 불러오기' }));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('이 강의에서 자주 틀린 개념이 없습니다.'));
+
+    await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+    await waitFor(() => expect(client.post).toHaveBeenCalled());
+    expect(client.post.mock.calls[0][1]).not.toHaveProperty('focusConcepts');
+    alertSpy.mockRestore();
   });
 
   it('학습 목표가 5개를 넘거나 한 줄이 100자를 넘으면 생성 버튼이 비활성화된다', async () => {

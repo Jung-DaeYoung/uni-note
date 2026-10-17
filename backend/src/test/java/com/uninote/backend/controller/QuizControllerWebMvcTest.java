@@ -248,6 +248,43 @@ class QuizControllerWebMvcTest {
         verify(quizService).generateQuiz(any(), any());
     }
 
+    private org.springframework.test.web.servlet.ResultActions generateWithFocusConcepts(Object concepts) throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("noteIds", java.util.List.of(1L));
+        body.put("typeCounts", Map.of("SHORT_ANSWER", 3));
+        body.put("difficulty", "NORMAL");
+        body.put("focusConcepts", concepts);
+
+        return mockMvc.perform(post("/api/quiz/generate")
+                .header("Authorization", bearerToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)));
+    }
+
+    static java.util.stream.Stream<Object> invalidFocusConcepts() {
+        return java.util.stream.Stream.of(
+                java.util.List.of("1", "2", "3", "4", "5", "6"),
+                java.util.List.of("a".repeat(31)),
+                java.util.List.of("LRU", " ")
+        );
+    }
+
+    // 6개 이상, 31자 이상, 공백 항목
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("invalidFocusConcepts")
+    void 잘못된focusConcepts는400을반환한다(Object concepts) throws Exception {
+        generateWithFocusConcepts(concepts)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+        verify(quizService, never()).generateQuiz(any(), any());
+    }
+
+    @Test
+    void focusConcepts5개와30자는DTO검증을통과한다() throws Exception {
+        generateWithFocusConcepts(java.util.List.of("a".repeat(30), "2", "3", "4", "5")).andExpect(status().isOk());
+        verify(quizService).generateQuiz(any(), any());
+    }
+
     @Test
     void typeCounts값20은DTO검증을통과한다() throws Exception {
         generateWithShortAnswerCount(20).andExpect(status().isOk());

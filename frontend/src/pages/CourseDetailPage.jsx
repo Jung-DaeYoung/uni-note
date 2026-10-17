@@ -224,6 +224,7 @@ const CourseDetailPage = () => {
         isOpen={isQuizModalOpen}
         onClose={() => setIsQuizModalOpen(false)}
         currentNoteId={noteId}
+        courseId={courseId}
         onGenerated={(res) => setQuizResult(res)}
         saveStatus={saveState.status}
       />

@@ -242,6 +242,24 @@ class QuizAiGenerationServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void requestQuizPromptAddsFocusConceptsAfterObjectivesOnlyWhenGiven() throws Exception {
+        when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
+        QuizRequest request = simpleRequest(List.of(1L));
+        request.setLearningObjectives(List.of("페이지 교체를 설명할 수 있다"));
+        request.setFocusConcepts(List.of(" LRU ", "FIFO"));
+
+        service.requestQuiz(request, textInput());
+
+        List<Map<String, Object>> contents = (List<Map<String, Object>>) lastRequestBody().get("contents");
+        String prompt = (String) ((List<Map<String, Object>>) contents.get(0).get("parts")).get(0).get("text");
+        assertThat(prompt).contains("내용을 지어내지 마라.\n학습자가 자주 틀린 개념: LRU, FIFO\n"
+                + "문항 대부분이 위 개념을 다루도록 출제하라. 단순한 정의 확인을 반복하지 말고 개념 비교, 사례 적용, 흔한 오개념 판별처럼 다른 형태로 물어라. 노트에 근거가 없는 개념은 건너뛰어라.\n응답 구조:");
+        assertThat(QuizAiGenerationService.focusConceptInstruction(List.of())).isEmpty();
+        assertThat(QuizAiGenerationService.focusConceptInstruction(null)).isEmpty();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void requestQuizPromptIncludesGuideForRequestedDifficulty() throws Exception {
         when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn(successfulGeminiResponse());
 

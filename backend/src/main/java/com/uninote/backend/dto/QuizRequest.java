@@ -29,6 +29,11 @@ public class QuizRequest {
     // QuizConfigModal의 MAX_LEARNING_OBJECTIVES / MAX_OBJECTIVE_LENGTH와 같게 유지한다.
     @Size(max = 5)
     private List<@NotBlank @Size(max = 100) String> learningObjectives;
+
+    // 선택 필드. 자주 틀린 개념(개념별 통계의 conceptTag)을 중심으로 출제한다(P2-4).
+    // 길이는 개념 태그 정규화 상한(QuizQualityValidator.MAX_CONCEPT_TAG_LENGTH)과 같다.
+    @Size(max = 5)
+    private List<@NotBlank @Size(max = 30) String> focusConcepts;
     // 선택 필드. 노트별로 블록(과 하위 블록)만 문제 범위로 쓴다. 여기 없는 noteIds의 노트는
     // 노트 전체를 사용하며, 생략하거나 비어 있으면 모든 노트를 전체로 쓴다.
     // noteId는 noteIds에 포함되어야 한다(QuizService에서 검증).

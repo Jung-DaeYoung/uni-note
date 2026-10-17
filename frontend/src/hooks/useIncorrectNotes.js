@@ -15,6 +15,7 @@ const useIncorrectNotes = (view) => {
   const [incorrectSummary, setIncorrectSummary] = useState(null);
   const [courseStats, setCourseStats] = useState([]);
   const [typeStats, setTypeStats] = useState([]);
+  const [conceptStats, setConceptStats] = useState([]);
   const [todayReview, setTodayReview] = useState([]);
   const [reviewCourseFilter, setReviewCourseFilter] = useState(null);
   const [isOverviewLoading, setIsOverviewLoading] = useState(false);
@@ -45,14 +46,16 @@ const useIncorrectNotes = (view) => {
   const fetchIncorrectOverview = async () => {
     setIsOverviewLoading(true);
     try {
-      const [summaryRes, courseRes, typeRes] = await Promise.all([
+      const [summaryRes, courseRes, typeRes, conceptRes] = await Promise.all([
         client.get('/quiz/incorrect/summary'),
         client.get('/quiz/incorrect/statistics/courses'),
         client.get('/quiz/incorrect/statistics/types'),
+        client.get('/quiz/incorrect/statistics/concepts'),
       ]);
       setIncorrectSummary(summaryRes.data);
       setCourseStats(courseRes.data);
       setTypeStats(typeRes.data);
+      setConceptStats(conceptRes.data);
       await fetchTodayReview(reviewCourseFilter);
     } catch (err) {
       console.error(err);
@@ -150,6 +153,7 @@ const useIncorrectNotes = (view) => {
     incorrectSummary,
     courseStats,
     typeStats,
+    conceptStats,
     todayReview,
     reviewCourseFilter,
     isOverviewLoading,

@@ -25,8 +25,13 @@ public class QuestionResponseMapper {
         qr.setExplanation(q.getExplanation());
         qr.setSourceNoteId(q.getSourceNoteId());
         qr.setSourceBlockId(q.getSourceBlockId());
-        qr.setConceptTags(readList(q.getConceptTags()));
+        qr.setConceptTags(conceptTagsOf(q));
         return qr;
+    }
+
+    // 개념별 통계(IncorrectNoteService)도 응답과 같은 규칙으로 태그를 읽는다.
+    public List<String> conceptTagsOf(Question q) {
+        return readList(q.getConceptTags());
     }
 
     // options·conceptTags는 JSON 문자열 배열로 저장된다. 값이 없거나(태그 도입 전 문제) 읽을 수 없으면 빈 배열로 응답한다.

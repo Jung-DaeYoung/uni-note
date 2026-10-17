@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, ListChecks } from 'lucide-react';
+import { BookOpen, ListChecks, Tags } from 'lucide-react';
 
 const TYPE_LABELS = {
   MULTIPLE_CHOICE: '객관식',
@@ -16,7 +16,10 @@ const AccuracyBar = ({ accuracyRate }) => (
   </div>
 );
 
-const WeakAreaBreakdown = ({ courseStats, typeStats, isLoading }) => {
+// 개념 수가 많아질 수 있어 취약한 순(서버 정렬)으로 앞부분만 보여준다.
+const MAX_CONCEPTS = 8;
+
+const WeakAreaBreakdown = ({ courseStats, typeStats, conceptStats = [], isLoading }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-5">
@@ -67,6 +70,35 @@ const WeakAreaBreakdown = ({ courseStats, typeStats, isLoading }) => {
                   </span>
                 </div>
                 <AccuracyBar accuracyRate={t.accuracyRate} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="md:col-span-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-5">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
+          <Tags size={16} className="text-slate-500 dark:text-slate-400" />
+          취약 개념
+        </h3>
+        {isLoading ? (
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 py-6 text-center">불러오는 중...</p>
+        ) : conceptStats.length === 0 ? (
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 py-6 text-center">개념 태그가 있는 문제를 풀면 표시됩니다.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+            {conceptStats.slice(0, MAX_CONCEPTS).map((c) => (
+              <div key={`${c.courseId}-${c.conceptTag}`}>
+                <div className="flex items-center justify-between mb-1 gap-2">
+                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
+                    {c.conceptTag}
+                    {c.courseName && <span className="ml-1.5 text-slate-400 dark:text-slate-500">{c.courseName}</span>}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 shrink-0">
+                    {Math.round(c.accuracyRate * 100)}% · {c.attemptCount}회
+                  </span>
+                </div>
+                <AccuracyBar accuracyRate={c.accuracyRate} />
               </div>
             ))}
           </div>

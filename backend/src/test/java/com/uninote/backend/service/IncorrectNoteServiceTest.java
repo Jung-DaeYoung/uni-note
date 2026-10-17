@@ -6,6 +6,7 @@ import com.uninote.backend.domain.QuestionType;
 import com.uninote.backend.domain.QuizSet;
 import com.uninote.backend.domain.Student;
 import com.uninote.backend.dto.AddToIncorrectRequest;
+import com.uninote.backend.dto.ConceptStatResponse;
 import com.uninote.backend.dto.IncorrectSummaryResponse;
 import com.uninote.backend.dto.QuestionResponse;
 import com.uninote.backend.dto.ReviewPriority;
@@ -472,6 +473,50 @@ class IncorrectNoteServiceTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getReviewPriority()).isEqualTo(ReviewPriority.HIGH);
+    }
+
+    private Question questionWithTags(Long id, String tagsJson) {
+        Question q = questionWithId(id);
+        q.setConceptTags(tagsJson);
+        return q;
+    }
+
+    @Test
+    void getConceptStatisticsGroupsByCourseAndCaseInsensitiveTagAndSkipsUntaggedQuestions() {
+        QuestionResponseMapper realMapper = new QuestionResponseMapper(new com.fasterxml.jackson.databind.ObjectMapper());
+        when(questionResponseMapper.conceptTagsOf(any())).thenAnswer(inv -> realMapper.conceptTagsOf(inv.getArgument(0)));
+        LocalDateTime now = LocalDateTime.of(2024, 1, 10, 12, 0);
+        when(userAnswerRepository.aggregateByQuestionForStudent(owner.getStudId())).thenReturn(List.of(
+                // 운영체제 LRU: 문제 1(LRU, FIFO) + 문제 2(lru) -> 5회 중 1회 정답(20%) -> HIGH
+                rawStat(1L, 1L, "운영체제", QuestionType.SHORT_ANSWER, 2, 1, 1, now.minusDays(3), now.minusDays(4)),
+                rawStat(2L, 1L, "운영체제", QuestionType.SHORT_ANSWER, 3, 0, 3, now.minusDays(2), now.minusDays(2)),
+                // 다른 강의의 같은 표기는 다른 개념이다. 4회 모두 정답 -> LOW
+                rawStat(3L, 2L, "캐시 설계", QuestionType.SHORT_ANSWER, 4, 4, 0, now, null),
+                // 태그 없는 옛 문제: 제외
+                rawStat(4L, 1L, "운영체제", QuestionType.SHORT_ANSWER, 3, 0, 3, now, now)
+        ));
+        when(questionRepository.findAllById(any())).thenReturn(List.of(
+                questionWithTags(1L, "[\"LRU\",\"FIFO\"]"), questionWithTags(2L, "[\"lru\"]"),
+                questionWithTags(3L, "[\"LRU\"]"), questionWithId(4L)));
+
+        List<ConceptStatResponse> result = incorrectNoteService.getConceptStatistics(owner);
+
+        assertThat(result).extracting(ConceptStatResponse::getConceptTag, ConceptStatResponse::getCourseId)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("LRU", 1L),
+                        org.assertj.core.groups.Tuple.tuple("FIFO", 1L),
+                        org.assertj.core.groups.Tuple.tuple("LRU", 2L));
+        ConceptStatResponse weakest = result.get(0);
+        assertThat(weakest.getCourseName()).isEqualTo("운영체제");
+        assertThat(weakest.getQuestionCount()).isEqualTo(2);
+        assertThat(weakest.getAttemptCount()).isEqualTo(5);
+        assertThat(weakest.getCorrectCount()).isEqualTo(1);
+        assertThat(weakest.getAccuracyRate()).isEqualTo(0.2);
+        assertThat(weakest.getReviewPriority()).isEqualTo(ReviewPriority.HIGH);
+        // FIFO는 문제 1만: 2회 중 1회 정답(50%), 마지막 풀이가 정답 -> MEDIUM
+        assertThat(result.get(1).getAccuracyRate()).isEqualTo(0.5);
+        assertThat(result.get(1).getReviewPriority()).isEqualTo(ReviewPriority.MEDIUM);
+        assertThat(result.get(2).getReviewPriority()).isEqualTo(ReviewPriority.LOW);
     }
 
     private Question questionWithId(Long id) {

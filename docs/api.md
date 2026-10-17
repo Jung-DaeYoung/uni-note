@@ -116,7 +116,10 @@
 | GET | `/quiz/incorrect/statistics/courses` | 예 | 없음 | `CourseIncorrectStatResponse[]` |
 | GET | `/quiz/incorrect/statistics/types` | 예 | 없음 | `QuestionTypeIncorrectStatResponse[]` |
 | GET | `/quiz/incorrect/statistics/blocks` | 예 | 없음 | `SourceBlockStatResponse[]` (출처 블록별 풀이 통계, 취약 블록 먼저) |
+| GET | `/quiz/incorrect/statistics/concepts` | 예 | 없음 | `ConceptStatResponse[]` (강의·개념 태그별 풀이 통계, 취약 개념 먼저) |
 | GET | `/quiz/incorrect/review-today` | 예 | query `limit`(기본 10), `courseId`(선택) | `TodayReviewQuestionResponse[]` (간격 반복: 한 번이라도 틀린 문제 중 `nextReviewAt`이 오늘 이전인 문제. 마지막 오답 이후 연속 정답 `streak`에 따라 1·3·7·14·30일 간격, 5회 연속 정답이면 제외) |
+
+`ConceptStatResponse`는 `conceptTag`, `courseId`, `courseName`, `questionCount`, `attemptCount`, `correctCount`, `incorrectCount`, `accuracyRate`, `reviewPriority`를 가진다. 같은 표기도 강의가 다르면 다른 개념으로 집계하고, 태그는 대소문자를 무시해 묶어 가장 먼저 만든 문제의 표기를 쓴다. 태그가 여럿인 문제는 각 태그에 풀이가 모두 더해지고, 태그가 없는 문제는 제외된다. 취약도(`reviewPriority`)와 정렬은 출처 블록 통계와 같다.
 
 ## 파일
 

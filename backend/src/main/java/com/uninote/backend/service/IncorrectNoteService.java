@@ -15,8 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -188,29 +191,79 @@ public class IncorrectNoteService {
             .values().stream()
             .map(group -> {
                 Question first = group.get(0).getQuestion();
-                long correct = group.stream().mapToLong(QuestionReviewStat::getCorrectCount).sum();
-                long incorrect = group.stream().mapToLong(QuestionReviewStat::getIncorrectCount).sum();
-                long attempts = correct + incorrect;
-                double accuracyRate = attempts == 0 ? 0.0 : (double) correct / attempts;
-                LocalDateTime lastAttemptedAt = group.stream().map(QuestionReviewStat::getLastAttemptedAt)
-                    .filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
-                LocalDateTime lastIncorrectAt = group.stream().map(QuestionReviewStat::getLastIncorrectAt)
-                    .filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
-                boolean recentlyIncorrect = lastIncorrectAt != null && lastIncorrectAt.equals(lastAttemptedAt);
+                GroupTotals totals = totalsOf(group);
                 return SourceBlockStatResponse.builder()
                     .noteId(first.getSourceNoteId())
                     .blockId(first.getSourceBlockId())
-                    .attemptCount(attempts)
-                    .correctCount(correct)
-                    .incorrectCount(incorrect)
-                    .accuracyRate(accuracyRate)
-                    .reviewPriority(classifyPriority(incorrect, accuracyRate, recentlyIncorrect))
+                    .attemptCount(totals.attempts())
+                    .correctCount(totals.correct())
+                    .incorrectCount(totals.incorrect())
+                    .accuracyRate(totals.accuracyRate())
+                    .reviewPriority(totals.priority())
                     .build();
             })
             // 취약 블록 먼저: 우선순위(HIGH → LOW, enum 선언 순서) → 정답률 오름차순
             .sorted(Comparator.comparing(SourceBlockStatResponse::getReviewPriority)
                 .thenComparingDouble(SourceBlockStatResponse::getAccuracyRate))
             .collect(Collectors.toList());
+    }
+
+    // (강의, 개념 태그)별 풀이 통계(P2-3). 같은 표기도 강의가 다르면 다른 개념으로 본다.
+    // 태그는 대소문자 무시로 묶고 가장 먼저 만든 문제의 표기를 쓴다. 태그가 여럿인 문제는 각 태그에 모두 더한다.
+    // 태그가 없는 문제(태그 도입 전 문제)는 제외한다. 취약도·정렬은 블록 통계와 같다.
+    @Transactional(readOnly = true)
+    public List<ConceptStatResponse> getConceptStatistics(Student student) {
+        Map<List<Object>, List<QuestionReviewStat>> groups = new LinkedHashMap<>();
+        Map<List<Object>, String> labels = new HashMap<>();
+        // 표기는 가장 먼저 만든 문제(문제 ID 순)의 것을 쓴다. 집계 목록은 복습 우선순위 순이라 그대로 쓰면 표기가 매번 바뀐다.
+        List<QuestionReviewStat> stats = buildQuestionReviewStats(student).stream()
+            .sorted(Comparator.comparing(s -> s.getQuestion().getQuestionId()))
+            .toList();
+        for (QuestionReviewStat stat : stats) {
+            for (String tag : questionResponseMapper.conceptTagsOf(stat.getQuestion())) {
+                List<Object> key = Arrays.asList(stat.getCourseId(), QuizQualityValidator.normalize(tag));
+                groups.computeIfAbsent(key, k -> new ArrayList<>()).add(stat);
+                labels.putIfAbsent(key, tag);
+            }
+        }
+
+        return groups.entrySet().stream()
+            .map(entry -> {
+                List<QuestionReviewStat> group = entry.getValue();
+                GroupTotals totals = totalsOf(group);
+                return ConceptStatResponse.builder()
+                    .conceptTag(labels.get(entry.getKey()))
+                    .courseId(group.get(0).getCourseId())
+                    .courseName(group.get(0).getCourseName())
+                    .questionCount(group.size())
+                    .attemptCount(totals.attempts())
+                    .correctCount(totals.correct())
+                    .incorrectCount(totals.incorrect())
+                    .accuracyRate(totals.accuracyRate())
+                    .reviewPriority(totals.priority())
+                    .build();
+            })
+            .sorted(Comparator.comparing(ConceptStatResponse::getReviewPriority)
+                .thenComparingDouble(ConceptStatResponse::getAccuracyRate))
+            .collect(Collectors.toList());
+    }
+
+    private record GroupTotals(long correct, long incorrect, long attempts, double accuracyRate,
+                               ReviewPriority priority) {}
+
+    // 여러 문제를 묶은 통계의 합계. 최근 오답 여부는 묶음 전체의 마지막 풀이가 오답인지로 본다.
+    private GroupTotals totalsOf(List<QuestionReviewStat> group) {
+        long correct = group.stream().mapToLong(QuestionReviewStat::getCorrectCount).sum();
+        long incorrect = group.stream().mapToLong(QuestionReviewStat::getIncorrectCount).sum();
+        long attempts = correct + incorrect;
+        double accuracyRate = attempts == 0 ? 0.0 : (double) correct / attempts;
+        LocalDateTime lastAttemptedAt = group.stream().map(QuestionReviewStat::getLastAttemptedAt)
+            .filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
+        LocalDateTime lastIncorrectAt = group.stream().map(QuestionReviewStat::getLastIncorrectAt)
+            .filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
+        boolean recentlyIncorrect = lastIncorrectAt != null && lastIncorrectAt.equals(lastAttemptedAt);
+        return new GroupTotals(correct, incorrect, attempts, accuracyRate,
+            classifyPriority(incorrect, accuracyRate, recentlyIncorrect));
     }
 
     @Transactional(readOnly = true)

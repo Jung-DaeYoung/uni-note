@@ -21,6 +21,7 @@ const IncorrectNotesPage = () => {
     incorrectSummary,
     courseStats,
     typeStats,
+    conceptStats,
     todayReview,
     reviewCourseFilter,
     isOverviewLoading,
@@ -88,6 +89,7 @@ const IncorrectNotesPage = () => {
             <WeakAreaBreakdown
               courseStats={courseStats}
               typeStats={typeStats}
+              conceptStats={conceptStats}
               isLoading={isOverviewLoading}
             />
           </div>

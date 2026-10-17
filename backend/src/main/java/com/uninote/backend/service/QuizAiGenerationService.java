@@ -48,7 +48,7 @@ public class QuizAiGenerationService {
     public static final String MODEL_NAME = "gemini-2.5-flash";
     // 생성 결과 로그(quiz.generation)에 남는 prompt·response schema 버전.
     // requestQuiz의 prompt 문자열이나 schema를 바꿀 때마다 올린다.
-    public static final String PROMPT_VERSION = "2026-10-17.2";
+    public static final String PROMPT_VERSION = "2026-10-17.3";
 
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
@@ -157,6 +157,8 @@ public class QuizAiGenerationService {
             "5. 주관식(SHORT_ANSWER) 정답(correctAnswer)은 하나의 단어나 짧은 구(20자 이내)로 하고, 설명이나 서술을 요구하지 마라. 난이도가 높아도 사고 과정은 문제에 담고 정답은 짧게 하라.\n" +
             // 개념별 취약 분석(P2-3)의 집계 단위가 된다. 같은 개념이 다른 표기로 흩어지지 않게 한다.
             "6. 각 문항이 평가하는 핵심 개념을 conceptTags에 1~3개 적어라. 노트에 쓰인 용어 그대로 20자 이내의 짧은 명사구로 쓰고, 같은 개념은 세트 안에서 항상 같은 표기를 써라.\n" +
+            // 개념을 몰라도 맞힐 수 있는 보기는 정답률과 개념별 취약도(P2-3)를 왜곡한다(P2-5).
+            "7. 객관식(MULTIPLE_CHOICE)의 오답 보기는 노트에 나온 다른 개념이나 학습자가 흔히 혼동하는 내용으로 만들어라. 모든 보기는 같은 문장 형태로 쓰고 길이 차이가 10자 이내가 되게 하며, 정답이 가장 긴 보기가 되지 않게 하라. 정답과 오답 어느 보기에도 '항상', '절대', '반드시'처럼 답을 짐작하게 하는 표현을 쓰지 말고, '모두 정답', '정답 없음' 같은 보기도 쓰지 마라.\n" +
             "텍스트 내용: %s",
             request.getDifficulty(), difficultyGuide(request.getDifficulty()), typeInstruction,
             learningObjectiveInstruction(request.getLearningObjectives()),

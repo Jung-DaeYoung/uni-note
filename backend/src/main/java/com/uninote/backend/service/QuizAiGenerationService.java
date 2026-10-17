@@ -11,16 +11,10 @@ import com.uninote.backend.dto.QuizResponse;
 import com.uninote.backend.exception.ExternalServiceException;
 import com.uninote.backend.exception.InvalidRequestException;
 import com.uninote.backend.security.FileAccessSigner;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
@@ -45,25 +39,14 @@ public class QuizAiGenerationService {
     // 첨부 이미지/PDF 총 용량 상한으로 둔다. AI 호출 페이로드가 지나치게 커지는 것을 막는다.
     private static final long MAX_TOTAL_MEDIA_BYTES = 20L * 1024 * 1024;
 
-    public static final String MODEL_NAME = "gemini-2.5-flash";
+    public static final String MODEL_NAME = GeminiClient.MODEL_NAME;
     // 생성 결과 로그(quiz.generation)에 남는 prompt·response schema 버전.
     // requestQuiz의 prompt 문자열이나 schema를 바꿀 때마다 올린다.
     public static final String PROMPT_VERSION = "2026-10-17.4";
 
     private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate;
+    private final GeminiClient geminiClient;
     private final FileAccessSigner fileAccessSigner;
-
-    private final String GEMINI_API_KEY = System.getenv("GEMINI_API_KEY");
-    private final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL_NAME
-            + ":generateContent?key=" + GEMINI_API_KEY;
-
-    @PostConstruct
-    public void validateConfig() {
-        if (GEMINI_API_KEY == null || GEMINI_API_KEY.isBlank()) {
-            throw new IllegalStateException("GEMINI_API_KEY 환경 변수가 설정되지 않았습니다.");
-        }
-    }
 
     // 노트 콘텐츠를 AI 입력(텍스트·미디어)으로 변환하고, 실제로 REF 태그를 붙인 출처 쌍을 모은다.
     // blockScopes는 noteId별 선택 블록이다. 항목이 없는 노트는 전체를, 있는 노트는 해당 blockId
@@ -231,24 +214,7 @@ public class QuizAiGenerationService {
             "required", List.of("title", "difficulty", "questions")
         );
 
-        Map<String, Object> requestBody = Map.of(
-            "contents", List.of(Map.of("parts", parts)),
-            "generationConfig", Map.of("responseMimeType", "application/json", "responseSchema", schema)
-        );
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-
-        String rawResponse;
-        try {
-            rawResponse = restTemplate.postForObject(API_URL, entity, String.class);
-        } catch (RestClientException e) {
-            log.error("AI 퀴즈 생성 API 호출 실패", e);
-            throw new ExternalServiceException("AI 퀴즈 생성 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");
-        }
-
-        String text = extractGeneratedText(rawResponse);
+        String text = geminiClient.generateJson(parts, schema, "AI 퀴즈 생성 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");
 
         QuizResponse quizResponse;
         try {
@@ -262,39 +228,8 @@ public class QuizAiGenerationService {
         return quizResponse;
     }
 
-    // AI가 예상한 구조로 응답했는지 확인한 뒤 실제 생성된 텍스트만 꺼낸다.
-    // candidates가 비어 있거나(안전 필터 차단 등) 구조가 다르면 명시적으로 실패시킨다.
-    private String extractGeneratedText(String rawResponse) {
-        JsonNode root;
-        try {
-            root = objectMapper.readTree(rawResponse);
-        } catch (Exception e) {
-            throw invalidResponse("AI 응답을 해석할 수 없습니다.");
-        }
-
-        JsonNode candidates = root.path("candidates");
-        if (!candidates.isArray() || candidates.isEmpty()) {
-            throw invalidResponse("AI가 문제를 생성하지 못했습니다.");
-        }
-
-        JsonNode parts = candidates.get(0).path("content").path("parts");
-        if (!parts.isArray() || parts.isEmpty()) {
-            throw invalidResponse("AI 응답 구조가 올바르지 않습니다.");
-        }
-
-        String text = parts.get(0).path("text").asText(null);
-        if (text == null || text.isBlank()) {
-            throw invalidResponse("AI 응답에 문제 내용이 없습니다.");
-        }
-        return text;
-    }
-
     private static List<String> enumNames(Enum<?>[] values) {
         return Arrays.stream(values).map(Enum::name).toList();
-    }
-
-    private ExternalServiceException invalidResponse(String message) {
-        return new ExternalServiceException(ExternalServiceException.AI_RESPONSE_INVALID, message);
     }
 
     // 노트 JSON이 깨져 있으면 해당 노트를 조용히 빼고 생성을 계속하지 않고 요청을 실패시킨다.

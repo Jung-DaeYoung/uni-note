@@ -43,8 +43,9 @@ class QuizAiGenerationServiceTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RestTemplate restTemplate = mock(RestTemplate.class);
     private final FileAccessSigner fileAccessSigner = new FileAccessSigner(SECRET);
+    private final GeminiClient geminiClient = new GeminiClient(objectMapper, restTemplate);
     private final QuizAiGenerationService service =
-            new QuizAiGenerationService(objectMapper, restTemplate, fileAccessSigner);
+            new QuizAiGenerationService(objectMapper, geminiClient, fileAccessSigner);
 
     private Student student;
     private Path createdFile;
@@ -82,16 +83,16 @@ class QuizAiGenerationServiceTest {
 
     @Test
     void validateConfigThrowsWhenApiKeyMissing() {
-        ReflectionTestUtils.setField(service, "GEMINI_API_KEY", "");
+        ReflectionTestUtils.setField(geminiClient, "GEMINI_API_KEY", "");
 
-        assertThatThrownBy(service::validateConfig).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(geminiClient::validateConfig).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void validateConfigPassesWhenApiKeyPresent() {
-        ReflectionTestUtils.setField(service, "GEMINI_API_KEY", "some-key");
+        ReflectionTestUtils.setField(geminiClient, "GEMINI_API_KEY", "some-key");
 
-        service.validateConfig();
+        geminiClient.validateConfig();
     }
 
     private static final String TEXT_NOTE_JSON =

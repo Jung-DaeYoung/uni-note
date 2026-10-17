@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import AppLayout from '../components/layout/AppLayout';
 import NotionEditor from '../components/editor/NotionEditor';
+import KeywordExplainPanel from '../components/editor/components/KeywordExplainPanel';
 import QuizConfigModal from '../components/editor/components/QuizConfigModal';
 import CBTPlayer from '../components/editor/components/CBTPlayer';
 import { NoteTreeProvider } from '../context/NoteTreeContext';
@@ -74,6 +75,9 @@ const CourseDetailPage = () => {
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
   const [quizResult, setQuizResult] = useState(null);
   const [saveState, setSaveState] = useState({ status: 'synced', retry: () => {} });
+  // 키워드 설명 패널 대상: { keyword, context, blockId, noteId, courseId }. 커뮤니티 패널과 동시에 열지 않는다.
+  const [keywordTarget, setKeywordTarget] = useState(null);
+  const isSidePanelOpen = isBoardOpen || keywordTarget !== null;
 
   // noteId가 바뀌면 이전 노트의 저장 상태가 새 노트 헤더에 잠깐이라도 남지 않도록
   // 렌더 중에 상태를 초기화한다(effect가 아닌 렌더 단계에서 처리하는 React 권장 패턴).
@@ -81,6 +85,7 @@ const CourseDetailPage = () => {
   if (noteId !== savedForNoteId) {
     setSavedForNoteId(noteId);
     setSaveState({ status: 'synced', retry: () => {} });
+    setKeywordTarget(null);
   }
 
   // --- Sidebar Content ---
@@ -203,7 +208,10 @@ const CourseDetailPage = () => {
           </>
         ) : (
         <button
-          onClick={() => setIsBoardOpen(!isBoardOpen)}
+          onClick={() => {
+            setIsBoardOpen(!isBoardOpen);
+            setKeywordTarget(null);
+          }}
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
             isBoardOpen
             ? 'bg-slate-900 dark:bg-slate-700 text-white'
@@ -234,11 +242,16 @@ const CourseDetailPage = () => {
       <AppLayout sidebarContent={sidebarContent} headerContent={headerContent}>
         <div className="flex h-[calc(100vh-48px)] bg-slate-50 dark:bg-slate-950 overflow-hidden relative font-sans">
           {/* Left: Lecture Note Area */}
-          <main className={`flex-1 overflow-y-auto transition-all duration-500 ease-in-out bg-white dark:bg-slate-950 ${isBoardOpen ? (isBoardMaximized ? 'opacity-0 invisible' : 'mr-[400px]') : 'mr-0'}`}>
-            <div className={`mx-auto transition-all duration-500 pt-8 ${isBoardOpen ? 'max-w-4xl' : 'max-w-7xl'}`}>
+          <main className={`flex-1 overflow-y-auto transition-all duration-500 ease-in-out bg-white dark:bg-slate-950 ${isBoardOpen && isBoardMaximized ? 'opacity-0 invisible' : isSidePanelOpen ? 'mr-[400px]' : 'mr-0'}`}>
+            <div className={`mx-auto transition-all duration-500 pt-8 ${isSidePanelOpen ? 'max-w-4xl' : 'max-w-7xl'}`}>
               <div className="px-8 pb-10">
                 {noteId && noteData && noteData.noteId === parseInt(noteId) ? (
-                  <NotionEditor key={noteId} noteId={noteId} courseId={courseId} initialData={noteData} onSaved={fetchTree} onSaveStateChange={setSaveState} />
+                  <NotionEditor key={noteId} noteId={noteId} courseId={courseId} initialData={noteData} onSaved={fetchTree} onSaveStateChange={setSaveState}
+                    onKeywordSelect={(selection) => {
+                      setKeywordTarget({ ...selection, noteId: Number(noteId), courseId: Number(courseId) });
+                      setIsBoardOpen(false);
+                    }}
+                  />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-40 opacity-20 text-slate-900 dark:text-slate-100">
                     <FileText size={64} className="mb-4" />
@@ -251,6 +264,14 @@ const CourseDetailPage = () => {
 
           {/* Right Sidebar (Community) */}
           <CourseBoardPanel {...board} />
+          {keywordTarget && (
+            <KeywordExplainPanel
+              key={keywordTarget.keyword}
+              target={keywordTarget}
+              onClose={() => setKeywordTarget(null)}
+              onSelectKeyword={(keyword) => setKeywordTarget(prev => ({ ...prev, keyword }))}
+            />
+          )}
         </div>
       </AppLayout>
     </NoteTreeProvider>

@@ -1,51 +1,87 @@
-# 오답 기반 생성 모드 (PLANS.md P2-4 2단계)
+# 키워드 설명 패널 MVP (PLANS.md 1단계)
 
 ## 문제와 목표
 
-P2-4 1단계로 "취약 개념 불러오기"는 있지만, 학생이 범위·개념·문항 수를 직접 조합해야 한다. 계획의 나머지 생성 모드(최근 틀린 문제 유사, 이번 주 복습, 시험 직전 모의고사)를 생성 창의 모드 버튼으로 추가한다. 모드는 기존 설정을 자동으로 채우고, 학생은 확인·수정 후 생성한다.
+노트에서 단어나 짧은 문장을 선택했을 때 바로 뜻을 확인할 방법이 없다. 이번 단계는 텍스트를 선택하면 "키워드 설명" 버튼을 보여 주고, 오른쪽 패널에 AI 설명(3줄 요약·쉬운 설명·전공 심화), 연관 키워드, 관련 자료 검색 링크를 보여 준다.
 
-사용자 승인 범위: 모드 UI + 틀린 문제 원문 참고(요청 필드·프롬프트 변경) + 다른 인지 유형으로 변형 + "이번 주" 기간 조회(API 변경) + 노트별 최소 출제 보장(프롬프트·검증).
-
-## 모드
-
-| 모드 | 원천 | 채우는 설정 |
-|---|---|---|
-| 직접 설정(기본) | - | 지금과 같다. 참고 문제·전체 노트 출제를 끈다 |
-| 최근 틀린 문제 유사 | `GET /api/quiz/incorrect/recent?courseId=&limit=10` (신규) | 범위 = 틀린 문제의 출처 블록, 집중 개념 = 개념 태그(최대 5), 유형·문항 수 = 틀린 문제의 유형별 수, `referenceQuestions` = 문제 원문 |
-| 이번 주 복습 | `GET /api/quiz/incorrect/review-today?courseId=&limit=10&withinDays=6` | 위와 같은 방식 |
-| 모의고사 | 강의 노트 트리 | 범위 = 노트 전체(트리 순서로 최대 20개), 객관식 10·OX 5·주관식 5, 보통, 집중 개념·참고 문제 비움, `coverAllNotes = true` |
-
-- 출처가 없는(미검증) 틀린 문제는 범위에는 못 쓰고 개념·참고 문제에만 쓴다. 출처가 하나도 없으면 범위는 그대로 둔다.
-- 데이터가 없으면 안내만 하고 설정은 바꾸지 않는다.
+노트 언급 검색, 문제 만들기 연계, 설명 삽입은 2·3단계에서 한다.
 
 ## 백엔드
 
-1. `IncorrectNoteService.getRecentIncorrect(student, limit, courseId)` + `GET /api/quiz/incorrect/recent` → `List<QuestionResponse>`
-   - 한 번 이상 틀린 문제를 마지막 오답 시각 내림차순으로. 기존 문제별 집계(`buildQuestionReviewStats`)를 재사용한다. limit 1~100.
-2. `review-today`에 선택 파라미터 `withinDays`(기본 0, 0~13) 추가. 복습 예정일이 `오늘 + withinDays` 이전이면 대상이다. 기본값이면 기존과 같다. 요약의 복습 대상 수는 그대로 오늘 기준이다.
-3. `QuizRequest` 선택 필드
-   - `referenceQuestions`: `@Size(max = 10) List<@NotBlank @Size(max = 500) String>`
-   - `coverAllNotes`: `Boolean`
-4. 프롬프트(`PROMPT_VERSION` 갱신, 두 필드가 없으면 기존 프롬프트와 같다)
-   - 참고 문제: 같은 개념을 평가하되 문장·보기·상황을 바꾸고, 원래 문제와 다른 인지 형태(비교, 사례 적용, 오개념 판별)로 물으라고 지시한다. 그대로 복사하면 이력 중복 검사(P1-4)가 재생성한다.
-   - 노트별 출제: `coverAllNotes`이고 출처가 있는 노트가 2개 이상이며 총 문항 수 이상일 때만, 각 noteId에서 1문항 이상 내라고 지시한다.
-5. 노트별 출제 검증: 검증을 통과한 결과에서 출처로 쓰이지 않은 노트 수(`uncoveredNotes`)를 센다. 이력 중복과 같은 "약한 조건"으로 다룬다. 0이 아니면 1회 재생성하고, 재생성 결과가 나쁘면 앞선 결과를 저장한다(실패시키지 않음). 로그에 `uncoveredNotes`를 추가한다.
+1. **`GeminiClient` 분리 (동작 불변 리팩터)**
+   - `QuizAiGenerationService`의 API 키, URL, `restTemplate` 호출, `extractGeneratedText`를 `service/GeminiClient`로 옮긴다.
+   - `String generateJson(List<parts>, Map schema)`는 생성된 JSON 텍스트를 반환한다.
+   - 퀴즈의 프롬프트, 스키마, 오류 코드, 사용자 메시지는 그대로 둔다. 연결 실패 메시지는 호출하는 쪽이 넘긴다.
+   - 기존 `QuizAiGenerationServiceTest`가 그대로 통과해야 한다.
+2. **`POST /api/keywords/explain`**
+   - 요청 `KeywordExplainRequest`:
+     - `keyword`: 필수, 1~80자
+     - `context`: 선택, 2,000자 이하
+     - `courseId`, `noteId`, `blockId`: 선택
+   - 응답 `KeywordExplainResponse`:
+     - `keyword`, `summary`, `easyExplanation`, `advancedExplanation`
+     - `relatedKeywords`: 문자열 배열
+     - `resources`: `[{ title, url, source, reason }]`
+3. **`KeywordService`**
+   - `noteId`가 있으면 `NoteService.getNote(noteId, studentNum)`로 본인 노트인지 확인한다(없으면 404, 남의 노트면 403).
+   - 학생별 호출 제한: 10분에 20회, 초과하면 429. `QuizService.acquireGenerationSlot`과 같은 방식이다.
+   - 프롬프트 원칙:
+     - 키워드와 "학습자가 제공한 문맥"을 기준으로 설명한다.
+     - 문맥에 없는 내용은 일반적인 전공 지식 범위에서만 설명하고, 단정하지 않는다.
+     - 탭별 목적을 나눈다.
+     - 연관 키워드는 최대 5개다.
+     - 자료는 최대 3개이며 `{searchQuery, site, reason}`로 받는다. `site`는 허용 목록 키 중에서 고른다.
+   - 별도 `PROMPT_VERSION`을 둔다.
+   - 응답 정리:
+     - 설명 3개가 비어 있으면 503 `AI_RESPONSE_INVALID`로 실패한다.
+     - 설명은 각각 3,000자에서 자른다.
+     - 연관 키워드는 공백·중복을 정리해 최대 5개, 각 30자 이하만 남긴다.
+     - 자료는 허용 목록에 있는 `site`와 빈칸이 아닌 검색어만 최대 3개 남기고, 서버가 URL을 조립한다.
+   - 로그 한 줄 `keyword.explain`(status, promptVersion, elapsedMs, studId, keywordChars, contextChars)을 남긴다. 키워드·문맥 본문은 남기지 않는다.
+4. **자료 허용 목록**(서버 상수)
+   - `wikipedia_ko`: `https://ko.wikipedia.org/w/index.php?search=`
+   - `wikipedia_en`: `https://en.wikipedia.org/w/index.php?search=`
+   - `mdn`: `https://developer.mozilla.org/ko/search?q=`
+   - `scholar`: `https://scholar.google.com/scholar?q=`
 
 ## 프론트엔드
 
-- `QuizConfigModal`에 모드 버튼 4개(`aria-pressed`)와 모드별 채우기를 추가한다. 블록 범위 채우기는 기존 `selectWeakBlocks` 방식(선택 → 패널 열기 → `loadBlocks`)을 그대로 쓴다.
-- 참고 문제가 있으면 "틀린 문제 N개를 바꿔 출제합니다"를 표시한다.
-- payload: 참고 문제·`coverAllNotes`가 있을 때만 필드를 넣는다(직접 설정 payload는 기존과 같다).
+- **`KeywordSelectionMenu`** (`components/editor/components/`, `NotionEditor`에 `onKeywordSelect`를 넘길 때만 표시)
+  - 선택 텍스트를 trim한다. 1~80자이고 텍스트가 있을 때만 버튼을 활성화하고, 80자를 넘으면 안내 문구를 보여 준다.
+  - 위치는 `editor.view.coordsAtPos`로 계산한다. 버튼은 `onMouseDown`에서 `preventDefault`를 호출해 선택을 유지한다.
+  - 넘기는 값: `{ keyword, context, blockId }`. 문맥은 선택이 속한 최상위 블록의 텍스트(최대 2,000자)이고, `blockId`는 그 블록의 `attrs.id`(없으면 null)다.
+- **`KeywordExplainPanel`** (`CourseBoardPanel`과 같은 오른쪽 고정 400px 패널)
+  - 헤더(키워드, 닫기), 탭 3개(`role="tablist"`), 연관 키워드 칩, 자료 링크(`target="_blank" rel="noopener noreferrer"`)로 구성한다.
+  - 로딩, 오류(서버 `message`와 다시 시도), 빈 상태를 보여 준다.
+  - 연관 키워드 칩을 누르면 같은 문맥으로 그 키워드를 설명한다.
+- **`useKeywordExplanation`** (`hooks/`)
+  - `client.post('/keywords/explain')`를 호출한다.
+  - 세션 캐시를 둔다. 키는 `noteId|blockId|정규화 키워드|문맥`이다.
+  - 진행 중인 같은 요청은 다시 보내지 않는다.
+- **`CourseDetailPage`**
+  - `keywordTarget` 상태를 둔다. 키워드를 선택하면 커뮤니티 패널을 닫는다.
+  - 커뮤니티 버튼을 누르면 키워드 패널을 닫는다.
+  - 노트 영역 여백은 패널이 하나라도 열려 있으면 400px로 둔다.
+  - 노트가 바뀌면 패널을 닫는다.
 
-## 제외
+## 제외 (다음 단계)
 
-- DB 변경 없음
-- 모의고사 시간 제한, 모드 저장
+- 노트 언급 검색, 문제 만들기 버튼, 설명 삽입, 모바일 bottom sheet, 공유 노트 뷰어
 
 ## 검증
 
-- 백엔드: 최근 오답 정렬·강의 필터·limit, `withinDays` 경계, 프롬프트 지시문(없으면 빈 문자열), 노트별 출제 미충족 시 1회 재생성·앞선 결과 유지, WebMvc 검증(참고 문제 11개 → 400)
-- 프론트: 모드별 payload(직접 설정 payload 불변, 최근 오답 → blockSelections/focusConcepts/referenceQuestions, 모의고사 → coverAllNotes)
-- `backend\gradlew.bat test`, `npm run lint`, `npm run build`, `npm run test`
-- 로컬 서버에서 실제 Gemini로 세 모드 생성 확인 후 테스트 데이터 정리
-- `docs/api.md` 갱신
+- **백엔드**
+  - WebMvc: 키워드 81자·빈칸, 문맥 2,001자 → 400 `VALIDATION_FAILED`
+  - `KeywordService` 단위 테스트:
+    - 남의 노트 403
+    - 호출 제한 429
+    - 설명 3개가 비면 503
+    - 연관 키워드·자료 정리(허용 목록 밖 site 제거, URL 인코딩, 개수 제한)
+  - `GeminiClient` 분리 후 기존 퀴즈 테스트 전부 통과, `backend\gradlew.bat test`
+- **프론트**
+  - vitest: 선택 메뉴 활성·비활성(80자), 패널 탭 전환·로딩·오류·링크 속성, 캐시로 같은 요청 1회
+  - `npm run lint`, `npm run build`, `npm run test`
+- **실제 확인**
+  - 로컬 서버에서 실제 Gemini로 설명 요청
+  - 브라우저에서 선택 → 메뉴 → 패널 → 탭 → 연관 키워드 → 커뮤니티 패널 전환 확인
+- `docs/api.md`에 키워드 API 추가

@@ -35,6 +35,7 @@ import PdfBlock from './extensions/PdfBlock.jsx';
 import SourceHighlight from './extensions/SourceHighlight.js';
 import SuggestionList from './components/SuggestionList.jsx';
 import BlockHandle from './components/BlockHandle.jsx';
+import KeywordSelectionMenu from './components/KeywordSelectionMenu.jsx';
 import CodeBlockComponent from './components/CodeBlockComponent';
 import useNoteUploads, { isAllowedFileUrl, resolveFileUrl } from './hooks/useNoteUploads';
 import useNoteAutosave from './hooks/useNoteAutosave';
@@ -175,7 +176,8 @@ const pickFile = (accept, onFile) => {
   input.click();
 };
 
-const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChange }) => {
+// onKeywordSelect를 넘기면 텍스트 선택 시 키워드 설명 메뉴를 보여 준다.
+const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChange, onKeywordSelect }) => {
   const navigate = useNavigate();
 
   const { handleImageUpload, handlePdfUpload, uploadStatus, uploadError, clearUploadError } = useNoteUploads();
@@ -419,6 +421,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
         <NoteEditorStyles />
         <div className="relative z-20">
           {editor && <BlockHandle editor={editor} />}
+          {editor && onKeywordSelect && <KeywordSelectionMenu editor={editor} onExplain={onKeywordSelect} />}
           <EditorContent editor={editor} />
         </div>
         <div className="absolute top-0 left-12 w-[1px] h-full bg-red-50/50 dark:bg-red-500/10" />

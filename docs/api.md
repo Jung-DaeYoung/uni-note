@@ -122,6 +122,14 @@
 
 `ConceptStatResponse`는 `conceptTag`, `courseId`, `courseName`, `questionCount`, `attemptCount`, `correctCount`, `incorrectCount`, `accuracyRate`, `reviewPriority`를 가진다. 같은 표기도 강의가 다르면 다른 개념으로 집계하고, 태그는 대소문자를 무시해 묶어 가장 먼저 만든 문제의 표기를 쓴다. 태그가 여럿인 문제는 각 태그에 풀이가 모두 더해지고, 태그가 없는 문제는 제외된다. 취약도(`reviewPriority`)와 정렬은 출처 블록 통계와 같다.
 
+## 키워드 설명
+
+| Method | Endpoint | 인증 | 요청 | 응답 |
+|---|---|---:|---|---|
+| POST | `/keywords/explain` | 예 | `{ keyword, context?, courseId?, noteId?, blockId? }` — `keyword` 1~80자, `context`(선택한 블록의 텍스트) 2,000자 이하. `noteId`가 있으면 본인 노트인지 확인(404/403). 학생별 10분에 20회(초과 시 429) | `KeywordExplainResponse` |
+
+`KeywordExplainResponse`는 `keyword`, `summary`(3줄 요약), `easyExplanation`, `advancedExplanation`, `relatedKeywords`(최대 5개), `resources`(최대 3개, `{ title, url, source, reason }`)를 가진다. `url`은 AI가 만든 주소가 아니라 서버가 허용 사이트(한국어·영어 위키백과, MDN, Google Scholar)의 검색 URL에 AI가 고른 검색어를 넣어 만든 링크다. AI 호출 실패·응답 형식 오류·빈 설명은 503(`EXTERNAL_SERVICE_ERROR`/`AI_RESPONSE_INVALID`)이다.
+
 ## 파일
 
 | Method | Endpoint | 인증 | 요청 | 응답 |

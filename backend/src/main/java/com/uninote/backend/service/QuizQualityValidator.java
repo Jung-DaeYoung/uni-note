@@ -183,6 +183,11 @@ public class QuizQualityValidator {
     // 개념 태그는 재생성 사유로 쓰지 않고 정리만 한다: 공백 정리, 빈 값·너무 긴 값 제거,
     // 대소문자 무시 중복 제거(처음 표기 유지), 최대 MAX_CONCEPT_TAGS개.
     static List<String> normalizeConceptTags(List<String> tags) {
+        return normalizeTags(tags, MAX_CONCEPT_TAGS);
+    }
+
+    // 키워드 설명의 연관 키워드(KeywordService)도 같은 규칙에 개수만 달리 쓴다.
+    static List<String> normalizeTags(List<String> tags, int limit) {
         if (tags == null) return new ArrayList<>();
         Set<String> seen = new HashSet<>();
         return tags.stream()
@@ -190,7 +195,7 @@ public class QuizQualityValidator {
                 .map(tag -> tag.trim().replaceAll("\\s+", " "))
                 .filter(tag -> !tag.isEmpty() && tag.length() <= MAX_CONCEPT_TAG_LENGTH)
                 .filter(tag -> seen.add(normalize(tag)))
-                .limit(MAX_CONCEPT_TAGS)
+                .limit(limit)
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 

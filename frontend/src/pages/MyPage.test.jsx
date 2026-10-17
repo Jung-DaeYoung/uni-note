@@ -15,7 +15,7 @@ const baseData = {
   heatmap: [],
   courseProgress: [],
   recentActivities: [],
-  myContents: { recentNotes: [], sharedNotes: [], sharedQuizzes: [] },
+  myContents: { recentNotes: [], recentQuizzes: [], sharedNotes: [], sharedQuizzes: [] },
 };
 
 const renderPage = (data) => {
@@ -28,6 +28,7 @@ describe('MyPage 2차 영역', () => {
     renderPage({});
     expect(await screen.findByText('수강 중인 강의가 없습니다.')).toBeInTheDocument();
     expect(screen.getByText('최근 활동이 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('만든 퀴즈가 없습니다.')).toBeInTheDocument();
     expect(screen.getByText('공유한 시험이 없습니다.')).toBeInTheDocument();
   });
 
@@ -41,6 +42,7 @@ describe('MyPage 2차 영역', () => {
       ],
       myContents: {
         recentNotes: [],
+        recentQuizzes: [{ quizSetId: 7, title: '내 퀴즈', createdAt: '2026-10-10T09:00:00' }],
         sharedNotes: [{ postId: 3, title: '공유 노트', createdAt: '2026-10-11T09:00:00' }],
         sharedQuizzes: [],
       },
@@ -51,6 +53,7 @@ describe('MyPage 2차 영역', () => {
     expect(screen.getByText('스케줄링').closest('a')).toHaveAttribute('href', '/course/1/note/10');
     expect(screen.getByText('질문 글').closest('a')).toHaveAttribute('href', '/course/1?postId=24');
     expect(screen.getByText('중간고사 대비').closest('a')).toHaveAttribute('href', '/shared-quizzes');
+    expect(screen.getByText('내 퀴즈').closest('a')).toHaveAttribute('href', '/quizzes');
     expect(screen.getByText('공유 노트').closest('a')).toHaveAttribute('href', '/shared-notes/3');
   });
 });

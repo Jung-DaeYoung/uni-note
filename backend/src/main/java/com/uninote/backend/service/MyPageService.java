@@ -34,6 +34,8 @@ public class MyPageService {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final int RECENT_ACTIVITY_LIMIT = 20;
     private static final int TITLE_PREVIEW_LENGTH = 40;
+    // 최근 퀴즈는 최근 노트(findTop6ByStudentOrderByUpdatedAtDesc)와 같은 개수만 보여준다.
+    private static final int RECENT_QUIZ_LIMIT = 6;
 
     private final StudentRepository studentRepository;
     private final MyPageActivityRepository activityRepository;
@@ -173,6 +175,9 @@ public class MyPageService {
                 noteRepository.findTop6ByStudentOrderByUpdatedAtDesc(student).stream()
                         .map(n -> new MyPageResponse.RecentNote(n.getNoteId(),
                                 n.getCourse() != null ? n.getCourse().getCourseId() : null, n.getTitle(), n.getUpdatedAt()))
+                        .toList(),
+                activityRepository.findRecentQuizSets(student, PageRequest.of(0, RECENT_QUIZ_LIMIT)).stream()
+                        .map(r -> new MyPageResponse.RecentQuiz((Long) r[3], (String) r[0], (LocalDateTime) r[1]))
                         .toList(),
                 activityRepository.findRecentSharedNotes(student, top).stream()
                         .map(r -> new MyPageResponse.SharedNote((Long) r[3], (String) r[0], (LocalDateTime) r[1]))

@@ -20,14 +20,14 @@
 |---|---|---:|---|---|
 | GET | `/mypage` | 예 | 없음 | `MyPageResponse`. 인증된 학번 본인의 데이터만 |
 
-`MyPageResponse`는 `profile { name, studentNum }`, `semester { label, startDate, endDate }`, `summary { noteCount, quizSetCount, attemptCount, incorrectNoteCount, postCount, commentCount, sharedCount }`, `heatmap [{ date, count }]`, `courseProgress [{ courseId, courseName, noteCount, quizSetCount, attemptCount, lastActivityAt }]`, `recentActivities [{ type, title, occurredAt, courseId, targetId }]`, `myContents { recentNotes [{ noteId, courseId, title, updatedAt }], sharedNotes [{ postId, title, createdAt }], sharedQuizzes [{ sharedQuizId, title, createdAt }] }`를 가진다.
+`MyPageResponse`는 `profile { name, studentNum }`, `semester { label, startDate, endDate }`, `summary { noteCount, quizSetCount, attemptCount, incorrectNoteCount, postCount, commentCount, sharedCount }`, `heatmap [{ date, count }]`, `courseProgress [{ courseId, courseName, noteCount, quizSetCount, attemptCount, lastActivityAt }]`, `recentActivities [{ type, title, occurredAt, courseId, targetId }]`, `myContents { recentNotes [{ noteId, courseId, title, updatedAt }], recentQuizzes [{ quizSetId, title, createdAt }], sharedNotes [{ postId, title, createdAt }], sharedQuizzes [{ sharedQuizId, title, createdAt }] }`를 가진다.
 
 - 학기는 서울 날짜 기준 달력 규칙으로 정한다. 1학기는 3/1~6/30, 2학기는 9/1~12/31이다. 7~8월에는 그해 1학기, 1~2월에는 전년도 2학기를 반환한다.
 - `summary`는 전체 누적이다. `commentCount`는 강의 게시판·공유 노트·공유 시험 댓글의 합이고, `sharedCount`는 공유 노트와 공유 시험의 합이다.
 - `courseProgress`는 대시보드와 같은 강의 목록(수강 강의 + 직접 만든 강의)이며 활동이 없는 강의도 0으로 담는다. `lastActivityAt`은 노트 수정·퀴즈 생성·풀이 중 가장 최근 시각이고 없으면 `null`이다.
 - `recentActivities`는 학기와 관계없이 최신순 20건이다. `type`은 `NOTE_CREATED`, `NOTE_UPDATED`(마지막 수정일이 생성일과 다를 때만), `POST_CREATED`, `COMMENT_CREATED`, `SHARED_NOTE_COMMENTED`, `SHARED_QUIZ_COMMENTED`, `QUIZ_GENERATED`, `QUIZ_ATTEMPTED`, `INCORRECT_NOTE_ADDED`, `NOTE_SHARED`, `QUIZ_SHARED`다. `title`은 40자를 넘으면 잘라서 `…`을 붙인다(오답노트 담기는 문제 텍스트).
 - `targetId`는 type별 원천 ID다. 노트는 `noteId`, 게시글·댓글은 `postId`, 공유 노트·공유 노트 댓글은 공유 글 ID, 시험 공유·공유 시험 댓글은 `sharedQuizId`, 퀴즈 생성은 `quizSetId`, 풀이는 `attemptId`, 오답노트 담기는 오답 항목 ID다.
-- `myContents.recentNotes`는 최근 수정한 노트 6개, `sharedNotes`·`sharedQuizzes`는 최신순 20개다.
+- `myContents.recentNotes`는 최근 수정한 노트 6개, `recentQuizzes`는 최근 생성한 퀴즈 6개, `sharedNotes`·`sharedQuizzes`는 최신순 20개다.
 - `heatmap`은 학기 범위에서 활동이 있는 날만 날짜 오름차순으로 담는다. 활동은 노트 생성·수정, 게시글, 댓글, AI 퀴즈 생성, 퀴즈 풀이(복습 재풀이 포함), 오답노트 담기, 노트·시험 공유다.
 - 노트는 생성일에 1회로 센다. 마지막 수정일이 생성일과 다르면 그날 1회를 더 센다. 삭제되거나 공유를 내린 활동은 집계하지 않는다.
 

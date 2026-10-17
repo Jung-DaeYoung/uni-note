@@ -9,6 +9,7 @@ vi.mock('./pages/DashboardPage', () => ({ default: () => <div>DASHBOARD_PAGE</di
 vi.mock('./pages/CourseDetailPage', () => ({ default: () => <div>COURSE_DETAIL_PAGE</div> }));
 vi.mock('./pages/QuizLibraryPage', () => ({ default: () => <div>QUIZ_LIBRARY_PAGE</div> }));
 vi.mock('./pages/IncorrectNotesPage', () => ({ default: () => <div>INCORRECT_NOTES_PAGE</div> }));
+vi.mock('./pages/MyPage', () => ({ default: () => <div>MY_PAGE</div> }));
 
 // AuthContext.test.jsx와 동일한 패턴을 중복 사용한다 (공유 test-util 모듈은 아직 없음).
 const makeToken = (expSecondsFromNow) => {
@@ -94,6 +95,20 @@ describe('App routing', () => {
     renderAppAt('/incorrect-notes/groups');
 
     expect(await screen.findByText('INCORRECT_NOTES_PAGE')).toBeInTheDocument();
+  });
+
+  it('비로그인 사용자의 /mypage 접근은 /login으로 이동한다', async () => {
+    renderAppAt('/mypage');
+
+    expect(await screen.findByText('LOGIN_PAGE')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/login');
+  });
+
+  it('인증 상태에서 /mypage에 직접 접근할 수 있다', async () => {
+    localStorage.setItem('token', makeToken(3600));
+    renderAppAt('/mypage');
+
+    expect(await screen.findByText('MY_PAGE')).toBeInTheDocument();
   });
 
   it('인증 상태에서 /login 접근은 /dashboard로 이동한다', async () => {

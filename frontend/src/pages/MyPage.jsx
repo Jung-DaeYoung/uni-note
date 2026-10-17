@@ -178,11 +178,16 @@ const MyPage = () => {
                 <FolderOpen size={16} className="text-blue-600 dark:text-blue-400" />
                 내 콘텐츠
               </h3>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <ContentList
                   title="최근 수정한 노트"
                   empty="작성한 노트가 없습니다."
                   items={data.myContents.recentNotes.map(n => ({ key: n.noteId, to: `/course/${n.courseId}/note/${n.noteId}`, title: n.title || '제목 없음', at: n.updatedAt }))}
+                />
+                <ContentList
+                  title="최근 만든 퀴즈"
+                  empty="만든 퀴즈가 없습니다."
+                  items={data.myContents.recentQuizzes.map(q => ({ key: q.quizSetId, to: '/quizzes', title: q.title, at: q.createdAt }))}
                 />
                 <ContentList
                   title="공유한 노트"

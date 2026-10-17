@@ -26,10 +26,12 @@ public record MyPageResponse(Profile profile, Semester semester, Summary summary
     // targetId는 type별 원천 ID다(노트 noteId, 게시글·댓글 postId, 공유 노트·댓글 sharedNotePostId 등).
     public record Activity(String type, String title, LocalDateTime occurredAt, Long courseId, Long targetId) {}
 
-    public record MyContents(List<RecentNote> recentNotes, List<SharedNote> sharedNotes,
-                             List<SharedQuizItem> sharedQuizzes) {}
+    public record MyContents(List<RecentNote> recentNotes, List<RecentQuiz> recentQuizzes,
+                             List<SharedNote> sharedNotes, List<SharedQuizItem> sharedQuizzes) {}
 
     public record RecentNote(Long noteId, Long courseId, String title, LocalDateTime updatedAt) {}
+
+    public record RecentQuiz(Long quizSetId, String title, LocalDateTime createdAt) {}
 
     public record SharedNote(Long postId, String title, LocalDateTime createdAt) {}
 

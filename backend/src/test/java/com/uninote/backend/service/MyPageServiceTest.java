@@ -10,6 +10,7 @@ import com.uninote.backend.repository.MyPageActivityRepository;
 import com.uninote.backend.repository.NoteRepository;
 import com.uninote.backend.repository.StudentRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -78,7 +79,7 @@ class MyPageServiceTest {
         assertThat(res.heatmap()).isEmpty();
         assertThat(res.courseProgress()).isEmpty();
         assertThat(res.recentActivities()).isEmpty();
-        assertThat(res.myContents()).isEqualTo(new MyPageResponse.MyContents(List.of(), List.of(), List.of()));
+        assertThat(res.myContents()).isEqualTo(new MyPageResponse.MyContents(List.of(), List.of(), List.of(), List.of()));
     }
 
     @Test
@@ -173,13 +174,15 @@ class MyPageServiceTest {
     }
 
     @Test
-    void myContentsMapsSharedRows() {
+    void myContentsMapsQuizAndSharedRows() {
         LocalDateTime at = LocalDateTime.of(2026, 10, 2, 9, 0);
+        when(activityRepository.findRecentQuizSets(student, PageRequest.of(0, 6))).thenReturn(rows(new Object[]{"내 퀴즈", at, 1L, 7L}));
         when(activityRepository.findRecentSharedNotes(eq(student), any())).thenReturn(rows(new Object[]{"공유 노트", at, 1L, 3L}));
         when(activityRepository.findRecentSharedQuizzes(eq(student), any())).thenReturn(rows(new Object[]{"공유 시험", at, 1L, 5L}));
 
         MyPageResponse.MyContents contents = service.getMyPage("2021001").myContents();
 
+        assertThat(contents.recentQuizzes()).containsExactly(new MyPageResponse.RecentQuiz(7L, "내 퀴즈", at));
         assertThat(contents.sharedNotes()).containsExactly(new MyPageResponse.SharedNote(3L, "공유 노트", at));
         assertThat(contents.sharedQuizzes()).containsExactly(new MyPageResponse.SharedQuizItem(5L, "공유 시험", at));
     }

@@ -29,9 +29,16 @@ const safeParseJson = (value) => {
 const isValidTiptapDoc = (value) =>
   !!value && typeof value === 'object' && value.type === 'doc' && Array.isArray(value.content);
 
-// 로컬 스토리지 항목: { content: <Tiptap 문서>, timestamp: <number> } 형태만 유효로 인정한다.
+// 로컬 스토리지 항목: { content: <Tiptap 문서>, timestamp: <number>, baseUpdatedAt: <서버 updatedAt> } 형태만 유효로 인정한다.
 const isValidLocalEntry = (value) =>
   !!value && typeof value === 'object' && isValidTiptapDoc(value.content) && typeof value.timestamp === 'number';
+
+const parseServerDoc = (initialData) => {
+  const parsed = safeParseJson(initialData?.content);
+  return isValidTiptapDoc(parsed) ? parsed : null;
+};
+
+const localKey = (id) => `note-temp-${id}`;
 
 // 로컬 스토리지 복구 + 서버 저장(2초 debounce)을 함께 관리한다.
 const useNoteAutosave = ({ noteId, initialData, onSaved }) => {
@@ -46,15 +53,20 @@ const useNoteAutosave = ({ noteId, initialData, onSaved }) => {
   // 최초 동기화 이후에는 initialData/editor 참조가 바뀌어 effect가 다시 실행되더라도
   // 사용자가 편집 중인(아직 저장 전인) 내용을 오래된 서버 콘텐츠로 덮어써서는 안 된다.
   const hasSyncedRef = useRef(false);
+  // 로컬 백업이 어느 서버 버전 위의 편집인지(서버 updatedAt). 저장에 성공하면 응답 값으로 바뀐다.
+  // 브라우저 시계와 서버 LocalDateTime(시간대 없음)을 비교하지 않기 위해 버전 문자열로 판단한다.
+  const baseUpdatedAtRef = useRef(initialData?.updatedAt ?? null);
 
   const getInitialContent = useCallback(() => {
-    const parsedServerData = safeParseJson(initialData?.content);
-    const serverData = isValidTiptapDoc(parsedServerData) ? parsedServerData : null;
+    const serverData = parseServerDoc(initialData);
 
-    const parsedLocalEntry = safeParseJson(localStorage.getItem(`note-temp-${noteId}`));
+    const parsedLocalEntry = safeParseJson(localStorage.getItem(localKey(noteId)));
     const localData = isValidLocalEntry(parsedLocalEntry) ? parsedLocalEntry : null;
 
-    if (localData && (!serverData || localData.timestamp > (initialData?.updatedAt || 0))) {
+    // 서버에 아직 저장되지 않은 편집이고, 그 사이 다른 곳에서 서버 내용이 바뀌지 않았을 때만 복구한다.
+    // baseUpdatedAt이 없는 옛 형식 백업은 기준을 알 수 없어 쓰지 않는다.
+    if (localData && (!serverData
+        || (localData.baseUpdatedAt != null && localData.baseUpdatedAt === initialData?.updatedAt))) {
       return localData.content;
     }
 
@@ -87,13 +99,19 @@ const useNoteAutosave = ({ noteId, initialData, onSaved }) => {
 
     setSaveStatus('saving');
     try {
-      await client.put(`/notes/${id}`, {
+      const response = await client.put(`/notes/${id}`, {
         title: title,
         content: JSON.stringify(jsonContent),
         previewText: previewText,
         searchContent: plainText,
       }, { signal: controller.signal });
       lastSavedJson.current = jsonContent;
+      baseUpdatedAtRef.current = response.data?.updatedAt ?? baseUpdatedAtRef.current;
+      // 방금 저장한 내용과 같은 로컬 백업은 더 필요 없다. 저장 중에 더 입력한 백업은 남긴다.
+      const entry = safeParseJson(localStorage.getItem(localKey(id)));
+      if (entry && JSON.stringify(entry.content) === JSON.stringify(jsonContent)) {
+        localStorage.removeItem(localKey(id));
+      }
       setSaveStatus('synced');
       if (onSaved) onSaved();
     } catch (error) {
@@ -116,12 +134,16 @@ const useNoteAutosave = ({ noteId, initialData, onSaved }) => {
   );
 
   const saveDraftToLocalStorage = useCallback((id, json) => {
-    localStorage.setItem(`note-temp-${id}`, JSON.stringify({ content: json, timestamp: Date.now() }));
+    localStorage.setItem(localKey(id), JSON.stringify({
+      content: json, timestamp: Date.now(), baseUpdatedAt: baseUpdatedAtRef.current,
+    }));
   }, []);
 
   // 서버 저장(2000ms)과는 별개로, 키 입력마다 즉시 실행되던 localStorage 기록만 짧게 debounce해
   // 대형 문서에서 매 입력마다 JSON.stringify + setItem이 동기 실행되는 지연을 줄인다.
   const debouncedSaveToLocalStorage = useMemo(
+    // saveDraftToLocalStorage의 ref 읽기는 debounce 타이머 만료 뒤에 일어난다(위 서버 저장과 같은 오탐).
+    // eslint-disable-next-line react-hooks/refs
     () => debounce(saveDraftToLocalStorage, 300),
     [saveDraftToLocalStorage]
   );
@@ -157,7 +179,8 @@ const useNoteAutosave = ({ noteId, initialData, onSaved }) => {
         editor.commands.setContent(initialContent, false); // emitUpdate: false로 불필요한 저장 방지
       }
 
-      lastSavedJson.current = initialContent;
+      // 기준점은 서버 내용이다. 로컬 백업을 복구했다면 서버와 달라 아래에서 저장이 예약된다.
+      lastSavedJson.current = parseServerDoc(initialData) ?? initialContent;
       isInitialMount.current = false;
 
       // 예전 BlockId 버그로 id가 비었거나 겹쳐 저장된 블록을 열자마자 고친다(BlockId.js).
@@ -169,7 +192,7 @@ const useNoteAutosave = ({ noteId, initialData, onSaved }) => {
     if (JSON.stringify(editor.getJSON()) !== JSON.stringify(lastSavedJson.current)) {
       debouncedSaveToServer(editor, noteId);
     }
-  }, [getInitialContent, debouncedSaveToServer, noteId]);
+  }, [getInitialContent, debouncedSaveToServer, noteId, initialData]);
 
   const cancelPendingSave = useCallback(() => {
     debouncedSaveToServer.cancel();

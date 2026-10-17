@@ -93,7 +93,8 @@ class NoteServiceTest {
     @Test
     void ownerCanSaveOwnNote() {
         when(noteRepository.findById(100L)).thenReturn(Optional.of(note));
-        when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        // 응답 updatedAt이 실제 저장 시각이 되도록 flush까지 한다.
+        when(noteRepository.saveAndFlush(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         NoteRequest request = new NoteRequest("새 제목", "새 내용", "미리보기", "검색용");
         var response = noteService.saveNote(100L, "owner-num", request);

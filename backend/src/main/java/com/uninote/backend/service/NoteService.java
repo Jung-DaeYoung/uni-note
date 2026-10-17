@@ -110,7 +110,9 @@ public class NoteService {
         note.setPreviewText(request.getPreviewText());
         note.setSearchContent(request.getSearchContent());
         
-        Note savedNote = noteRepository.save(note);
+        // @UpdateTimestamp는 flush 때 채워지므로, 응답의 updatedAt이 실제 저장 시각이 되도록 바로 flush한다
+        // (프론트 자동 저장이 이 값을 로컬 백업의 기준 버전으로 쓴다).
+        Note savedNote = noteRepository.saveAndFlush(note);
         return convertToResponse(savedNote);
     }
 

@@ -52,19 +52,31 @@ describe('useNoteAutosave', () => {
       expect(result.current.getInitialContent()).toEqual(serverDoc);
     });
 
-    it('localStorage 임시 저장본이 서버 데이터보다 최신이면 그것을 우선 사용한다', () => {
-      const serverDoc = { type: 'doc', content: [{ type: 'paragraph', content: [] }] };
-      const localDoc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '임시 저장분' }] }] };
-      localStorage.setItem('note-temp-1', JSON.stringify({ content: localDoc, timestamp: 999999 }));
+    // 실제 API의 updatedAt은 LocalDateTime ISO 문자열이다.
+    const SERVER_V1 = '2026-10-17T21:30:57.282749';
+    const SERVER_V2 = '2026-10-17T21:35:00.000001';
+    const serverDoc = { type: 'doc', content: [{ type: 'paragraph', content: [] }] };
+    const localDoc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '임시 저장분' }] }] };
+    const openWith = (updatedAt) => renderHook(() =>
+      useNoteAutosave({ noteId: 1, initialData: { title: '제목', content: JSON.stringify(serverDoc), updatedAt } })
+    );
 
-      const { result } = renderHook(() =>
-        useNoteAutosave({
-          noteId: 1,
-          initialData: { title: '제목', content: JSON.stringify(serverDoc), updatedAt: 100 },
-        })
-      );
+    it('서버에 저장되지 않은 백업이 지금 서버 버전 위의 편집이면 복구한다', () => {
+      localStorage.setItem('note-temp-1', JSON.stringify({ content: localDoc, timestamp: 1, baseUpdatedAt: SERVER_V1 }));
 
-      expect(result.current.getInitialContent()).toEqual(localDoc);
+      expect(openWith(SERVER_V1).result.current.getInitialContent()).toEqual(localDoc);
+    });
+
+    it('그 사이 다른 곳에서 서버 내용이 바뀌었으면 서버 내용을 쓴다', () => {
+      localStorage.setItem('note-temp-1', JSON.stringify({ content: localDoc, timestamp: Date.now(), baseUpdatedAt: SERVER_V1 }));
+
+      expect(openWith(SERVER_V2).result.current.getInitialContent()).toEqual(serverDoc);
+    });
+
+    it('기준 버전이 없는 옛 형식 백업은 서버 내용이 있으면 쓰지 않는다', () => {
+      localStorage.setItem('note-temp-1', JSON.stringify({ content: localDoc, timestamp: Date.now() }));
+
+      expect(openWith(SERVER_V1).result.current.getInitialContent()).toEqual(serverDoc);
     });
 
     it('localStorage에 손상된 JSON이 있어도 예외 없이 서버 데이터로 폴백한다', () => {
@@ -140,6 +152,71 @@ describe('useNoteAutosave', () => {
         expect.objectContaining({ title: '제목' }),
         expect.anything()
       );
+    });
+  });
+
+  describe('로컬 백업과 서버 버전', () => {
+    const heading = { type: 'heading', content: [{ type: 'text', text: '제목' }] };
+    const serverDoc = { type: 'doc', content: [heading] };
+    const editedDoc = { type: 'doc', content: [heading, { type: 'paragraph', content: [{ type: 'text', text: '본문' }] }] };
+    const initialData = { title: '제목', content: JSON.stringify(serverDoc), updatedAt: '2026-10-17T21:30:57.1' };
+
+    it('복구한 백업은 서버와 다르므로 열자마자 저장을 예약한다', async () => {
+      localStorage.setItem('note-temp-7', JSON.stringify({ content: editedDoc, timestamp: 1, baseUpdatedAt: initialData.updatedAt }));
+      const { result } = renderHook(() => useNoteAutosave({ noteId: 7, initialData }));
+
+      act(() => {
+        result.current.syncEditor(makeEditor(editedDoc, '제목본문'));
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+
+      expect(client.put).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(client.put.mock.calls[0][1].content)).toEqual(editedDoc);
+    });
+
+    it('저장에 성공하면 같은 내용의 백업을 지우고, 다음 백업은 응답 updatedAt을 기준 버전으로 쓴다', async () => {
+      client.put.mockResolvedValue({ data: { updatedAt: '2026-10-17T21:31:00.2' } });
+      const { result } = renderHook(() => useNoteAutosave({ noteId: 7, initialData }));
+      act(() => {
+        result.current.syncEditor(makeEditor(serverDoc, '제목'));
+      });
+
+      await act(async () => {
+        result.current.handleEditorUpdate(makeEditor(editedDoc, '제목본문'));
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(JSON.parse(localStorage.getItem('note-temp-7')).baseUpdatedAt).toBe('2026-10-17T21:30:57.1');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1700);
+      });
+      expect(localStorage.getItem('note-temp-7')).toBeNull();
+
+      const moreDoc = { type: 'doc', content: [...editedDoc.content, { type: 'paragraph', content: [{ type: 'text', text: '더' }] }] };
+      await act(async () => {
+        result.current.handleEditorUpdate(makeEditor(moreDoc, '제목본문더'));
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(JSON.parse(localStorage.getItem('note-temp-7')).baseUpdatedAt).toBe('2026-10-17T21:31:00.2');
+    });
+
+    it('저장에 실패하면 백업을 남긴다', async () => {
+      client.put.mockRejectedValue(new Error('network'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { result } = renderHook(() => useNoteAutosave({ noteId: 7, initialData }));
+      act(() => {
+        result.current.syncEditor(makeEditor(serverDoc, '제목'));
+      });
+
+      await act(async () => {
+        result.current.handleEditorUpdate(makeEditor(editedDoc, '제목본문'));
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+
+      expect(result.current.saveStatus).toBe('error');
+      expect(JSON.parse(localStorage.getItem('note-temp-7')).content).toEqual(editedDoc);
     });
   });
 

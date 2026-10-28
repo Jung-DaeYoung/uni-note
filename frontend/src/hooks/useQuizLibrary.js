@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import client from '../api/client';
-import { useConfirm } from '../context/ConfirmContext';
+import { showAlert, useConfirm } from '../context/ConfirmContext';
 
 // 학습 보관함의 탭별 조회(퀴즈/풀이 이력)와 재풀이·이력·이름 변경·삭제 액션을 담당한다.
 const useQuizLibrary = (activeTab) => {
@@ -48,7 +48,7 @@ const useQuizLibrary = (activeTab) => {
       const res = await client.get(`/quiz/${quiz.quizSetId}`);
       setSelectedQuiz({ ...res.data, quizSetId: quiz.quizSetId, courseId: quiz.courseId });
     } catch {
-      alert('퀴즈 정보를 불러오는 데 실패했습니다.');
+      showAlert('퀴즈 정보를 불러오는 데 실패했습니다.');
     }
   };
 
@@ -59,7 +59,7 @@ const useQuizLibrary = (activeTab) => {
       setIsAttemptsModalOpen(false); // 모달 닫기
     } catch (err) {
       console.error("기록 상세 조회 실패:", err);
-      alert(`기록 정보를 불러오는 데 실패했습니다. (ID: ${attemptId})`);
+      showAlert(`기록 정보를 불러오는 데 실패했습니다. (ID: ${attemptId})`);
     }
   };
 
@@ -81,19 +81,19 @@ const useQuizLibrary = (activeTab) => {
       await client.post('/shared-quizzes', { quizSetId: quiz.quizSetId });
       setQuizzes(prev => prev.map(q => (q.quizSetId === quiz.quizSetId ? { ...q, shared: true } : q)));
     } catch (err) {
-      alert(err.response?.data?.message || '공유하지 못했습니다.');
+      showAlert(err.response?.data?.message || '공유하지 못했습니다.');
     }
   };
 
   const handleRename = async (e, quiz) => {
     e.stopPropagation();
-    const title = window.prompt('새 퀴즈 이름', quiz.title)?.trim();
+    const title = (await confirm({ title: '퀴즈 이름 변경', variant: 'notice', confirmLabel: '저장', input: { defaultValue: quiz.title } }))?.trim();
     if (!title || title === quiz.title) return;
     try {
       await client.put(`/quiz/${quiz.quizSetId}`, { title });
       setQuizzes(prev => prev.map(q => (q.quizSetId === quiz.quizSetId ? { ...q, title } : q)));
     } catch (err) {
-      alert(err.response?.data?.message || '퀴즈 이름을 바꾸지 못했습니다.');
+      showAlert(err.response?.data?.message || '퀴즈 이름을 바꾸지 못했습니다.');
     }
   };
 
@@ -111,7 +111,7 @@ const useQuizLibrary = (activeTab) => {
       await client.delete(`/quiz/${quizSetId}`);
       setQuizzes(quizzes.filter(q => q.quizSetId !== quizSetId));
     } catch {
-      alert('삭제 실패');
+      showAlert('삭제 실패');
     }
   };
 
@@ -126,7 +126,7 @@ const useQuizLibrary = (activeTab) => {
       await client.delete(`/quiz/attempts/${attemptId}`);
       setAttempts(prev => prev.filter(a => a.attemptId !== attemptId));
     } catch (err) {
-      alert(err.response?.data?.message || '풀이 기록을 삭제하지 못했습니다.');
+      showAlert(err.response?.data?.message || '풀이 기록을 삭제하지 못했습니다.');
     }
   };
 

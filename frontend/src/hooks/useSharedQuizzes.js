@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import client from '../api/client';
-import { useConfirm } from '../context/ConfirmContext';
+import { showAlert, useConfirm } from '../context/ConfirmContext';
 
 // CBT 시험 공유게시판의 정렬·강의 필터 조회와 추천·풀기·글 삭제 액션을 담당한다.
 const useSharedQuizzes = () => {
@@ -20,7 +20,7 @@ const useSharedQuizzes = () => {
       setPosts(res.data);
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.message || '공유 시험 목록을 불러오지 못했습니다.');
+      showAlert(err.response?.data?.message || '공유 시험 목록을 불러오지 못했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -40,7 +40,7 @@ const useSharedQuizzes = () => {
         p.sharedQuizId === post.sharedQuizId ? { ...p, liked: res.data.liked, likeCount: res.data.likeCount } : p
       )));
     } catch (err) {
-      alert(err.response?.data?.message || '추천하지 못했습니다.');
+      showAlert(err.response?.data?.message || '추천하지 못했습니다.');
     }
   };
 
@@ -53,7 +53,7 @@ const useSharedQuizzes = () => {
         p.sharedQuizId === post.sharedQuizId ? { ...p, viewCount: p.viewCount + 1 } : p
       )));
     } catch (err) {
-      alert(err.response?.data?.message || '시험을 불러오지 못했습니다.');
+      showAlert(err.response?.data?.message || '시험을 불러오지 못했습니다.');
     }
   };
 
@@ -67,7 +67,7 @@ const useSharedQuizzes = () => {
       await client.delete(`/shared-quizzes/${post.sharedQuizId}`);
       setPosts(prev => prev.filter(p => p.sharedQuizId !== post.sharedQuizId));
     } catch (err) {
-      alert(err.response?.data?.message || '삭제하지 못했습니다.');
+      showAlert(err.response?.data?.message || '삭제하지 못했습니다.');
     }
   };
 

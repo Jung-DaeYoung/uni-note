@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import client from '../api/client';
-import { useConfirm } from '../context/ConfirmContext';
+import { showAlert, useConfirm } from '../context/ConfirmContext';
 
 // 노트 트리 조회/생성/삭제와 현재 노트 조회, 최초 진입 시 노트 이동/생성을 담당한다.
 const useCourseNotes = ({ courseId, noteId, navigate, searchParams }) => {
@@ -83,7 +83,7 @@ const useCourseNotes = ({ courseId, noteId, navigate, searchParams }) => {
       fetchTree();
       navigate(`/course/${courseId}/note/${res.data.noteId}`);
     } catch {
-      alert("노트 생성 실패");
+      showAlert("노트 생성 실패");
     }
   };
 
@@ -107,7 +107,7 @@ const useCourseNotes = ({ courseId, noteId, navigate, searchParams }) => {
         }
       }
     } catch {
-      alert("노트 삭제 실패");
+      showAlert("노트 삭제 실패");
     }
   };
 
@@ -131,7 +131,7 @@ const useCourseNotes = ({ courseId, noteId, navigate, searchParams }) => {
       });
       if (goToBoard) navigate('/shared-notes');
     } catch (err) {
-      alert(err.response?.data?.message || '노트를 공유하지 못했습니다.');
+      showAlert(err.response?.data?.message || '노트를 공유하지 못했습니다.');
     }
   };
 

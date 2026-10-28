@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { showAlert } from '../../../context/ConfirmContext';
 
 const MAX_WAIT_MS = 2000;
 const POLL_MS = 50;
@@ -67,7 +68,7 @@ const useSourceBlockScroll = (editor) => {
       if (Date.now() < deadline) {
         pollTimer = setTimeout(attempt, POLL_MS);
       } else {
-        alert(NOT_FOUND_MESSAGE);
+        showAlert(NOT_FOUND_MESSAGE);
         clearNavigationState();
       }
     };

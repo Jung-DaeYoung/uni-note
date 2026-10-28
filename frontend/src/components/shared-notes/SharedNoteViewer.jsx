@@ -5,6 +5,7 @@ import client from '../../api/client';
 import { noteSchemaExtensions, NoteEditorStyles } from '../editor/NotionEditor';
 import { NoteTreeProvider, findNote } from '../../context/NoteTreeContext';
 import QuestionComments from '../quiz/QuestionComments';
+import { showAlert } from '../../context/ConfirmContext';
 
 const parseContent = (content) => {
   try {
@@ -64,7 +65,7 @@ const SharedNoteViewer = ({ postId, onBack, onDelete }) => {
       })
       .catch(err => {
         if (ignore) return;
-        alert(err.response?.data?.message || '공유 노트를 불러오지 못했습니다.');
+        showAlert(err.response?.data?.message || '공유 노트를 불러오지 못했습니다.');
         onBack();
       });
     return () => { ignore = true; };

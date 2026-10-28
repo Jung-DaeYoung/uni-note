@@ -20,7 +20,7 @@ import QuizConfigModal from '../components/editor/components/QuizConfigModal';
 import CBTPlayer from '../components/editor/components/CBTPlayer';
 import { NoteTreeProvider } from '../context/NoteTreeContext';
 import { useCourses } from '../context/CourseContext';
-import { useConfirm } from '../context/ConfirmContext';
+import { showAlert, useConfirm } from '../context/ConfirmContext';
 import NoteTreeItem from '../components/course/NoteTreeItem';
 import CourseBoardPanel from '../components/course/CourseBoardPanel';
 import useCourseNotes from '../hooks/useCourseNotes';
@@ -39,12 +39,12 @@ const CourseDetailPage = () => {
   const isUserCreated = Boolean(course?.userCreated);
 
   const handleRenameCourse = async () => {
-    const name = window.prompt('새 강의 이름', courseName);
+    const name = await confirm({ title: '강의 이름 변경', variant: 'notice', confirmLabel: '저장', input: { defaultValue: courseName } });
     if (!name?.trim() || name.trim() === courseName) return;
     try {
       await renameCourse(course.courseId, name.trim());
     } catch (err) {
-      alert(err.response?.data?.message || '강의 이름을 바꾸지 못했습니다.');
+      showAlert(err.response?.data?.message || '강의 이름을 바꾸지 못했습니다.');
     }
   };
 
@@ -58,7 +58,7 @@ const CourseDetailPage = () => {
       await deleteCourse(course.courseId);
       navigate('/dashboard');
     } catch (err) {
-      alert(err.response?.data?.message || '강의를 삭제하지 못했습니다.');
+      showAlert(err.response?.data?.message || '강의를 삭제하지 못했습니다.');
     }
   };
 

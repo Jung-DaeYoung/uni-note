@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
-import { useConfirm } from '../context/ConfirmContext';
+import { showAlert, useConfirm } from '../context/ConfirmContext';
 
 // 오답노트 페이지(통계/모음)의 조회와 재풀이·삭제 액션을 담당한다.
 // useQuizLibrary와 독립된 selectedQuiz를 소유하며, 두 훅은 서로 다른 페이지에서만 쓰인다.
@@ -80,14 +80,14 @@ const useIncorrectNotes = (view) => {
 
   const handlePracticeIncorrect = async (group) => {
     if (group.itemCount === 0) {
-      alert('복습할 문제가 없습니다.');
+      showAlert('복습할 문제가 없습니다.');
       return;
     }
     try {
       const res = await client.get(`/quiz/incorrect/groups/${group.id}/practice`);
       setSelectedQuiz(res.data);
     } catch {
-      alert('오답노트 정보를 불러오는 데 실패했습니다.');
+      showAlert('오답노트 정보를 불러오는 데 실패했습니다.');
     }
   };
 
@@ -99,11 +99,11 @@ const useIncorrectNotes = (view) => {
   const handleViewReviewSource = (item) => {
     const q = item.question;
     if (!item.courseId) {
-      alert('출처 강의 정보를 찾을 수 없습니다.');
+      showAlert('출처 강의 정보를 찾을 수 없습니다.');
       return;
     }
     if (!q.sourceNoteId || !q.sourceBlockId) {
-      alert('출처 정보를 찾을 수 없습니다.');
+      showAlert('출처 정보를 찾을 수 없습니다.');
       return;
     }
     navigate(`/course/${item.courseId}/note/${q.sourceNoteId}`, {
@@ -127,13 +127,13 @@ const useIncorrectNotes = (view) => {
 
   const handleRenameGroup = async (e, group) => {
     e.stopPropagation();
-    const title = window.prompt('새 오답노트 이름', group.title)?.trim();
+    const title = (await confirm({ title: '오답노트 이름 변경', variant: 'notice', confirmLabel: '저장', input: { defaultValue: group.title } }))?.trim();
     if (!title || title === group.title) return;
     try {
       await client.put(`/quiz/incorrect/groups/${group.id}`, { title });
       setIncorrectGroups(prev => prev.map(g => (g.id === group.id ? { ...g, title } : g)));
     } catch (err) {
-      alert(err.response?.data?.message || '오답노트 이름을 바꾸지 못했습니다.');
+      showAlert(err.response?.data?.message || '오답노트 이름을 바꾸지 못했습니다.');
     }
   };
 
@@ -148,7 +148,7 @@ const useIncorrectNotes = (view) => {
       await client.delete(`/quiz/incorrect/groups/${groupId}`);
       setIncorrectGroups(incorrectGroups.filter(g => g.id !== groupId));
     } catch {
-      alert('삭제 실패');
+      showAlert('삭제 실패');
     }
   };
 

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNoteTree, findNote } from '../../../context/NoteTreeContext';
 import { X, Check, BookOpen, Loader2, ChevronRight, Minus, Plus, ListTree } from 'lucide-react';
 import client from '../../../api/client';
+import { showAlert } from '../../../context/ConfirmContext';
 
 // QuizService.java의 MAX_NOTES_PER_QUIZ / MAX_TOTAL_QUESTIONS, QuizRequest.java의 유형별 상한(@Max)과
 // 동일하게 유지한다(수동 미러링 - 백엔드 상수가 바뀌면 함께 갱신 필요).
@@ -666,12 +667,12 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
         .map(stat => stat.conceptTag)
         .slice(0, MAX_FOCUS_CONCEPTS);
       if (weak.length === 0) {
-        alert('이 강의에서 자주 틀린 개념이 없습니다.');
+        showAlert('이 강의에서 자주 틀린 개념이 없습니다.');
         return;
       }
       setFocusConcepts(weak);
     } catch (error) {
-      alert(error.response?.data?.message || '취약 개념을 불러오지 못했습니다.');
+      showAlert(error.response?.data?.message || '취약 개념을 불러오지 못했습니다.');
     } finally {
       setConceptLoading(false);
     }
@@ -689,12 +690,12 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
           weakByNote[stat.noteId] = [...(weakByNote[stat.noteId] || []), stat.blockId];
         });
       if (Object.keys(weakByNote).length === 0) {
-        alert('이 강의의 노트에서 자주 틀린 블록이 없습니다.');
+        showAlert('이 강의의 노트에서 자주 틀린 블록이 없습니다.');
         return;
       }
       applyBlockSelections(weakByNote);
     } catch (error) {
-      alert(error.response?.data?.message || '취약 블록을 불러오지 못했습니다.');
+      showAlert(error.response?.data?.message || '취약 블록을 불러오지 못했습니다.');
     } finally {
       setWeakLoading(false);
     }
@@ -734,7 +735,7 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
   const applyMockExam = () => {
     const noteIds = collectNoteIds(noteTree);
     if (noteIds.length > MAX_NOTES_PER_QUIZ) {
-      alert(`노트가 많아 앞의 ${MAX_NOTES_PER_QUIZ}개만 선택했습니다.`);
+      showAlert(`노트가 많아 앞의 ${MAX_NOTES_PER_QUIZ}개만 선택했습니다.`);
     }
     setSelectedIds(noteIds.slice(0, MAX_NOTES_PER_QUIZ));
     setBlockSelections({});
@@ -768,13 +769,13 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
         : ((await client.get('/quiz/incorrect/review-today', { params: { ...params, withinDays: 6 } })).data || [])
           .map(item => item.question);
       if (questions.length === 0) {
-        alert(nextMode === 'RECENT' ? '이 강의에서 틀린 문제가 없습니다.' : '이번 주에 복습할 문제가 없습니다.');
+        showAlert(nextMode === 'RECENT' ? '이 강의에서 틀린 문제가 없습니다.' : '이번 주에 복습할 문제가 없습니다.');
         return;
       }
       applyIncorrectQuestions(questions);
       setMode(nextMode);
     } catch (error) {
-      alert(error.response?.data?.message || '틀린 문제를 불러오지 못했습니다.');
+      showAlert(error.response?.data?.message || '틀린 문제를 불러오지 못했습니다.');
     } finally {
       setModeLoading(false);
     }
@@ -908,7 +909,7 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
       onClose();
     } catch (error) {
       // 서버가 실패 원인(빈 노트, AI 호출 실패, 생성 결과 검증 실패 등)을 message로 내려주면 그대로 보여준다.
-      alert(error.response?.data?.message || '문제 생성 중 오류가 발생했습니다.');
+      showAlert(error.response?.data?.message || '문제 생성 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }

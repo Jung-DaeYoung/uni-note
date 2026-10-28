@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import client from '../api/client';
-import { useConfirm } from '../context/ConfirmContext';
+import { showAlert, useConfirm } from '../context/ConfirmContext';
 
 // 노트 공유 게시판의 강의 필터 조회와 글 삭제를 담당한다. 상세·댓글은 SharedNoteViewer가 직접 불러온다.
 const useSharedNotes = () => {
@@ -16,7 +16,7 @@ const useSharedNotes = () => {
       setPosts(res.data);
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.message || '공유 노트 목록을 불러오지 못했습니다.');
+      showAlert(err.response?.data?.message || '공유 노트 목록을 불러오지 못했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -41,7 +41,7 @@ const useSharedNotes = () => {
       setPosts(prev => prev.filter(p => p.sharedNotePostId !== post.sharedNotePostId));
       return true;
     } catch (err) {
-      alert(err.response?.data?.message || '삭제하지 못했습니다.');
+      showAlert(err.response?.data?.message || '삭제하지 못했습니다.');
       return false;
     }
   };

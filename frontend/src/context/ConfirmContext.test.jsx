@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { ConfirmProvider, useConfirm } from './ConfirmContext';
+import { ConfirmProvider, showAlert, useConfirm } from './ConfirmContext';
 
 let promise;
 const Opener = () => {
@@ -45,5 +45,35 @@ describe('ConfirmProvider', () => {
   it('danger는 취소 버튼에 포커스를 둔다', () => {
     open();
     expect(document.activeElement.textContent).toBe('취소');
+  });
+
+  it('showAlert는 확인 버튼만 있는 알림 창을 띄운다', async () => {
+    render(<ConfirmProvider><div /></ConfirmProvider>);
+    let done;
+    act(() => { done = showAlert('저장하지 못했습니다.'); });
+    expect(screen.getByRole('dialog', { name: '저장하지 못했습니다.' })).toBeTruthy();
+    expect(screen.queryByText('취소')).toBeNull();
+    fireEvent.click(screen.getByText('확인'));
+    await done;
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('input을 주면 입력값을 반환하고, 취소하면 null을 반환한다', async () => {
+    const Renamer = () => {
+      const confirm = useConfirm();
+      return <button onClick={() => { promise = confirm({ title: '이름 변경', input: { defaultValue: '기존' } }); }}>열기</button>;
+    };
+    const { unmount } = render(<ConfirmProvider><Renamer /></ConfirmProvider>);
+    act(() => { fireEvent.click(screen.getByText('열기')); });
+    const input = screen.getByRole('textbox', { name: '이름 변경' });
+    expect(input.value).toBe('기존');
+    fireEvent.change(input, { target: { value: '새 이름' } });
+    fireEvent.submit(input.form);
+    await expect(promise).resolves.toBe('새 이름');
+
+    act(() => { fireEvent.click(screen.getByText('열기')); });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await expect(promise).resolves.toBeNull();
+    unmount();
   });
 });

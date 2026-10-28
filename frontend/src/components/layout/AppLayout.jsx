@@ -21,6 +21,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useCourses } from '../../context/CourseContext';
 import { useTheme } from '../../context/ThemeContext';
+import { showAlert } from '../../context/ConfirmContext';
 
 const AppLayout = ({ children, sidebarContent, headerContent }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -58,7 +59,7 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
       setNewCourseName(null);
       navigate(`/course/${course.courseId}`);
     } catch (err) {
-      alert(err.response?.data?.message || '강의를 만들지 못했습니다.');
+      showAlert(err.response?.data?.message || '강의를 만들지 못했습니다.');
     } finally {
       setIsCreatingCourse(false);
     }

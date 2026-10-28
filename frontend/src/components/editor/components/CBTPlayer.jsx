@@ -4,6 +4,7 @@ import { ChevronRight, ChevronLeft, CheckCircle, XCircle, BookOpen, RotateCcw, E
 import client from '../../../api/client';
 import IncorrectNoteModal from './IncorrectNoteModal';
 import QuestionComments from '../../quiz/QuestionComments';
+import { showAlert } from '../../../context/ConfirmContext';
 
 // sharedQuizId: CBT 시험 공유게시판에서 연 경우에만 넘어오며, 결과 화면에 문제별 댓글을 보여 준다.
 const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers = null, sharedQuizId = null }) => {
@@ -78,7 +79,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
     } catch (error) {
       // 저장에 실패하면 결과 화면으로 넘기지 않는다. 답안이 남아 있어 다시 제출할 수 있다.
       console.error("결과 저장 실패:", error);
-      alert(error.response?.data?.message || '풀이 결과를 저장하지 못했습니다. 다시 시도해 주세요.');
+      showAlert(error.response?.data?.message || '풀이 결과를 저장하지 못했습니다. 다시 시도해 주세요.');
     } finally {
       setIsSaving(false);
     }
@@ -86,11 +87,11 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
 
   const handleViewSource = (q) => {
     if (!courseId) {
-      alert('출처 강의 정보를 찾을 수 없습니다.');
+      showAlert('출처 강의 정보를 찾을 수 없습니다.');
       return;
     }
     if (!q.sourceNoteId || !q.sourceBlockId) {
-      alert('출처 정보를 찾을 수 없습니다.');
+      showAlert('출처 정보를 찾을 수 없습니다.');
       return;
     }
     navigate(`/course/${courseId}/note/${q.sourceNoteId}`, {

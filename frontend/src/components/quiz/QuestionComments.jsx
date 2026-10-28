@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { MessageSquare, PenLine, Trash2 } from 'lucide-react';
 import client from '../../api/client';
-import { useConfirm } from '../../context/ConfirmContext';
+import { showAlert, useConfirm } from '../../context/ConfirmContext';
 
 // 공유게시판 댓글 목록·작성·수정·삭제. CBT 시험(문제별)과 노트 공유(글별)가 함께 쓴다.
 // 목록은 부모가 받아 내려주고, 작성·수정·삭제 결과는 onChange로 이 목록만 갱신한다.
@@ -13,7 +13,7 @@ const QuestionComments = ({ addUrl, commentUrl, comments, onChange, placeholder,
   const [editingId, setEditingId] = useState(null);
   const [editingContent, setEditingContent] = useState('');
 
-  const fail = (err, fallback) => alert(err.response?.data?.message || fallback);
+  const fail = (err, fallback) => showAlert(err.response?.data?.message || fallback);
 
   const handleAdd = async () => {
     if (!newComment.trim()) return;

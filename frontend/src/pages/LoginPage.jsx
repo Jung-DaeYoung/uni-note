@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { showAlert } from '../context/ConfirmContext';
 
 const LoginPage = () => {
   const [studentNum, setStudentNum] = useState('');
@@ -20,7 +21,7 @@ const LoginPage = () => {
       navigate('/dashboard');
     } catch (error) {
       const errorMessage = error.response?.data?.message || '로그인에 실패했습니다. 학번과 비밀번호를 확인해주세요.';
-      alert(errorMessage);
+      showAlert(errorMessage);
     } finally {
       setIsLoading(false);
     }

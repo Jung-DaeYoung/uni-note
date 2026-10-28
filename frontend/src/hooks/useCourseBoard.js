@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import client from '../api/client';
-import { useConfirm } from '../context/ConfirmContext';
+import { showAlert, useConfirm } from '../context/ConfirmContext';
 
 // 익명 게시판(글/댓글) 목록·상세·작성·수정·삭제 상태와 대시보드 postId 딥링크를 담당한다.
 // enabled=false면 게시글을 불러오지 않는다. 직접 만든 강의에는 게시판이 없어 서버가 403을 주고,
@@ -66,7 +66,7 @@ const useCourseBoard = ({ courseId, searchString, enabled = true }) => {
       setNewPost({ title: '', content: '' });
       setBoardView('list');
     } catch {
-      alert("게시글 저장에 실패했습니다.");
+      showAlert("게시글 저장에 실패했습니다.");
     }
   };
 
@@ -79,7 +79,7 @@ const useCourseBoard = ({ courseId, searchString, enabled = true }) => {
       setSelectedPost(res.data);
       setBoardView('detail');
     } catch {
-      alert("게시글 수정에 실패했습니다.");
+      showAlert("게시글 수정에 실패했습니다.");
     }
   };
 
@@ -100,7 +100,7 @@ const useCourseBoard = ({ courseId, searchString, enabled = true }) => {
       await refreshPosts();
       setNewComment('');
     } catch {
-      alert("댓글 작성에 실패했습니다.");
+      showAlert("댓글 작성에 실패했습니다.");
     }
   };
 
@@ -111,7 +111,7 @@ const useCourseBoard = ({ courseId, searchString, enabled = true }) => {
       await refreshPosts();
       setEditingCommentId(null);
     } catch {
-      alert("댓글 수정에 실패했습니다.");
+      showAlert("댓글 수정에 실패했습니다.");
     }
   };
 
@@ -125,7 +125,7 @@ const useCourseBoard = ({ courseId, searchString, enabled = true }) => {
       await client.delete(`/posts/comments/${commentId}`);
       await refreshPosts();
     } catch {
-      alert("댓글 삭제에 실패했습니다.");
+      showAlert("댓글 삭제에 실패했습니다.");
     }
   };
 
@@ -142,7 +142,7 @@ const useCourseBoard = ({ courseId, searchString, enabled = true }) => {
       setSelectedPost(null);
       setBoardView('list');
     } catch (error) {
-      alert(error.response?.data?.message || "삭제 권한이 없거나 실패했습니다.");
+      showAlert(error.response?.data?.message || "삭제 권한이 없거나 실패했습니다.");
     }
   };
 

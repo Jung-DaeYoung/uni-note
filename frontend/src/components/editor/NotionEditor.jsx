@@ -40,6 +40,7 @@ import CodeBlockComponent from './components/CodeBlockComponent';
 import useNoteUploads, { isAllowedFileUrl, resolveFileUrl } from './hooks/useNoteUploads';
 import useNoteAutosave from './hooks/useNoteAutosave';
 import useSourceBlockScroll from './hooks/useSourceBlockScroll';
+import { showAlert } from '../../context/ConfirmContext';
 
 import 'highlight.js/styles/atom-one-dark.css'
 
@@ -228,7 +229,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
                       })
                       .run();
                   } catch {
-                    alert("하위 노트 생성에 실패했습니다.");
+                    showAlert("하위 노트 생성에 실패했습니다.");
                   }
                 }
               },

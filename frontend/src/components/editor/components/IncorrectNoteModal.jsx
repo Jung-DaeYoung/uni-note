@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, BookOpen, Check, Loader2, Bookmark } from 'lucide-react';
 import client from '../../../api/client';
+import { showAlert } from '../../../context/ConfirmContext';
 
 const IncorrectNoteModal = ({ isOpen, onClose, questionId }) => {
   const [groups, setGroups] = useState([]);
@@ -37,11 +38,11 @@ const IncorrectNoteModal = ({ isOpen, onClose, questionId }) => {
   const handleSave = async () => {
     if (isSaving) return;
     if (isCreating && !newTitle.trim()) {
-      alert('노트 제목을 입력해주세요.');
+      showAlert('노트 제목을 입력해주세요.');
       return;
     }
     if (!isCreating && !selectedGroupId) {
-      alert('저장할 노트를 선택해주세요.');
+      showAlert('저장할 노트를 선택해주세요.');
       return;
     }
 
@@ -52,11 +53,11 @@ const IncorrectNoteModal = ({ isOpen, onClose, questionId }) => {
         newGroupTitle: isCreating ? newTitle : null,
         questionId: questionId
       });
-      alert('오답노트에 저장되었습니다.');
+      showAlert('오답노트에 저장되었습니다.');
       onClose();
     } catch (err) {
       console.error("저장 실패:", err);
-      alert('저장 중 오류가 발생했습니다.');
+      showAlert('저장 중 오류가 발생했습니다.');
     } finally {
       setIsSaving(false);
     }

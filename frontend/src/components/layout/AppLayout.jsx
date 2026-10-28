@@ -12,6 +12,7 @@ import {
   PenLine,
   Share2,
   FileText,
+  MessagesSquare,
   Plus,
   Moon,
   Sun,
@@ -24,6 +25,7 @@ import { useTheme } from '../../context/ThemeContext';
 const AppLayout = ({ children, sidebarContent, headerContent }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isDashboardExpanded, setIsDashboardExpanded] = useState(true);
+  const [isBoardExpanded, setIsBoardExpanded] = useState(true);
   const { logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -56,23 +58,37 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
     }
   };
 
+  // 강의목록·게시판 하위 항목 공통 스타일
+  const subItemClass = (active) => `w-[calc(100%-0.5rem)] ml-2 flex items-center gap-3 p-2.5 rounded-lg transition-colors text-xs font-bold ${
+    active
+    ? 'bg-blue-600/10 text-blue-400'
+    : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'
+  }`;
+  const isSharedQuizzesActive = location.pathname === '/shared-quizzes';
+  const isSharedNotesActive = location.pathname.startsWith('/shared-notes');
+
+  // '/course/1'이 '/course/10'에도 걸리지 않도록 경로 구분자까지 비교한다.
+  const isCourseActive = (course) => `${location.pathname}/`.startsWith(`/course/${course.courseId}/`);
+  // 페이지가 넘긴 사이드바 내용(강의 페이지의 노트 목록)은 현재 강의 바로 아래에 둔다.
+  // 강의목록이 접혀 있거나 강의 목록에 현재 강의가 아직 없으면 강의목록 제목 바로 아래에 둔다.
+  const showSidebarUnderHeader = sidebarContent && (!isDashboardExpanded || !courses.some(isCourseActive));
+
   const renderCourse = (course) => {
-    // '/course/1'이 '/course/10'에도 걸리지 않도록 경로 구분자까지 비교한다.
-    const isCourseActive = `${location.pathname}/`.startsWith(`/course/${course.courseId}/`);
+    const active = isCourseActive(course);
     const Icon = course.userCreated ? PenLine : BookOpen;
     return (
-      <button
-        key={course.courseId}
-        onClick={() => navigate(`/course/${course.courseId}`)}
-        className={`w-[calc(100%-0.5rem)] ml-2 flex items-center gap-3 p-2.5 rounded-lg transition-colors text-xs font-bold ${
-          isCourseActive
-          ? 'bg-blue-600/10 text-blue-400'
-          : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'
-        }`}
-      >
-        <Icon size={14} className={isCourseActive ? 'text-blue-400' : 'text-slate-500'} />
-        <span className="truncate">{course.courseName}</span>
-      </button>
+      <React.Fragment key={course.courseId}>
+        <button
+          onClick={() => navigate(`/course/${course.courseId}`)}
+          className={subItemClass(active)}
+        >
+          <Icon size={14} className={active ? 'text-blue-400' : 'text-slate-500'} />
+          <span className="truncate">{course.courseName}</span>
+        </button>
+        {active && sidebarContent && (
+          <div className="ml-4 mt-1 mb-2 border-l border-slate-800">{sidebarContent}</div>
+        )}
+      </React.Fragment>
     );
   };
 
@@ -108,6 +124,16 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
 
         {/* Navigation */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto custom-scrollbar">
+          <button
+            onClick={() => navigate('/mypage')}
+            className={`w-full flex items-center gap-3 py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap mb-2 ${
+              location.pathname === '/mypage' ? 'border-blue-500 bg-blue-500/5 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <User size={18} />
+            <span className="text-sm font-bold">마이페이지</span>
+          </button>
+
           {/* Dashboard Menu (Collapsible) */}
           <div className="mb-2">
             <div
@@ -127,6 +153,10 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
                 {isDashboardExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </button>
             </div>
+
+            {showSidebarUnderHeader && (
+              <div className="mt-1 ml-4 border-l border-slate-800">{sidebarContent}</div>
+            )}
 
             {/* Course List (Nested): 수강 중인 강의 / 내가 만든 강의 */}
             {isDashboardExpanded && (
@@ -186,25 +216,37 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
             <span className="text-sm font-bold">나의 CBT 시험</span>
           </button>
 
-          <button
-            onClick={() => navigate('/shared-quizzes')}
-            className={`w-full flex items-center gap-3 py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap mb-2 ${
-              location.pathname === '/shared-quizzes' ? 'border-blue-500 bg-blue-500/5 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Share2 size={18} />
-            <span className="text-sm font-bold">CBT 시험 공유게시판</span>
-          </button>
+          {/* 게시판 메뉴: 자체 페이지 없이 하위 게시판 목록만 접고 편다 */}
+          <div className="mb-2">
+            <button
+              onClick={() => setIsBoardExpanded(!isBoardExpanded)}
+              aria-expanded={isBoardExpanded}
+              className={`w-full flex items-center justify-between py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap ${
+                isSharedQuizzesActive || isSharedNotesActive ? 'border-blue-500 bg-blue-500/5 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <MessagesSquare size={18} />
+                <span className="text-sm font-bold">게시판</span>
+              </div>
+              <span className="p-1">
+                {isBoardExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </span>
+            </button>
 
-          <button
-            onClick={() => navigate('/shared-notes')}
-            className={`w-full flex items-center gap-3 py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap mb-2 ${
-              location.pathname.startsWith('/shared-notes') ? 'border-blue-500 bg-blue-500/5 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <FileText size={18} />
-            <span className="text-sm font-bold">노트 공유 게시판</span>
-          </button>
+            {isBoardExpanded && (
+              <div className="mt-1 ml-4 space-y-1 border-l border-slate-800">
+                <button onClick={() => navigate('/shared-quizzes')} className={subItemClass(isSharedQuizzesActive)}>
+                  <Share2 size={14} className={isSharedQuizzesActive ? 'text-blue-400' : 'text-slate-500'} />
+                  <span className="truncate">CBT 시험 공유게시판</span>
+                </button>
+                <button onClick={() => navigate('/shared-notes')} className={subItemClass(isSharedNotesActive)}>
+                  <FileText size={14} className={isSharedNotesActive ? 'text-blue-400' : 'text-slate-500'} />
+                  <span className="truncate">노트 공유 게시판</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           <button
             onClick={() => navigate('/incorrect-notes')}
@@ -215,20 +257,6 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
             <BarChart3 size={18} />
             <span className="text-sm font-bold">오답노트</span>
           </button>
-
-          <button
-            onClick={() => navigate('/mypage')}
-            className={`w-full flex items-center gap-3 py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap mb-2 ${
-              location.pathname === '/mypage' ? 'border-blue-500 bg-blue-500/5 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <User size={18} />
-            <span className="text-sm font-bold">마이페이지</span>
-          </button>
-
-          <div className="h-[1px] bg-slate-800 my-4 mx-2" />
-
-          {sidebarContent}
         </nav>
 
         {/* Bottom Actions */}

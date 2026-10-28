@@ -34,6 +34,23 @@ describe('KeywordExplainPanel', () => {
     clearKeywordCache();
   });
 
+  it('문장마다 줄을 바꾸고, 3줄 요약은 앞의 3문장만 보여 준다', async () => {
+    const user = userEvent.setup();
+    client.post.mockResolvedValueOnce({ data: {
+      ...explanation,
+      summary: '첫째 문장. 둘째는 3.14다! 셋째인가? 넷째 문장.',
+      easyExplanation: '하나. 둘.\n셋',
+    } });
+    render(<KeywordExplainPanel target={target} onClose={vi.fn()} onSelectKeyword={vi.fn()} onOpenMention={vi.fn()} onMakeQuiz={vi.fn()} />);
+
+    await screen.findByText('첫째 문장.');
+    const lines = () => [...screen.getByRole('tabpanel').querySelectorAll('p')].map(p => p.textContent);
+    expect(lines()).toEqual(['첫째 문장.', '둘째는 3.14다!', '셋째인가?']);
+
+    await user.click(screen.getByRole('tab', { name: '쉬운 설명' }));
+    expect(lines()).toEqual(['하나.', '둘.', '셋']);
+  });
+
   it('설명을 요청해 탭으로 보여 주고, 자료 링크는 새 탭으로 연다', async () => {
     const user = userEvent.setup();
     const onSelectKeyword = vi.fn();
@@ -52,6 +69,7 @@ describe('KeywordExplainPanel', () => {
     const link = screen.getByRole('link', { name: /JSON Web Token/ });
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.queryByText('표준 설명')).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'OAuth' }));
     expect(onSelectKeyword).toHaveBeenCalledWith('OAuth');

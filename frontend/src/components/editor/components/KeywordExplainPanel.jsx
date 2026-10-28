@@ -9,6 +9,10 @@ const TABS = [
   { key: 'advancedExplanation', label: '전공 심화' },
 ];
 
+// 마침표·물음표·느낌표 뒤 공백이나 줄바꿈에서 나눈다. 3.14처럼 뒤에 공백이 없는 점은 나누지 않는다.
+const toSentenceLines = (text) =>
+  text.split(/(?<=[.!?])\s+|\n+/).map(s => s.trim()).filter(Boolean);
+
 // 오른쪽 고정 패널(CourseBoardPanel과 같은 자리). 키워드가 바뀌면 부모가 key로 새로 마운트해 탭을 초기화한다.
 // canInsert: 설명을 만든 노트를 지금 편집 중인지. onInsert({ text, label })는 사용자 확인 후 적용 여부를 돌려준다(Promise 가능).
 const KeywordExplainPanel = ({ target, onClose, onSelectKeyword, onOpenMention, onMakeQuiz, canInsert, onInsert }) => {
@@ -85,9 +89,11 @@ const KeywordExplainPanel = ({ target, onClose, onSelectKeyword, onOpenMention, 
                   </button>
                 ))}
               </div>
-              <p role="tabpanel" className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200 whitespace-pre-line">
-                {data[tab]}
-              </p>
+              <div role="tabpanel" className="mt-3 space-y-1.5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                {toSentenceLines(data[tab]).slice(0, tab === 'summary' ? 3 : undefined).map((line, i) => (
+                  <p key={i}>{line}</p>
+                ))}
+              </div>
               <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">AI가 만든 설명입니다. 중요한 내용은 강의 자료로 확인하세요.</p>
               <div className="mt-2 flex items-center gap-2">
                 <button
@@ -144,9 +150,6 @@ const KeywordExplainPanel = ({ target, onClose, onSelectKeyword, onOpenMention, 
                           <ExternalLink size={11} className="shrink-0 text-slate-400" />
                         </span>
                         <span className="block mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{resource.source}</span>
-                        {resource.reason && (
-                          <span className="block mt-1 text-xs text-slate-600 dark:text-slate-300">{resource.reason}</span>
-                        )}
                       </a>
                     </li>
                   ))}

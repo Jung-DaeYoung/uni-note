@@ -40,7 +40,6 @@ const SharedQuizBoardPage = () => {
         <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">CBT 시험 공유게시판</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">같은 강의 수강생이 공유한 시험을 풀고, 틀린 문제는 오답노트에 담아 보세요.</p>
           </div>
 
           <div className="flex items-center gap-2">

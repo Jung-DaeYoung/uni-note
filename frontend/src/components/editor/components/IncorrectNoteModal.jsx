@@ -73,7 +73,6 @@ const IncorrectNoteModal = ({ isOpen, onClose, questionId }) => {
               <Bookmark size={20} className="text-blue-600 dark:text-blue-400" />
               오답노트 담기
             </h2>
-            <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500 mt-0.5">문제를 분류하여 저장하세요.</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors text-slate-400 dark:text-slate-500">
             <X size={20} />

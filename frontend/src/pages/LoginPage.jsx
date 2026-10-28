@@ -30,8 +30,7 @@ const LoginPage = () => {
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 font-sans">
       <div className="max-w-sm w-full bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100">
         <div className="text-center mb-10">
-          <h1 className="text-4xl font-black text-blue-600 mb-2">UniNote</h1>
-          <p className="text-slate-500 font-medium text-sm">서비스 이용을 위해 로그인해주세요.</p>
+          <h1 className="text-4xl font-black text-blue-600">UniNote</h1>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">

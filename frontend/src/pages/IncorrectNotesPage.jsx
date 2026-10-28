@@ -48,7 +48,6 @@ const IncorrectNotesPage = () => {
         <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">오답노트</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">틀린 문제를 분석하고 복습하세요.</p>
           </div>
 
           <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">

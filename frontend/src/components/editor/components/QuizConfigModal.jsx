@@ -42,16 +42,10 @@ const TYPE_LABELS = {
   SHORT_ANSWER: '주관식',
 };
 
-const TYPE_DESCRIPTIONS = {
-  MULTIPLE_CHOICE: '선택지 중 정답을 고르는 문제',
-  OX: '참·거짓을 판단하는 문제',
-  SHORT_ANSWER: '직접 답을 입력하는 문제',
-};
-
 const DIFFICULTY_OPTIONS = [
-  { value: 'EASY', label: '하 · 기초', description: '핵심 개념 확인' },
-  { value: 'NORMAL', label: '중 · 보통', description: '표준 난이도' },
-  { value: 'HARD', label: '상 · 심화', description: '응용 및 심화' },
+  { value: 'EASY', label: '하 · 기초' },
+  { value: 'NORMAL', label: '중 · 보통' },
+  { value: 'HARD', label: '상 · 심화' },
 ];
 
 
@@ -397,7 +391,6 @@ const QuestionTypeSection = ({ activeTypes, typeCounts, onToggleType, onChangeCo
               />
               <span className="min-w-0">
                 <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{TYPE_LABELS[type]}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{TYPE_DESCRIPTIONS[type]}</p>
               </span>
             </label>
             <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
@@ -489,7 +482,6 @@ const DifficultySection = ({ difficulty, onChange }) => (
           }`}
         >
           <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{opt.label}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{opt.description}</p>
         </button>
       ))}
     </div>
@@ -937,7 +929,6 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
             </div>
             <div>
               <h2 id="quiz-config-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">AI 문제 생성</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">노트에서 학습 문제를 구성합니다</p>
             </div>
           </div>
           <button

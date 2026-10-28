@@ -59,7 +59,6 @@ const QuizLibraryPage = () => {
         <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">학습 보관함</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">생성된 퀴즈와 과거 풀이 기록을 관리하세요.</p>
           </div>
 
           <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">

@@ -39,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class KeywordService {
     // keyword.explain 로그에 남는 prompt·schema 버전. 문구나 스키마를 바꾸면 올린다.
-    public static final String PROMPT_VERSION = "2026-10-17.1";
+    public static final String PROMPT_VERSION = "2026-10-28.1";
 
     // 학생별 설명 요청 제한. ponytail: 서버 메모리 기준이라 재시작하면 초기화된다.
     static final int MAX_EXPLAINS_PER_WINDOW = 20;
@@ -59,9 +59,7 @@ public class KeywordService {
     // 검색어와 사이트만 받고, 링크는 이 목록의 검색 URL로만 만든다.
     enum ResourceSite {
         WIKIPEDIA_KO("한국어 위키백과", "ko.wikipedia.org", "https://ko.wikipedia.org/w/index.php?search="),
-        WIKIPEDIA_EN("영어 위키백과", "en.wikipedia.org", "https://en.wikipedia.org/w/index.php?search="),
-        MDN("MDN", "developer.mozilla.org", "https://developer.mozilla.org/ko/search?q="),
-        SCHOLAR("Google Scholar", "scholar.google.com", "https://scholar.google.com/scholar?q=");
+        GOOGLE("Google", "www.google.com", "https://www.google.com/search?q=");
 
         final String label;
         final String domain;
@@ -192,7 +190,7 @@ public class KeywordService {
                "4. 문맥에 맞는 의미로 설명하라. 문맥에 없는 내용은 널리 알려진 표준 지식만 쓰고, 확실하지 않은 내용은 단정하지 마라.\n" +
                "5. relatedKeywords: 함께 공부하면 좋은 연관 키워드를 최대 5개, 각각 20자 이내의 명사구로 적어라.\n" +
                "6. resources: 더 찾아볼 자료를 최대 3개 적어라. URL은 쓰지 말고 검색어(searchQuery), 사이트(site), 추천 이유(reason, 한 문장)만 적어라. " +
-               "site는 WIKIPEDIA_KO, WIKIPEDIA_EN, MDN, SCHOLAR 중 하나이며, MDN은 웹 기술 키워드일 때만 골라라.\n" +
+               "첫 번째는 site를 WIKIPEDIA_KO로 하고, 나머지는 GOOGLE로 하되 서로 다른 관점의 검색어(예: 개념 정리, 예제, 비교)를 써라.\n" +
                "7. 마크다운 없이 JSON 객체로만 응답하라.";
     }
 

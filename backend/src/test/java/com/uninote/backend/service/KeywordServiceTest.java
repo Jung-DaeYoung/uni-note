@@ -125,12 +125,13 @@ class KeywordServiceTest {
         KeywordService.AiExplanation ai = new KeywordService.AiExplanation("요약", "쉬움", "x".repeat(4000),
                 List.of(" jwt ", "OAuth", "oauth", " ", "a".repeat(31), "HMAC", "Bearer   Token", "세션", "쿠키", "CSRF"),
                 List.of(
-                        new KeywordService.AiResource("JSON Web Token", "WIKIPEDIA_EN", " 표준 설명 "),
+                        new KeywordService.AiResource("JSON Web Token", "GOOGLE", " 표준 설명 "),
                         new KeywordService.AiResource("JWT", "EVIL_SITE", "허용 목록 밖"),
-                        new KeywordService.AiResource("  ", "MDN", "빈 검색어"),
+                        new KeywordService.AiResource("  ", "GOOGLE", "빈 검색어"),
                         new KeywordService.AiResource("토큰 & 인증", "WIKIPEDIA_KO", "한국어 문서"),
-                        new KeywordService.AiResource("JWT security", "SCHOLAR", "논문"),
-                        new KeywordService.AiResource("JWT", "MDN", "네 번째라 버림")));
+                        new KeywordService.AiResource("JWT security", "MDN", "지금은 허용 목록 밖"),
+                        new KeywordService.AiResource("JWT 예제", "GOOGLE", "예제"),
+                        new KeywordService.AiResource("JWT", "GOOGLE", "네 번째라 버림")));
 
         KeywordExplainResponse response = KeywordService.toResponse("JWT", ai);
 
@@ -138,10 +139,11 @@ class KeywordServiceTest {
         // 키워드 자신·중복·빈 값·30자 초과를 빼고 최대 5개
         assertThat(response.relatedKeywords()).containsExactly("OAuth", "HMAC", "Bearer Token", "세션", "쿠키");
         assertThat(response.resources()).extracting(KeywordExplainResponse.Resource::url).containsExactly(
-                "https://en.wikipedia.org/w/index.php?search=JSON+Web+Token",
+                "https://www.google.com/search?q=JSON+Web+Token",
                 "https://ko.wikipedia.org/w/index.php?search=%ED%86%A0%ED%81%B0+%26+%EC%9D%B8%EC%A6%9D",
-                "https://scholar.google.com/scholar?q=JWT+security");
-        assertThat(response.resources().get(0).source()).isEqualTo("en.wikipedia.org");
+                "https://www.google.com/search?q=JWT+%EC%98%88%EC%A0%9C");
+        assertThat(response.resources().get(0).title()).isEqualTo("Google에서 'JSON Web Token' 찾기");
+        assertThat(response.resources().get(0).source()).isEqualTo("www.google.com");
         assertThat(response.resources().get(0).reason()).isEqualTo("표준 설명");
     }
 

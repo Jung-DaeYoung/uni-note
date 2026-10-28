@@ -55,7 +55,7 @@ const KeywordSelectionMenu = ({ editor, onExplain, onQuiz }) => {
 
   return (
     <div
-      className="absolute z-30 flex items-center gap-2 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg"
+      className="absolute z-30 flex items-center gap-2 px-2 py-1.5 rounded-lg border border-slate-900 dark:border-slate-500 bg-slate-900 dark:bg-slate-700 shadow-lg"
       style={{ top: menu.top, left: menu.left }}
       // 버튼을 눌러도 에디터 선택이 풀리지 않게 한다.
       onMouseDown={(e) => e.preventDefault()}
@@ -64,7 +64,7 @@ const KeywordSelectionMenu = ({ editor, onExplain, onQuiz }) => {
         type="button"
         disabled={tooLong}
         onClick={() => onExplain(menu.selection)}
-        className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-40 disabled:pointer-events-none"
+        className="flex items-center gap-1.5 text-xs font-semibold text-white hover:text-blue-300 disabled:opacity-40 disabled:pointer-events-none"
       >
         <BookOpen size={13} />
         키워드 설명
@@ -73,13 +73,13 @@ const KeywordSelectionMenu = ({ editor, onExplain, onQuiz }) => {
         <button
           type="button"
           onClick={() => onQuiz(menu.selection)}
-          className="pl-2 border-l border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400"
+          className="pl-2 border-l border-slate-600 dark:border-slate-500 text-xs font-semibold text-white hover:text-blue-300"
         >
           문제 만들기
         </button>
       )}
       {tooLong && (
-        <span className="text-[11px] text-amber-600 dark:text-amber-400">{MAX_KEYWORD_LENGTH}자 이하로 선택하세요</span>
+        <span className="text-[11px] text-amber-300">{MAX_KEYWORD_LENGTH}자 이하로 선택하세요</span>
       )}
     </div>
   );

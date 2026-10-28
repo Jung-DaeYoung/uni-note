@@ -222,6 +222,16 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
             <span className="text-sm font-bold">나의 CBT 시험</span>
           </button>
 
+          <button
+            onClick={() => navigate('/incorrect-notes')}
+            className={`w-full flex items-center gap-3 py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap mb-2 ${
+              location.pathname.startsWith('/incorrect-notes') ? 'border-blue-500 bg-blue-500/5 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <BarChart3 size={18} />
+            <span className="text-sm font-bold">오답노트</span>
+          </button>
+
           {/* 게시판 메뉴: 자체 페이지 없이 하위 게시판 목록만 접고 편다 */}
           <div className="mb-2">
             <button
@@ -253,16 +263,6 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
               </div>
             )}
           </div>
-
-          <button
-            onClick={() => navigate('/incorrect-notes')}
-            className={`w-full flex items-center gap-3 py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap mb-2 ${
-              location.pathname.startsWith('/incorrect-notes') ? 'border-blue-500 bg-blue-500/5 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <BarChart3 size={18} />
-            <span className="text-sm font-bold">오답노트</span>
-          </button>
         </nav>
 
         {/* Bottom Actions */}

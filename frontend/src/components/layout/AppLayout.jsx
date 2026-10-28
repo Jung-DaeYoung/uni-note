@@ -24,11 +24,17 @@ import { useTheme } from '../../context/ThemeContext';
 
 const AppLayout = ({ children, sidebarContent, headerContent }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isDashboardExpanded, setIsDashboardExpanded] = useState(true);
-  const [isBoardExpanded, setIsBoardExpanded] = useState(true);
   const { logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  // 사이드바는 페이지마다 새로 마운트된다. 강의목록은 강의목록·강의 페이지에서,
+  // 게시판은 공유게시판 페이지에서만 펼친 채로 시작한다.
+  const [isDashboardExpanded, setIsDashboardExpanded] = useState(
+    () => location.pathname === '/dashboard' || location.pathname.startsWith('/course/')
+  );
+  const [isBoardExpanded, setIsBoardExpanded] = useState(
+    () => location.pathname === '/shared-quizzes' || location.pathname.startsWith('/shared-notes')
+  );
   const { courses, createCourse } = useCourses();
   const { theme, toggleTheme } = useTheme();
   const enrolledCourses = courses.filter(c => !c.userCreated);

@@ -60,6 +60,7 @@
 | POST | `/quiz/generate` | 예 | `{ noteIds, typeCounts, difficulty, blockSelections?, learningObjectives?, focusConcepts?, referenceQuestions?, coverAllNotes? }` — `blockSelections: [{ noteId, blockIds }]`(선택)에 있는 노트는 해당 블록과 하위 블록만, 나머지 `noteIds` 노트는 전체로 생성. `noteId`는 `noteIds`에 포함되어야 하며 전체 블록은 최대 500개. `learningObjectives`(선택)는 문항이 평가할 학습 목표로 최대 5개, 항목당 1~100자. `focusConcepts`(선택)는 집중 출제할 개념(개념별 통계의 `conceptTag`)으로 최대 5개, 항목당 1~30자이며 같은 문제를 반복하지 않도록 비교·적용·오개념 판별 형태로 출제된다. `referenceQuestions`(선택)는 학습자가 틀린 문제 원문으로 최대 10개, 항목당 1~500자이며 같은 개념을 다른 형태로 바꿔 출제한다. `coverAllNotes`(선택)가 true이고 출처가 있는 노트가 2개 이상이며 총 문항 수 이상이면 노트마다 1문항 이상 출제하도록 요청하고, 빠진 노트가 있으면 1회 재생성한다(그래도 빠지면 그대로 저장) | `QuizResponse` |
 | GET | `/quiz/my` | 예 | 없음 | `QuizSetResponse[]` |
 | GET | `/quiz/{quizSetId}` | 예 | 없음 | `QuizSetDetailResponse` |
+| PUT | `/quiz/{quizSetId}` | 예 | `{ title }` — 1~255자, 앞뒤 공백 제거 후 저장. 본인 퀴즈만 가능(아니면 403). 공유게시판 글 제목은 바뀌지 않는다 | 빈 응답(204) |
 | DELETE | `/quiz/{quizSetId}` | 예 | 없음 | 빈 응답 |
 | POST | `/quiz/attempts` | 예 | `{ quizSetId, userAnswers[] }` | 빈 응답 |
 | GET | `/quiz/attempts/my` | 예 | 없음 | `QuizAttemptResponse[]` |

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import client from '../api/client';
 import { useConfirm } from '../context/ConfirmContext';
 
-// 학습 보관함의 탭별 조회(퀴즈/풀이 이력)와 재풀이·이력·삭제 액션을 담당한다.
+// 학습 보관함의 탭별 조회(퀴즈/풀이 이력)와 재풀이·이력·이름 변경·삭제 액션을 담당한다.
 const useQuizLibrary = (activeTab) => {
   const confirm = useConfirm();
   const [quizzes, setQuizzes] = useState([]);
@@ -85,6 +85,18 @@ const useQuizLibrary = (activeTab) => {
     }
   };
 
+  const handleRename = async (e, quiz) => {
+    e.stopPropagation();
+    const title = window.prompt('새 퀴즈 이름', quiz.title)?.trim();
+    if (!title || title === quiz.title) return;
+    try {
+      await client.put(`/quiz/${quiz.quizSetId}`, { title });
+      setQuizzes(prev => prev.map(q => (q.quizSetId === quiz.quizSetId ? { ...q, title } : q)));
+    } catch (err) {
+      alert(err.response?.data?.message || '퀴즈 이름을 바꾸지 못했습니다.');
+    }
+  };
+
   const handleDelete = async (e, quizSetId) => {
     e.stopPropagation();
     const shared = quizzes.find(q => q.quizSetId === quizSetId)?.shared;
@@ -132,6 +144,7 @@ const useQuizLibrary = (activeTab) => {
     handleDelete,
     handleDeleteAttempt,
     handleShare,
+    handleRename,
   };
 };
 

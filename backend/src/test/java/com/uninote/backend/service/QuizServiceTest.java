@@ -158,6 +158,25 @@ class QuizServiceTest {
     }
 
     @Test
+    void ownerCanRenameQuizWithTrimmedTitle() {
+        when(quizSetRepository.findById(50L)).thenReturn(Optional.of(quizSet));
+
+        quizService.renameQuiz(50L, "  중간고사 대비  ", owner);
+
+        assertThat(quizSet.getTitle()).isEqualTo("중간고사 대비");
+    }
+
+    @Test
+    void otherStudentCannotRenameQuiz() {
+        quizSet.setTitle("원래 제목");
+        when(quizSetRepository.findById(50L)).thenReturn(Optional.of(quizSet));
+
+        assertThatThrownBy(() -> quizService.renameQuiz(50L, "바꾼 제목", other))
+                .isInstanceOf(CourseAccessException.class);
+        assertThat(quizSet.getTitle()).isEqualTo("원래 제목");
+    }
+
+    @Test
     void ownerlessSharedSnapshotCannotBeOpenedOrDeletedThroughQuizApi() {
         QuizSet snapshot = new QuizSet();
         snapshot.setQuizSetId(80L);

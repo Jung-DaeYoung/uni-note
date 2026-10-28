@@ -392,6 +392,16 @@ public class QuizService {
         }
     }
 
+    // 공유게시판 글은 공유 시점의 스냅샷 제목을 쓰므로 함께 바뀌지 않는다.
+    @Transactional
+    public void renameQuiz(Long quizSetId, String title, Student student) {
+        QuizSet quizSet = quizSetRepository.findById(quizSetId)
+            .orElseThrow(() -> new ResourceNotFoundException("퀴즈를 찾을 수 없습니다."));
+
+        validateOwnership(quizSet.getStudent(), student, "본인 퀴즈만 이름을 바꿀 수 있습니다.");
+        quizSet.setTitle(title.trim());
+    }
+
     @Transactional
     public void deleteQuiz(Long quizSetId, Student student) {
         QuizSet quizSet = quizSetRepository.findById(quizSetId)

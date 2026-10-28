@@ -27,6 +27,16 @@ public class QuizController {
         return ResponseEntity.noContent().build();
     }
 
+    // 숫자로 제한하지 않으면 PUT /generate 같은 요청도 여기로 들어와 405 대신 500이 된다.
+    @PutMapping("/{quizSetId:\\d+}")
+    public ResponseEntity<Void> renameQuiz(
+            @PathVariable @Positive Long quizSetId,
+            @Valid @RequestBody QuizTitleRequest request,
+            Principal principal) {
+        quizService.renameQuiz(quizSetId, request.getTitle(), getStudent(principal));
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{quizSetId}")
     public ResponseEntity<QuizSetDetailResponse> getQuizDetail(@PathVariable @Positive Long quizSetId, Principal principal) {
         return ResponseEntity.ok(quizService.getQuizDetail(quizSetId, getStudent(principal)));

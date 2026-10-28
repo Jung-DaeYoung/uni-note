@@ -111,6 +111,7 @@
 |---|---|---:|---|---|
 | GET | `/quiz/incorrect/groups` | 예 | 없음 | `IncorrectNoteGroupResponse[]` |
 | POST | `/quiz/incorrect/add-to-group` | 예 | `{ groupId, newGroupTitle, questionId }` | 빈 응답 |
+| PUT | `/quiz/incorrect/groups/{groupId}` | 예 | `{ title }` — 1~255자, 앞뒤 공백 제거 후 저장. 본인 오답노트만 가능(아니면 403). 본인의 다른 오답노트와 이름이 같으면 400 | 빈 응답(204) |
 | DELETE | `/quiz/incorrect/groups/{groupId}` | 예 | 없음 | 빈 응답 |
 | GET | `/quiz/incorrect/groups/{groupId}/practice` | 예 | 없음 | `QuizSetDetailResponse` |
 | GET | `/quiz/incorrect/summary` | 예 | 없음 | `IncorrectSummaryResponse` |

@@ -33,6 +33,15 @@ public class IncorrectNoteController {
         return ResponseEntity.ok().build();
     }
 
+    @PutMapping("/groups/{groupId}")
+    public ResponseEntity<Void> renameGroup(
+            @PathVariable @Positive Long groupId,
+            @Valid @RequestBody IncorrectGroupTitleRequest request,
+            Principal principal) {
+        incorrectNoteService.renameGroup(groupId, request.getTitle(), getStudent(principal));
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/groups/{groupId}")
     public ResponseEntity<Void> deleteGroup(@PathVariable @Positive Long groupId, Principal principal) {
         incorrectNoteService.deleteGroup(groupId, getStudent(principal));

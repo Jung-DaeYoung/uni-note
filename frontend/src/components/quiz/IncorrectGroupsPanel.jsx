@@ -1,7 +1,7 @@
 import React from 'react';
-import { Bookmark, Folder, PlayCircle, Trash2 } from 'lucide-react';
+import { Bookmark, PenLine, PlayCircle, Trash2 } from 'lucide-react';
 
-const IncorrectGroupsPanel = ({ incorrectGroups, isLoading, onPracticeIncorrect, onDeleteGroup }) => {
+const IncorrectGroupsPanel = ({ incorrectGroups, isLoading, onPracticeIncorrect, onDeleteGroup, onRenameGroup }) => {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -29,14 +29,16 @@ const IncorrectGroupsPanel = ({ incorrectGroups, isLoading, onPracticeIncorrect,
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {incorrectGroups.map(group => (
         <div key={group.id} className="bg-white dark:bg-slate-900 p-5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500/40 transition-colors group relative">
-          <div className="w-10 h-10 bg-blue-50 dark:bg-blue-500/10 rounded-lg flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400">
-            <Folder size={20} />
-          </div>
-          <div className="flex justify-between items-start mb-1">
+          <div className="flex justify-between items-start gap-2 mb-1">
             <h3 className="font-semibold text-slate-900 dark:text-slate-100 line-clamp-1">{group.title}</h3>
-            <button onClick={(e) => onDeleteGroup(e, group.id)} className="text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
-              <Trash2 size={14} />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={(e) => onRenameGroup(e, group)} title="이름 변경" className="text-slate-300 dark:text-slate-600 hover:text-blue-500 dark:hover:text-blue-400 transition-colors">
+                <PenLine size={14} />
+              </button>
+              <button onClick={(e) => onDeleteGroup(e, group.id)} title="오답노트 삭제" className="text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+                <Trash2 size={14} />
+              </button>
+            </div>
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-6">{group.itemCount}개의 문항 저장됨</p>
 

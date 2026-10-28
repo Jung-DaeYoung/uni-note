@@ -125,6 +125,18 @@ const useIncorrectNotes = (view) => {
     });
   };
 
+  const handleRenameGroup = async (e, group) => {
+    e.stopPropagation();
+    const title = window.prompt('새 오답노트 이름', group.title)?.trim();
+    if (!title || title === group.title) return;
+    try {
+      await client.put(`/quiz/incorrect/groups/${group.id}`, { title });
+      setIncorrectGroups(prev => prev.map(g => (g.id === group.id ? { ...g, title } : g)));
+    } catch (err) {
+      alert(err.response?.data?.message || '오답노트 이름을 바꾸지 못했습니다.');
+    }
+  };
+
   const handleDeleteGroup = async (e, groupId) => {
     e.stopPropagation();
     if (!(await confirm({
@@ -162,6 +174,7 @@ const useIncorrectNotes = (view) => {
     handleViewReviewSource,
     handlePracticeReviewQuestion,
     handleDeleteGroup,
+    handleRenameGroup,
     closePractice,
   };
 };

@@ -30,6 +30,7 @@ const IncorrectNotesPage = () => {
     handleViewReviewSource,
     handlePracticeReviewQuestion,
     handleDeleteGroup,
+    handleRenameGroup,
     closePractice,
   } = useIncorrectNotes(view);
 
@@ -98,6 +99,7 @@ const IncorrectNotesPage = () => {
             isLoading={isGroupsLoading}
             onPracticeIncorrect={handlePracticeIncorrect}
             onDeleteGroup={handleDeleteGroup}
+            onRenameGroup={handleRenameGroup}
           />
         )}
       </div>

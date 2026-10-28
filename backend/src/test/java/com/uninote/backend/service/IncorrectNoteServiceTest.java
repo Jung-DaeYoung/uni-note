@@ -102,6 +102,39 @@ class IncorrectNoteServiceTest {
     }
 
     @Test
+    void ownerCanRenameGroupWithTrimmedTitle() {
+        when(groupRepository.findById(30L)).thenReturn(Optional.of(group));
+        when(groupRepository.findByStudent_StudIdAndTitle(1L, "운영체제 오답")).thenReturn(Optional.empty());
+
+        incorrectNoteService.renameGroup(30L, "  운영체제 오답  ", owner);
+
+        assertThat(group.getTitle()).isEqualTo("운영체제 오답");
+    }
+
+    @Test
+    void renameGroupRejectsTitleUsedByAnotherGroup() {
+        IncorrectNoteGroup another = new IncorrectNoteGroup();
+        another.setId(31L);
+        another.setStudent(owner);
+        another.setTitle("중간고사");
+        when(groupRepository.findById(30L)).thenReturn(Optional.of(group));
+        when(groupRepository.findByStudent_StudIdAndTitle(1L, "중간고사")).thenReturn(Optional.of(another));
+
+        assertThatThrownBy(() -> incorrectNoteService.renameGroup(30L, "중간고사", owner))
+                .isInstanceOf(InvalidRequestException.class);
+        assertThat(group.getTitle()).isEqualTo("오답노트");
+    }
+
+    @Test
+    void otherStudentCannotRenameGroup() {
+        when(groupRepository.findById(30L)).thenReturn(Optional.of(group));
+
+        assertThatThrownBy(() -> incorrectNoteService.renameGroup(30L, "바꾼 이름", other))
+                .isInstanceOf(CourseAccessException.class);
+        assertThat(group.getTitle()).isEqualTo("오답노트");
+    }
+
+    @Test
     void ownerCanAddQuestionToOwnGroup() {
         when(groupRepository.findById(30L)).thenReturn(Optional.of(group));
         when(questionRepository.findById(40L)).thenReturn(Optional.of(question));

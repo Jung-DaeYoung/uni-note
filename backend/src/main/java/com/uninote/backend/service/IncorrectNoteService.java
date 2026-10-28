@@ -88,6 +88,19 @@ public class IncorrectNoteService {
     }
 
     @Transactional
+    public void renameGroup(Long groupId, String title, Student student) {
+        IncorrectNoteGroup group = getOwnedGroup(groupId, student);
+        String trimmed = title.trim();
+        // (stud_id, title) 유니크 제약이 있어 겹치는 이름은 DB 오류(500) 전에 400으로 막는다.
+        groupRepository.findByStudent_StudIdAndTitle(student.getStudId(), trimmed)
+            .filter(other -> !other.getId().equals(groupId))
+            .ifPresent(other -> {
+                throw new InvalidRequestException("같은 이름의 오답노트가 이미 있습니다.");
+            });
+        group.setTitle(trimmed);
+    }
+
+    @Transactional
     public void deleteGroup(Long groupId, Student student) {
         groupRepository.delete(getOwnedGroup(groupId, student));
     }

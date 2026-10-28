@@ -64,10 +64,10 @@ const ActivityHeatmap = ({ startDate, endDate, heatmap }) => {
                   title={`${day.date} · 활동 ${day.count}회`}
                   aria-label={`${day.date} 활동 ${day.count}회`}
                   data-level={levelOf(day.count)}
-                  className={`w-3.5 h-3.5 rounded-sm ${LEVEL_CLASSES[levelOf(day.count)]}`}
+                  className={`w-3 h-3 rounded-sm ${LEVEL_CLASSES[levelOf(day.count)]}`}
                 />
               ) : (
-                <div key={`empty-${wi}-${di}`} className="w-3.5 h-3.5" />
+                <div key={`empty-${wi}-${di}`} className="w-3 h-3" />
               ))}
             </div>
           ))}

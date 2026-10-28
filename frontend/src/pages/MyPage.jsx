@@ -30,7 +30,9 @@ const ACTIVITY_TYPES = {
   QUIZ_SHARED: { label: '시험 공유', to: () => '/shared-quizzes' },
 };
 
-const formatDateTime = (value) => (value ? value.slice(0, 16).replace('T', ' ') : '-');
+const ACTIVITIES_PER_PAGE = 5;
+
+const formatDateTime =(value) => (value ? value.slice(0, 16).replace('T', ' ') : '-');
 
 const SECTION_TITLE = 'text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800';
 const CARD = 'bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700';
@@ -57,6 +59,7 @@ const ContentList = ({ title, items, empty }) => (
 const MyPage = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [activityPage, setActivityPage] = useState(1);
 
   useEffect(() => {
     client.get('/mypage')
@@ -68,6 +71,11 @@ const MyPage = () => {
   }, []);
 
   const totalActivities = data ? data.heatmap.reduce((sum, d) => sum + d.count, 0) : 0;
+  // 서버가 최대 RECENT_ACTIVITY_LIMIT(20)개를 한 번에 주므로 화면에서만 나눈다.
+  const activities = data?.recentActivities ?? [];
+  const activityPageCount = Math.ceil(activities.length / ACTIVITIES_PER_PAGE);
+  const activityOffset = (activityPage - 1) * ACTIVITIES_PER_PAGE;
+  const pagedActivities = activities.slice(activityOffset, activityOffset + ACTIVITIES_PER_PAGE);
 
   return (
     <AppLayout>
@@ -89,37 +97,40 @@ const MyPage = () => {
               </div>
             </div>
 
-            {/* 활동 히트맵 (학기 범위) */}
-            <section className="space-y-4">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
-                <CalendarDays size={16} className="text-blue-600 dark:text-blue-400" />
-                {data.semester.label} 학습 활동
-                <span className="ml-auto text-xs font-medium text-slate-400 dark:text-slate-500">
-                  {data.semester.startDate} ~ {data.semester.endDate} · 총 {totalActivities}회
-                </span>
-              </h3>
-              <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-                <ActivityHeatmap startDate={data.semester.startDate} endDate={data.semester.endDate} heatmap={data.heatmap} />
-                {totalActivities === 0 && (
-                  <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">이번 학기 활동 기록이 아직 없습니다.</p>
-                )}
-              </div>
-            </section>
+            {/* 넓은 화면: 왼쪽 히트맵, 오른쪽 통계 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 활동 히트맵 (학기 범위) */}
+              <section className="space-y-4 min-w-0">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
+                  <CalendarDays size={16} className="text-blue-600 dark:text-blue-400" />
+                  {data.semester.label} 학습 활동
+                  <span className="ml-auto text-[11px] font-medium text-slate-400 dark:text-slate-500 text-right">
+                    {data.semester.startDate} ~ {data.semester.endDate} · 총 {totalActivities}회
+                  </span>
+                </h3>
+                <div className={`${CARD} p-4`}>
+                  <ActivityHeatmap startDate={data.semester.startDate} endDate={data.semester.endDate} heatmap={data.heatmap} />
+                  {totalActivities === 0 && (
+                    <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">이번 학기 활동 기록이 아직 없습니다.</p>
+                  )}
+                </div>
+              </section>
 
-            {/* 통계 카드 (전체 누적) */}
-            <section className="space-y-4">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 pb-2 border-b border-slate-200 dark:border-slate-800">
-                전체 학습 통계
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {SUMMARY_ITEMS.map(({ key, label }) => (
-                  <div key={key} className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-                    <p className="text-xs font-medium text-slate-400 dark:text-slate-500">{label}</p>
-                    <p className="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100">{data.summary[key]}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
+              {/* 통계 카드 (전체 누적) */}
+              <section className="space-y-4">
+                <h3 className={SECTION_TITLE}>
+                  전체 학습 통계
+                </h3>
+                <div className="grid grid-cols-3 lg:grid-cols-4 gap-2">
+                  {SUMMARY_ITEMS.map(({ key, label }) => (
+                    <div key={key} className={`${CARD} px-3 py-2`}>
+                      <p className="text-xs font-medium text-slate-400 dark:text-slate-500 truncate">{label}</p>
+                      <p className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-slate-100">{data.summary[key]}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
 
             {/* 강의별 현황 */}
             <section className="space-y-4">
@@ -155,11 +166,12 @@ const MyPage = () => {
               {data.recentActivities.length === 0 ? (
                 <p className={EMPTY}>최근 활동이 없습니다.</p>
               ) : (
+                <>
                 <ul className={`${CARD} divide-y divide-slate-100 dark:divide-slate-800`}>
-                  {data.recentActivities.map((activity, index) => {
+                  {pagedActivities.map((activity, i) => {
                     const type = ACTIVITY_TYPES[activity.type];
                     return (
-                      <li key={`${activity.type}-${activity.targetId}-${index}`}>
+                      <li key={`${activity.type}-${activity.targetId}-${activityOffset + i}`}>
                         <Link to={type ? type.to(activity) : '/mypage'} className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800/50">
                           <span className="shrink-0 w-24 text-xs font-medium text-blue-600 dark:text-blue-400">{type?.label ?? activity.type}</span>
                           <span className="truncate text-slate-700 dark:text-slate-200">{activity.title || '(제목 없음)'}</span>
@@ -169,6 +181,24 @@ const MyPage = () => {
                     );
                   })}
                 </ul>
+                {activityPageCount > 1 && (
+                  <nav aria-label="최근 활동 페이지" className="flex justify-center gap-1">
+                    {Array.from({ length: activityPageCount }, (_, i) => i + 1).map(page => (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => setActivityPage(page)}
+                        aria-current={page === activityPage ? 'page' : undefined}
+                        className={`min-w-8 h-8 px-2 rounded-md text-xs font-medium ${page === activityPage
+                          ? 'bg-blue-600 text-white dark:bg-blue-500'
+                          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                  </nav>
+                )}
+                </>
               )}
             </section>
 

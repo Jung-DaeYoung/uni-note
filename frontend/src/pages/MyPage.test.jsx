@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import MyPage from './MyPage';
 import client from '../api/client';
@@ -55,5 +55,23 @@ describe('MyPage 2차 영역', () => {
     expect(screen.getByText('중간고사 대비').closest('a')).toHaveAttribute('href', '/shared-quizzes');
     expect(screen.getByText('내 퀴즈').closest('a')).toHaveAttribute('href', '/quizzes');
     expect(screen.getByText('공유 노트').closest('a')).toHaveAttribute('href', '/shared-notes/3');
+    expect(screen.queryByRole('navigation', { name: '최근 활동 페이지' })).not.toBeInTheDocument();
+  });
+
+  it('최근 활동은 5개씩 페이지로 나눠 보여준다', async () => {
+    renderPage({
+      recentActivities: Array.from({ length: 7 }, (_, i) => (
+        { type: 'NOTE_UPDATED', title: `활동${i + 1}`, occurredAt: '2026-10-13T21:00:00', courseId: 1, targetId: i + 1 }
+      )),
+    });
+
+    expect(await screen.findByText('활동5')).toBeInTheDocument();
+    expect(screen.queryByText('활동6')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1' })).toHaveAttribute('aria-current', 'page');
+
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    expect(screen.getByText('활동6')).toBeInTheDocument();
+    expect(screen.getByText('활동7')).toBeInTheDocument();
+    expect(screen.queryByText('활동1')).not.toBeInTheDocument();
   });
 });

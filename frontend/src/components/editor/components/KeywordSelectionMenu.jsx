@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { NodeSelection } from '@tiptap/pm/state';
 import { BookOpen } from 'lucide-react';
 
 // KeywordExplainRequest의 keyword @Size(max = 80) / context @Size(max = 2000)와 같게 유지한다.
@@ -6,9 +7,10 @@ export const MAX_KEYWORD_LENGTH = 80;
 export const MAX_CONTEXT_LENGTH = 2000;
 
 // 선택한 텍스트와, 선택이 시작된 최상위 블록의 텍스트(문맥)·id. 텍스트가 없는 선택(이미지 등)은 null이다.
+// 블록 핸들의 블록 선택(NodeSelection)도 null이다. 그때는 블록 메뉴가 열려 있어 이 메뉴가 그 위를 가린다.
 const getKeywordSelection = (state) => {
   const { from, to, empty, $from } = state.selection;
-  if (empty) return null;
+  if (empty || state.selection instanceof NodeSelection) return null;
   const keyword = state.doc.textBetween(from, to, ' ').replace(/\s+/g, ' ').trim();
   if (!keyword) return null;
   const block = $from.depth > 0 ? $from.node(1) : null;

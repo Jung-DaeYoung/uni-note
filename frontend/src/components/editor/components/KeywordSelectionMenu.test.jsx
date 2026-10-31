@@ -53,6 +53,18 @@ describe('KeywordSelectionMenu', () => {
     expect(screen.queryByRole('button', { name: '키워드 설명' })).not.toBeInTheDocument();
   });
 
+  it('블록 핸들의 블록 선택(NodeSelection)에는 메뉴를 띄우지 않는다', () => {
+    makeEditor(doc(['p1', 'JWT 토큰']));
+    render(<KeywordSelectionMenu editor={editor} onExplain={vi.fn()} />);
+
+    act(() => {
+      editor.commands.setNodeSelection(0);
+    });
+
+    expect(editor.state.selection.node?.type.name).toBe('paragraph');
+    expect(screen.queryByRole('button', { name: '키워드 설명' })).not.toBeInTheDocument();
+  });
+
   it('텍스트를 선택하면 키워드 설명 버튼을 보여 주고, 누르면 선택 정보를 넘긴다', async () => {
     const user = userEvent.setup();
     const onExplain = vi.fn();

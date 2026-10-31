@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { User, CalendarDays, BookOpen, Clock, FolderOpen } from 'lucide-react';
 import AppLayout from '../components/layout/AppLayout';
 import ActivityHeatmap from '../components/mypage/ActivityHeatmap';
 import client from '../api/client';
+import './QuizLibraryPage.css';
+import './MyPage.css';
 
 const SUMMARY_ITEMS = [
   { key: 'noteCount', label: '작성한 노트' },
@@ -34,21 +35,19 @@ const ACTIVITIES_PER_PAGE = 5;
 
 const formatDateTime =(value) => (value ? value.slice(0, 16).replace('T', ' ') : '-');
 
-const SECTION_TITLE = 'text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800';
-const CARD = 'bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700';
-const EMPTY = 'text-xs text-slate-400 dark:text-slate-500';
-
 const ContentList = ({ title, items, empty }) => (
-  <div className={`${CARD} p-4`}>
-    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">{title}</p>
+  <div>
+    <h3 className="my-content-title">{title}</h3>
     {items.length === 0 ? (
-      <p className={EMPTY}>{empty}</p>
+      <p className="lib-empty">{empty}</p>
     ) : (
-      <ul className="space-y-1.5">
+      <ul className="lib-list">
         {items.map(item => (
-          <li key={item.key} className="flex items-center gap-2 text-sm">
-            <Link to={item.to} className="truncate text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400">{item.title}</Link>
-            <span className="ml-auto shrink-0 text-xs text-slate-400 dark:text-slate-500">{formatDateTime(item.at)}</span>
+          <li key={item.key}>
+            <Link to={item.to} className="my-row my-content-row">
+              <span className="my-row-title">{item.title}</span>
+              <span className="my-row-meta">{formatDateTime(item.at)}</span>
+            </Link>
           </li>
         ))}
       </ul>
@@ -79,160 +78,146 @@ const MyPage = () => {
 
   return (
     <AppLayout>
-      <div className="p-6 max-w-6xl mx-auto space-y-8 font-sans">
-        {error ? (
-          <p className="py-12 text-center text-sm font-medium text-red-500">{error}</p>
-        ) : !data ? (
-          <p className="py-12 text-center text-sm font-medium text-slate-400 dark:text-slate-500">불러오는 중...</p>
-        ) : (
-          <>
-            {/* 프로필 */}
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-blue-50 dark:bg-blue-500/10 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-                <User size={24} />
+      <div className="lib-frame">
+        <div className="lib">
+          {error ? (
+            <p className="my-error" role="alert">{error}</p>
+          ) : !data ? (
+            <p className="lib-empty">불러오는 중…</p>
+          ) : (
+            <>
+              {/* 프로필 */}
+              <h1 className="lib-title">{data.profile.name}</h1>
+              <p className="my-student-num">{data.profile.studentNum}</p>
+
+              {/* 넓은 화면: 왼쪽 히트맵, 오른쪽 통계 */}
+              <div className="my-top">
+                {/* 활동 히트맵 (학기 범위) */}
+                <section className="my-section">
+                  <div className="my-heading-row">
+                    <h2 className="lib-heading">{data.semester.label} 학습 활동</h2>
+                    <p className="my-heading-meta">
+                      <span>{data.semester.startDate} ~ {data.semester.endDate}</span>
+                      <span>총 {totalActivities}회</span>
+                    </p>
+                  </div>
+                  <div className="my-heat-body">
+                    <ActivityHeatmap startDate={data.semester.startDate} endDate={data.semester.endDate} heatmap={data.heatmap} />
+                    {totalActivities === 0 && (
+                      <p className="my-heat-note">이번 학기 활동 기록이 아직 없습니다.</p>
+                    )}
+                  </div>
+                </section>
+
+                {/* 통계 (전체 누적) */}
+                <section className="my-section">
+                  <h2 className="lib-heading">전체 학습 통계</h2>
+                  <dl className="my-stats">
+                    {SUMMARY_ITEMS.map(({ key, label }) => (
+                      <div key={key} className="my-stat">
+                        <dt>{label}</dt>
+                        <dd>{data.summary[key]}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{data.profile.name}</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">{data.profile.studentNum}</p>
-              </div>
-            </div>
 
-            {/* 넓은 화면: 왼쪽 히트맵, 오른쪽 통계 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* 활동 히트맵 (학기 범위) */}
-              <section className="space-y-4 min-w-0">
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
-                  <CalendarDays size={16} className="text-blue-600 dark:text-blue-400" />
-                  {data.semester.label} 학습 활동
-                  <span className="ml-auto text-[11px] font-medium text-slate-400 dark:text-slate-500 text-right">
-                    {data.semester.startDate} ~ {data.semester.endDate} · 총 {totalActivities}회
-                  </span>
-                </h3>
-                <div className={`${CARD} p-4`}>
-                  <ActivityHeatmap startDate={data.semester.startDate} endDate={data.semester.endDate} heatmap={data.heatmap} />
-                  {totalActivities === 0 && (
-                    <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">이번 학기 활동 기록이 아직 없습니다.</p>
-                  )}
-                </div>
-              </section>
-
-              {/* 통계 카드 (전체 누적) */}
-              <section className="space-y-4">
-                <h3 className={SECTION_TITLE}>
-                  전체 학습 통계
-                </h3>
-                <div className="grid grid-cols-3 lg:grid-cols-4 gap-2">
-                  {SUMMARY_ITEMS.map(({ key, label }) => (
-                    <div key={key} className={`${CARD} px-3 py-2`}>
-                      <p className="text-xs font-medium text-slate-400 dark:text-slate-500 truncate">{label}</p>
-                      <p className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-slate-100">{data.summary[key]}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </div>
-
-            {/* 강의별 현황 */}
-            <section className="space-y-4">
-              <h3 className={SECTION_TITLE}>
-                <BookOpen size={16} className="text-blue-600 dark:text-blue-400" />
-                강의별 학습 현황
-              </h3>
-              {data.courseProgress.length === 0 ? (
-                <p className={EMPTY}>수강 중인 강의가 없습니다.</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {data.courseProgress.map(course => (
-                    <Link key={course.courseId} to={`/course/${course.courseId}`} className={`${CARD} p-4 hover:border-blue-400 dark:hover:border-blue-500`}>
-                      <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{course.courseName}</p>
-                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                        노트 {course.noteCount} · 퀴즈 {course.quizSetCount} · 풀이 {course.attemptCount}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                        최근 활동 {course.lastActivityAt ? formatDateTime(course.lastActivityAt) : '없음'}
-                      </p>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* 최근 활동 */}
-            <section className="space-y-4">
-              <h3 className={SECTION_TITLE}>
-                <Clock size={16} className="text-blue-600 dark:text-blue-400" />
-                최근 활동
-              </h3>
-              {data.recentActivities.length === 0 ? (
-                <p className={EMPTY}>최근 활동이 없습니다.</p>
-              ) : (
-                <>
-                <ul className={`${CARD} divide-y divide-slate-100 dark:divide-slate-800`}>
-                  {pagedActivities.map((activity, i) => {
-                    const type = ACTIVITY_TYPES[activity.type];
-                    return (
-                      <li key={`${activity.type}-${activity.targetId}-${activityOffset + i}`}>
-                        <Link to={type ? type.to(activity) : '/mypage'} className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                          <span className="shrink-0 w-24 text-xs font-medium text-blue-600 dark:text-blue-400">{type?.label ?? activity.type}</span>
-                          <span className="truncate text-slate-700 dark:text-slate-200">{activity.title || '(제목 없음)'}</span>
-                          <span className="ml-auto shrink-0 text-xs text-slate-400 dark:text-slate-500">{formatDateTime(activity.occurredAt)}</span>
+              {/* 강의별 현황 */}
+              <section className="my-section">
+                <h2 className="lib-heading">강의별 학습 현황</h2>
+                {data.courseProgress.length === 0 ? (
+                  <p className="lib-empty">수강 중인 강의가 없습니다.</p>
+                ) : (
+                  <ul className="lib-list">
+                    {data.courseProgress.map(course => (
+                      <li key={course.courseId}>
+                        <Link to={`/course/${course.courseId}`} className="my-row my-course-row">
+                          <span className="my-row-title">{course.courseName}</span>
+                          <span className="my-row-meta my-counts">
+                            <span>노트 {course.noteCount}</span>
+                            <span>퀴즈 {course.quizSetCount}</span>
+                            <span>풀이 {course.attemptCount}</span>
+                          </span>
+                          <span className="my-row-meta">
+                            최근 활동 {course.lastActivityAt ? formatDateTime(course.lastActivityAt) : '없음'}
+                          </span>
                         </Link>
                       </li>
-                    );
-                  })}
-                </ul>
-                {activityPageCount > 1 && (
-                  <nav aria-label="최근 활동 페이지" className="flex justify-center gap-1">
-                    {Array.from({ length: activityPageCount }, (_, i) => i + 1).map(page => (
-                      <button
-                        key={page}
-                        type="button"
-                        onClick={() => setActivityPage(page)}
-                        aria-current={page === activityPage ? 'page' : undefined}
-                        className={`min-w-8 h-8 px-2 rounded-md text-xs font-medium ${page === activityPage
-                          ? 'bg-blue-600 text-white dark:bg-blue-500'
-                          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                      >
-                        {page}
-                      </button>
                     ))}
-                  </nav>
+                  </ul>
                 )}
-                </>
-              )}
-            </section>
+              </section>
 
-            {/* 내 콘텐츠 */}
-            <section className="space-y-4">
-              <h3 className={SECTION_TITLE}>
-                <FolderOpen size={16} className="text-blue-600 dark:text-blue-400" />
-                내 콘텐츠
-              </h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ContentList
-                  title="최근 수정한 노트"
-                  empty="작성한 노트가 없습니다."
-                  items={data.myContents.recentNotes.map(n => ({ key: n.noteId, to: `/course/${n.courseId}/note/${n.noteId}`, title: n.title || '제목 없음', at: n.updatedAt }))}
-                />
-                <ContentList
-                  title="최근 만든 퀴즈"
-                  empty="만든 퀴즈가 없습니다."
-                  items={data.myContents.recentQuizzes.map(q => ({ key: q.quizSetId, to: '/quizzes', title: q.title, at: q.createdAt }))}
-                />
-                <ContentList
-                  title="공유한 노트"
-                  empty="공유한 노트가 없습니다."
-                  items={data.myContents.sharedNotes.map(n => ({ key: n.postId, to: `/shared-notes/${n.postId}`, title: n.title, at: n.createdAt }))}
-                />
-                <ContentList
-                  title="공유한 시험"
-                  empty="공유한 시험이 없습니다."
-                  items={data.myContents.sharedQuizzes.map(q => ({ key: q.sharedQuizId, to: '/shared-quizzes', title: q.title, at: q.createdAt }))}
-                />
-              </div>
-            </section>
-          </>
-        )}
+              {/* 최근 활동 */}
+              <section className="my-section">
+                <h2 className="lib-heading">최근 활동</h2>
+                {data.recentActivities.length === 0 ? (
+                  <p className="lib-empty">최근 활동이 없습니다.</p>
+                ) : (
+                  <>
+                    <ul className="lib-list">
+                      {pagedActivities.map((activity, i) => {
+                        const type = ACTIVITY_TYPES[activity.type];
+                        return (
+                          <li key={`${activity.type}-${activity.targetId}-${activityOffset + i}`}>
+                            <Link to={type ? type.to(activity) : '/mypage'} className="my-row my-activity-row">
+                              <span className="my-activity-type">{type?.label ?? activity.type}</span>
+                              <span className="my-row-title">{activity.title || '(제목 없음)'}</span>
+                              <span className="my-row-meta">{formatDateTime(activity.occurredAt)}</span>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {activityPageCount > 1 && (
+                      <nav aria-label="최근 활동 페이지" className="my-pages">
+                        {Array.from({ length: activityPageCount }, (_, i) => i + 1).map(page => (
+                          <button
+                            key={page}
+                            type="button"
+                            onClick={() => setActivityPage(page)}
+                            aria-current={page === activityPage ? 'page' : undefined}
+                            className="my-page"
+                          >
+                            {page}
+                          </button>
+                        ))}
+                      </nav>
+                    )}
+                  </>
+                )}
+              </section>
+
+              {/* 내 콘텐츠 */}
+              <section className="my-section">
+                <h2 className="lib-heading">내 콘텐츠</h2>
+                <div className="my-contents">
+                  <ContentList
+                    title="최근 수정한 노트"
+                    empty="작성한 노트가 없습니다."
+                    items={data.myContents.recentNotes.map(n => ({ key: n.noteId, to: `/course/${n.courseId}/note/${n.noteId}`, title: n.title || '제목 없음', at: n.updatedAt }))}
+                  />
+                  <ContentList
+                    title="최근 만든 퀴즈"
+                    empty="만든 퀴즈가 없습니다."
+                    items={data.myContents.recentQuizzes.map(q => ({ key: q.quizSetId, to: '/quizzes', title: q.title, at: q.createdAt }))}
+                  />
+                  <ContentList
+                    title="공유한 노트"
+                    empty="공유한 노트가 없습니다."
+                    items={data.myContents.sharedNotes.map(n => ({ key: n.postId, to: `/shared-notes/${n.postId}`, title: n.title, at: n.createdAt }))}
+                  />
+                  <ContentList
+                    title="공유한 시험"
+                    empty="공유한 시험이 없습니다."
+                    items={data.myContents.sharedQuizzes.map(q => ({ key: q.sharedQuizId, to: '/shared-quizzes', title: q.title, at: q.createdAt }))}
+                  />
+                </div>
+              </section>
+            </>
+          )}
+        </div>
       </div>
     </AppLayout>
   );

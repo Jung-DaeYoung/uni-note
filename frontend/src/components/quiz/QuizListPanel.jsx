@@ -1,74 +1,79 @@
 import React from 'react';
-import { BrainCircuit, Calendar, PenLine, Search, Share2, Trash2 } from 'lucide-react';
+import { PenLine, Share2, Trash2 } from 'lucide-react';
+
+// 서버가 준 순서를 유지한 채 강의별로 묶는다.
+const groupByCourse = (quizzes) => {
+  const groups = new Map();
+  quizzes.forEach((quiz) => {
+    if (!groups.has(quiz.courseName)) groups.set(quiz.courseName, []);
+    groups.get(quiz.courseName).push(quiz);
+  });
+  return [...groups];
+};
 
 const QuizListPanel = ({ quizzes, onRetake, onOpenAttempts, onDelete, onShare, onRename }) => {
   if (quizzes.length === 0) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="col-span-2 text-center py-20 bg-white dark:bg-slate-900 rounded-lg border border-dashed border-slate-200 dark:border-slate-700">
-          <BrainCircuit size={40} className="mx-auto mb-4 text-slate-300 dark:text-slate-700" />
-          <p className="font-medium text-slate-400 dark:text-slate-500 text-sm">아직 생성된 퀴즈가 없습니다.</p>
-        </div>
-      </div>
-    );
+    return <p className="lib-empty">아직 생성된 퀴즈가 없습니다.</p>;
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {quizzes.map(quiz => (
-        <div key={quiz.quizSetId} className="bg-white dark:bg-slate-900 p-5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500/40 transition-colors group">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[11px] font-semibold px-2 py-0.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-md">
-              {quiz.courseName}
-            </span>
-          </div>
-          <div className="flex justify-between items-start mb-4">
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{quiz.title}</h3>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-md">{quiz.difficulty}</span>
-              <button
-                onClick={(e) => onRename(e, quiz)}
-                title="이름 변경"
-                className="text-slate-300 dark:text-slate-600 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
-              >
-                <PenLine size={16} />
-              </button>
-              {quiz.shared ? (
-                <span className="text-[11px] font-semibold px-2 py-0.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-md">공유됨</span>
-              ) : (
-                <button
-                  onClick={(e) => onShare(e, quiz)}
-                  title="CBT 시험 공유게시판에 공유"
-                  className="text-slate-300 dark:text-slate-600 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
-                >
-                  <Share2 size={16} />
-                </button>
-              )}
-              <button onClick={(e) => onDelete(e, quiz.quizSetId)} className="text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-6 font-medium flex items-center gap-1">
-            <Calendar size={12} />
-            생성일: {new Date(quiz.createdAt).toLocaleDateString()}
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onRetake(quiz)}
-              className="flex-1 py-2.5 bg-slate-900 dark:bg-slate-700 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 dark:hover:bg-slate-600 transition-colors active:scale-[0.98]"
-            >
-              다시 풀기
-            </button>
-            <button
-              onClick={() => onOpenAttempts(quiz)}
-              className="flex-1 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-colors active:scale-[0.98] flex items-center justify-center gap-1.5"
-            >
-              <Search size={14} />
-              결과 확인
-            </button>
-          </div>
-        </div>
+    <div>
+      {groupByCourse(quizzes).map(([courseName, courseQuizzes]) => (
+        <section key={courseName} className="lib-group">
+          <h2 className="lib-heading">{courseName}</h2>
+          <ul className="lib-list">
+            {courseQuizzes.map(quiz => (
+              <li key={quiz.quizSetId} className="lib-quiz">
+                <div className="lib-quiz-body">
+                  <h3 className="lib-item-title">{quiz.title}</h3>
+                  <p className="lib-meta">
+                    <span>{quiz.difficulty}</span>
+                    <span>생성일: {new Date(quiz.createdAt).toLocaleDateString()}</span>
+                    {quiz.shared && <span className="lib-shared">공유됨</span>}
+                  </p>
+                </div>
+                <div className="lib-actions">
+                  <div className="lib-icons">
+                    <button
+                      onClick={(e) => onRename(e, quiz)}
+                      title="이름 변경"
+                      aria-label={`${quiz.title} 이름 변경`}
+                      className="lib-icon"
+                    >
+                      <PenLine size={16} />
+                    </button>
+                    {quiz.shared ? (
+                      <span className="lib-icon-slot" aria-hidden="true" />
+                    ) : (
+                      <button
+                        onClick={(e) => onShare(e, quiz)}
+                        title="CBT 시험 공유게시판에 공유"
+                        aria-label={`${quiz.title} CBT 시험 공유게시판에 공유`}
+                        className="lib-icon"
+                      >
+                        <Share2 size={16} />
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => onDelete(e, quiz.quizSetId)}
+                      title="퀴즈 삭제"
+                      aria-label={`${quiz.title} 삭제`}
+                      className="lib-icon lib-icon-danger"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  <button onClick={() => onOpenAttempts(quiz)} className="lib-btn">
+                    결과 확인
+                  </button>
+                  <button onClick={() => onRetake(quiz)} className="lib-btn lib-btn-primary">
+                    다시 풀기
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
       ))}
     </div>
   );

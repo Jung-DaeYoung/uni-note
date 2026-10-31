@@ -1,0 +1,203 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full
+ * paper: oklch(98.4% 0.003 247.858) · accent: oklch(54.6% 0.245 262.881) · display: project stack · body: project stack
+ * nav: kept (AppLayout) · signature: today's review as the working list under four plain figures, weak areas as ruled bars · states: default, hover, focus, active, loading, empty
+ * axes: slate/project/blue · posture: ruled ledger · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V3 · weakest: V, it reuses the study archive's ledger classes on purpose so both screens read as one tool; icon tiles and nested cards went, the figures and the review list lead */
+
+/* 탭·목록·버튼은 QuizLibraryPage.css의 lib- 클래스를 함께 쓴다. 여기에는 이 화면에만 있는 요소를 둔다. */
+:root {
+  --inc-color-repeat: oklch(47.3% 0.137 46.201); /* amber-800 */
+  --inc-color-bar-track: oklch(92.9% 0.013 255.508); /* slate-200 */
+  --inc-color-bar-low: oklch(57.7% 0.245 27.325); /* red-600 */
+  --inc-color-bar-mid: oklch(76.9% 0.188 70.08); /* amber-500 */
+  --inc-color-bar-high: oklch(59.6% 0.145 163.225); /* emerald-600 */
+
+  --inc-dark-repeat: oklch(82.8% 0.189 84.429); /* amber-400 */
+  --inc-dark-bar-track: oklch(27.9% 0.041 260.031); /* slate-800 */
+  --inc-dark-bar-low: oklch(70.4% 0.191 22.216); /* red-400 */
+  --inc-dark-bar-mid: oklch(82.8% 0.189 84.429); /* amber-400 */
+  --inc-dark-bar-high: oklch(76.5% 0.177 163.223); /* emerald-400 */
+}
+
+.dark {
+  --inc-color-repeat: var(--inc-dark-repeat);
+  --inc-color-bar-track: var(--inc-dark-bar-track);
+  --inc-color-bar-low: var(--inc-dark-bar-low);
+  --inc-color-bar-mid: var(--inc-dark-bar-mid);
+  --inc-color-bar-high: var(--inc-dark-bar-high);
+}
+
+.inc-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 2px solid var(--lib-color-rule-strong);
+}
+
+.inc-stat {
+  min-width: 0;
+  padding: 0.25rem 0.5rem 1.25rem;
+}
+
+.inc-stat-value {
+  display: block;
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.inc-stat-accent {
+  color: var(--lib-color-accent);
+}
+
+.inc-stat-label {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--lib-color-ink-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.inc-section {
+  margin-top: 3rem;
+  min-width: 0;
+}
+
+.inc-heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  min-height: 2.25rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--lib-color-rule-strong);
+}
+
+.inc-heading-row .lib-heading {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.lib-item-title.inc-question {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.inc-repeat {
+  color: var(--inc-color-repeat);
+  font-weight: 600;
+}
+
+.inc-weak {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3rem;
+  margin-top: 3rem;
+}
+
+.inc-weak .inc-section {
+  margin-top: 0;
+}
+
+.inc-bars {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  margin: 0;
+  padding: 1rem 0.5rem 0;
+  list-style: none;
+}
+
+.inc-bar-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.375rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.inc-bar-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inc-bar-course {
+  margin-left: 0.5rem;
+  color: var(--lib-color-ink-2);
+  font-weight: 400;
+}
+
+.inc-bar-value {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.inc-bar {
+  height: 0.375rem;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--inc-color-bar-track);
+}
+
+.inc-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+
+.inc-bar-low {
+  background: var(--inc-color-bar-low);
+}
+
+.inc-bar-mid {
+  background: var(--inc-color-bar-mid);
+}
+
+.inc-bar-high {
+  background: var(--inc-color-bar-high);
+}
+
+/* 탭 아래 선이 목록의 윗선 역할을 하므로 간격만 줄인다. */
+.inc-groups {
+  margin-top: -2rem;
+}
+
+.inc-empty-hint {
+  display: block;
+  margin-top: 0.25rem;
+}
+
+@container (min-width: 44rem) {
+  .inc-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .inc-stat + .inc-stat {
+    border-left: 1px solid var(--lib-color-rule);
+    padding-left: 1.25rem;
+  }
+
+  .inc-weak {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 3.5rem;
+  }
+
+  .inc-section-wide {
+    grid-column: 1 / -1;
+  }
+
+  .inc-bars-wide {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 3.5rem;
+  }
+}

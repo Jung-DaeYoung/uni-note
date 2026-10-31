@@ -1,0 +1,367 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full
+ * paper: oklch(98.4% 0.003 247.858) · accent: oklch(54.6% 0.245 262.881) · display: project stack · body: project stack
+ * nav: kept (AppLayout) · signature: the semester activity heatmap beside plain figures, then ruled lists of courses, activity and contents · states: default, hover, focus, active, loading, empty, error
+ * axes: slate/project/blue · posture: ruled ledger · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V3 · weakest: V, it reuses the study archive's ledger classes on purpose so the account page reads as the same tool; the avatar icon, cards and section icons went, the heatmap carries the page */
+
+/* 제목·목록 기본 스타일은 QuizLibraryPage.css의 lib- 클래스를 함께 쓴다. 여기에는 이 화면에만 있는 요소를 둔다. */
+:root {
+  --my-color-heat-0: oklch(92.9% 0.013 255.508); /* slate-200 */
+  --my-color-heat-1: oklch(88.2% 0.059 254.128); /* blue-200 */
+  --my-color-heat-2: oklch(70.7% 0.165 254.624); /* blue-400 */
+  --my-color-heat-3: oklch(54.6% 0.245 262.881); /* blue-600 */
+  --my-color-heat-4: oklch(42.4% 0.199 265.638); /* blue-800 */
+
+  --my-dark-heat-0: oklch(27.9% 0.041 260.031); /* slate-800 */
+  --my-dark-heat-1: oklch(37.9% 0.146 265.522); /* blue-900 */
+  --my-dark-heat-2: oklch(48.8% 0.243 264.376); /* blue-700 */
+  --my-dark-heat-3: oklch(62.3% 0.214 259.815); /* blue-500 */
+  --my-dark-heat-4: oklch(80.9% 0.105 251.813); /* blue-300 */
+}
+
+.dark {
+  --my-color-heat-0: var(--my-dark-heat-0);
+  --my-color-heat-1: var(--my-dark-heat-1);
+  --my-color-heat-2: var(--my-dark-heat-2);
+  --my-color-heat-3: var(--my-dark-heat-3);
+  --my-color-heat-4: var(--my-dark-heat-4);
+}
+
+.my-student-num {
+  margin: -1rem 0 2rem;
+  color: var(--lib-color-ink-2);
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.my-error {
+  margin: 0;
+  padding: 1.5rem 0.5rem;
+  color: var(--lib-color-danger);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.my-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3rem;
+}
+
+.my-section {
+  min-width: 0;
+}
+
+.my-section + .my-section,
+.my-top + .my-section {
+  margin-top: 3rem;
+}
+
+.my-top .my-section + .my-section {
+  margin-top: 0;
+}
+
+.my-heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.125rem 1rem;
+  padding-bottom: 0.625rem;
+  border-bottom: 2px solid var(--lib-color-rule-strong);
+}
+
+.my-heading-row .lib-heading {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.my-heading-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.75rem;
+  margin: 0;
+  color: var(--lib-color-ink-2);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 활동 히트맵 */
+.my-heat-body {
+  padding-top: 1rem;
+}
+
+.my-heat-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.my-heat-grid {
+  display: flex;
+  gap: 0.1875rem;
+  width: max-content;
+}
+
+.my-heat-week {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+}
+
+.my-heat-cell {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 2px;
+}
+
+.my-heat-0 {
+  background: var(--my-color-heat-0);
+}
+
+.my-heat-1 {
+  background: var(--my-color-heat-1);
+}
+
+.my-heat-2 {
+  background: var(--my-color-heat-2);
+}
+
+.my-heat-3 {
+  background: var(--my-color-heat-3);
+}
+
+.my-heat-4 {
+  background: var(--my-color-heat-4);
+}
+
+.my-heat-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.1875rem;
+  margin-top: 0.5rem;
+  color: var(--lib-color-ink-2);
+  font-size: 0.75rem;
+}
+
+.my-heat-legend > :first-child {
+  margin-right: 0.25rem;
+}
+
+.my-heat-legend > :last-child {
+  margin-left: 0.25rem;
+}
+
+.my-heat-note {
+  margin: 0.5rem 0 0;
+  color: var(--lib-color-ink-2);
+  font-size: 0.8125rem;
+}
+
+/* 누적 수치 */
+.my-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem 1rem;
+  margin: 0;
+  padding: 1rem 0.5rem 0;
+}
+
+.my-stat {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.my-stat dd {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.my-stat dt {
+  margin-top: 0.25rem;
+  color: var(--lib-color-ink-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* 줄 목록의 링크 행 */
+.my-row {
+  display: grid;
+  gap: 0.25rem;
+  min-height: 2.75rem;
+  padding: 0.75rem 0.5rem;
+  color: inherit;
+  font-size: 0.9375rem;
+  text-decoration: none;
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+
+.my-row:focus-visible {
+  outline: 2px solid var(--lib-color-accent);
+  outline-offset: -2px;
+}
+
+.my-row:active {
+  background: var(--lib-color-rule);
+}
+
+.my-row-title {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--dur-micro) var(--ease-out);
+}
+
+.my-row-meta {
+  min-width: 0;
+  color: var(--lib-color-ink-2);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.my-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.75rem;
+}
+
+.my-activity-type {
+  color: var(--lib-color-accent);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* 페이지 번호 */
+.my-pages {
+  display: flex;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-top: 1rem;
+}
+
+.my-page {
+  min-width: 2.25rem;
+  height: 2.25rem;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--lib-color-ink-2);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+
+.my-page[aria-current='page'] {
+  background: var(--lib-color-primary);
+  color: var(--lib-color-primary-ink);
+}
+
+.my-page:focus-visible {
+  outline: 2px solid var(--lib-color-accent);
+  outline-offset: 2px;
+}
+
+.my-page:active {
+  background: var(--lib-color-rule);
+}
+
+.my-page:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 내 콘텐츠 */
+.my-contents {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2rem;
+  margin-top: 1.25rem;
+}
+
+.my-content-title {
+  margin: 0;
+  min-width: 0;
+  padding: 0 0.5rem 0.5rem;
+  border-bottom: 1px solid var(--lib-color-rule);
+  color: var(--lib-color-ink-2);
+  font-size: 0.875rem;
+  font-weight: 700;
+  overflow-wrap: break-word;
+}
+
+.my-contents .lib-empty {
+  padding-block: 1rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .my-row:hover {
+    background: var(--lib-color-hover);
+  }
+
+  .my-row:hover .my-row-title {
+    color: var(--lib-color-accent);
+  }
+
+  .my-page:not([aria-current='page']):hover {
+    background: var(--lib-color-hover);
+  }
+}
+
+@container (min-width: 44rem) {
+  .my-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .my-row {
+    align-items: baseline;
+    column-gap: 1.5rem;
+  }
+
+  .my-course-row {
+    grid-template-columns: minmax(0, 1fr) 11rem minmax(0, 13rem);
+  }
+
+  .my-course-row .my-row-meta:last-child {
+    text-align: right;
+  }
+
+  .my-activity-row {
+    grid-template-columns: 7rem minmax(0, 1fr) auto;
+  }
+
+  .my-content-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .my-contents {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 3.5rem;
+  }
+}
+
+@container (min-width: 56rem) {
+  .my-top {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 3.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .my-row,
+  .my-row-title,
+  .my-page {
+    transition: none;
+  }
+}

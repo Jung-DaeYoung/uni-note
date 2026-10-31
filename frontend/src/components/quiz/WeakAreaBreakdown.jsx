@@ -1,5 +1,4 @@
 import React from 'react';
-import { BookOpen, ListChecks, Tags } from 'lucide-react';
 
 const TYPE_LABELS = {
   MULTIPLE_CHOICE: '객관식',
@@ -8,9 +7,9 @@ const TYPE_LABELS = {
 };
 
 const AccuracyBar = ({ accuracyRate }) => (
-  <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-    <div
-      className={`h-full rounded-full ${accuracyRate < 0.5 ? 'bg-red-400 dark:bg-red-500' : accuracyRate < 0.75 ? 'bg-amber-400 dark:bg-amber-500' : 'bg-emerald-400 dark:bg-emerald-500'}`}
+  <div className="inc-bar">
+    <span
+      className={accuracyRate < 0.5 ? 'inc-bar-low' : accuracyRate < 0.75 ? 'inc-bar-mid' : 'inc-bar-high'}
       style={{ width: `${Math.round(accuracyRate * 100)}%` }}
     />
   </div>
@@ -21,89 +20,74 @@ const MAX_CONCEPTS = 8;
 
 const WeakAreaBreakdown = ({ courseStats, typeStats, conceptStats = [], isLoading }) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-5">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
-          <BookOpen size={16} className="text-slate-500 dark:text-slate-400" />
-          취약 강의
-        </h3>
+    <div className="inc-weak">
+      <section className="inc-section">
+        <h2 className="lib-heading">취약 강의</h2>
         {isLoading ? (
-          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 py-6 text-center">불러오는 중...</p>
+          <p className="lib-empty">불러오는 중…</p>
         ) : courseStats.length === 0 ? (
-          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 py-6 text-center">아직 풀이 기록이 없습니다.</p>
+          <p className="lib-empty">아직 풀이 기록이 없습니다.</p>
         ) : (
-          <div className="space-y-3">
+          <ul className="inc-bars">
             {courseStats.map((c) => (
-              <div key={c.courseId}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{c.courseName}</span>
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 shrink-0 ml-2">
-                    {Math.round(c.accuracyRate * 100)}%
-                  </span>
+              <li key={c.courseId}>
+                <div className="inc-bar-head">
+                  <span className="inc-bar-name">{c.courseName}</span>
+                  <span className="inc-bar-value">{Math.round(c.accuracyRate * 100)}%</span>
                 </div>
                 <AccuracyBar accuracyRate={c.accuracyRate} />
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </section>
 
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-5">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
-          <ListChecks size={16} className="text-slate-500 dark:text-slate-400" />
-          취약 유형
-        </h3>
+      <section className="inc-section">
+        <h2 className="lib-heading">취약 유형</h2>
         {isLoading ? (
-          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 py-6 text-center">불러오는 중...</p>
+          <p className="lib-empty">불러오는 중…</p>
         ) : typeStats.length === 0 ? (
-          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 py-6 text-center">아직 풀이 기록이 없습니다.</p>
+          <p className="lib-empty">아직 풀이 기록이 없습니다.</p>
         ) : (
-          <div className="space-y-3">
+          <ul className="inc-bars">
             {typeStats.map((t) => (
-              <div key={t.type}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                    {TYPE_LABELS[t.type] || t.type}
-                  </span>
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 shrink-0 ml-2">
-                    {Math.round(t.accuracyRate * 100)}%
-                  </span>
+              <li key={t.type}>
+                <div className="inc-bar-head">
+                  <span className="inc-bar-name">{TYPE_LABELS[t.type] || t.type}</span>
+                  <span className="inc-bar-value">{Math.round(t.accuracyRate * 100)}%</span>
                 </div>
                 <AccuracyBar accuracyRate={t.accuracyRate} />
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </section>
 
-      <div className="md:col-span-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-5">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
-          <Tags size={16} className="text-slate-500 dark:text-slate-400" />
-          취약 개념
-        </h3>
+      <section className="inc-section inc-section-wide">
+        <h2 className="lib-heading">취약 개념</h2>
         {isLoading ? (
-          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 py-6 text-center">불러오는 중...</p>
+          <p className="lib-empty">불러오는 중…</p>
         ) : conceptStats.length === 0 ? (
-          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 py-6 text-center">개념 태그가 있는 문제를 풀면 표시됩니다.</p>
+          <p className="lib-empty">개념 태그가 있는 문제를 풀면 표시됩니다.</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+          <ul className="inc-bars inc-bars-wide">
             {conceptStats.slice(0, MAX_CONCEPTS).map((c) => (
-              <div key={`${c.courseId}-${c.conceptTag}`}>
-                <div className="flex items-center justify-between mb-1 gap-2">
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
+              <li key={`${c.courseId}-${c.conceptTag}`}>
+                <div className="inc-bar-head">
+                  <span className="inc-bar-name">
                     {c.conceptTag}
-                    {c.courseName && <span className="ml-1.5 text-slate-400 dark:text-slate-500">{c.courseName}</span>}
+                    {c.courseName && <span className="inc-bar-course">{c.courseName}</span>}
                   </span>
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 shrink-0">
+                  <span className="inc-bar-value">
                     {Math.round(c.accuracyRate * 100)}% · {c.attemptCount}회
                   </span>
                 </div>
                 <AccuracyBar accuracyRate={c.accuracyRate} />
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </section>
     </div>
   );
 };

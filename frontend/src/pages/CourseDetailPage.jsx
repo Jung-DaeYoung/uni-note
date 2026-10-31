@@ -130,6 +130,7 @@ const CourseDetailPage = () => {
           onClick={handleCreateRootNote}
           className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors"
           title="새 노트 추가"
+          aria-label="새 노트 추가"
         >
           <Plus size={14} />
         </button>
@@ -279,8 +280,8 @@ const CourseDetailPage = () => {
       <AppLayout sidebarContent={sidebarContent} headerContent={headerContent}>
         <div className="flex h-[calc(100vh-48px)] bg-slate-50 dark:bg-slate-950 overflow-hidden relative font-sans">
           {/* Left: Lecture Note Area */}
-          <main className={`flex-1 overflow-y-auto transition-all duration-500 ease-in-out bg-white dark:bg-slate-950 ${isBoardOpen && isBoardMaximized ? 'opacity-0 invisible' : isSidePanelOpen ? 'xl:mr-[400px]' : 'mr-0'}`}>
-            <div className={`mx-auto transition-all duration-500 pt-8 ${isSidePanelOpen ? 'max-w-4xl' : 'max-w-7xl'}`}>
+          <main className={`flex-1 overflow-y-auto bg-white dark:bg-slate-950 ${isBoardOpen && isBoardMaximized ? 'opacity-0 invisible' : isSidePanelOpen ? 'xl:mr-[400px]' : 'mr-0'}`}>
+            <div className={`mx-auto pt-8 ${isSidePanelOpen ? 'max-w-4xl' : 'max-w-7xl'}`}>
               <div className="px-8 pb-10">
                 {noteId && noteData && noteData.noteId === parseInt(noteId) ? (
                   <NotionEditor key={noteId} noteId={noteId} courseId={courseId} initialData={noteData} onSaved={fetchTree} onSaveStateChange={setSaveState}

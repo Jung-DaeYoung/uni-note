@@ -39,8 +39,8 @@ const CourseBoardPanel = ({
   handleDeletePost,
 }) => {
   return (
-    <aside className={`fixed right-0 top-[48px] max-w-full h-[calc(100vh-48px)] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-[-10px_0_30px_rgba(0,0,0,0.03)] transition-all duration-500 ease-in-out z-20 flex flex-col ${isBoardOpen ? (isBoardMaximized ? 'w-full translate-x-0' : 'w-[400px] translate-x-0') : 'w-0 translate-x-full'}`}>
-      <div className={`${isBoardOpen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300 flex flex-col h-full`}>
+    <aside className={`fixed right-0 top-[48px] max-w-full h-[calc(100vh-48px)] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-[-10px_0_30px_rgba(0,0,0,0.03)] transition-[translate,visibility] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none z-20 flex flex-col ${isBoardMaximized ? 'w-full' : 'w-[400px]'} ${isBoardOpen ? 'translate-x-0 visible duration-[240ms]' : 'translate-x-full invisible duration-[180ms]'}`}>
+      <div className="flex flex-col h-full">
         {/* Board Header */}
         <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-3">

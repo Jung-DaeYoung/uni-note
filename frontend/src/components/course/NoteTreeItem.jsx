@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, FileText, FolderOpen, Trash2 } from 'lucide-react';
+import { ChevronRight, Trash2 } from 'lucide-react';
 
 const NoteTreeItem = ({ item, courseId, currentNoteId, onDelete }) => {
   const [isOpen, setIsOpen] = useState(true);
@@ -23,15 +23,12 @@ const NoteTreeItem = ({ item, courseId, currentNoteId, onDelete }) => {
             e.stopPropagation();
             setIsOpen(!isOpen);
           }}
+          aria-expanded={isOpen}
+          aria-label={isOpen ? '하위 노트 접기' : '하위 노트 펼치기'}
           className={`p-0.5 rounded hover:bg-white/10 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''} ${!hasChildren ? 'invisible' : ''}`}
         >
           <ChevronRight size={14} />
         </button>
-        {hasChildren ? (
-          <FolderOpen size={14} className={isActive ? 'text-blue-300' : 'text-slate-500 group-hover:text-blue-400'} />
-        ) : (
-          <FileText size={14} className={isActive ? 'text-blue-300' : 'text-slate-500 group-hover:text-slate-300'} />
-        )}
         <span className={`text-[11px] font-medium truncate flex-1 ${isActive ? 'text-white' : ''}`}>
           {item.title || '제목 없음'}
         </span>
@@ -44,6 +41,7 @@ const NoteTreeItem = ({ item, courseId, currentNoteId, onDelete }) => {
           }}
           className={`p-1 rounded hover:bg-red-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100 ${isActive ? 'text-blue-200' : 'text-slate-500'}`}
           title="노트 삭제"
+          aria-label="노트 삭제"
         >
           <Trash2 size={12} />
         </button>

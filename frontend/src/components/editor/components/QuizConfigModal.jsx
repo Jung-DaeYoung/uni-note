@@ -304,7 +304,7 @@ const NoteTreeRow = ({ note, level, scope }) => {
         />
       )}
       {hasChildren && isExpanded && (
-        <div className="overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+        <div className="overflow-hidden">
           {note.children.map(child => (
             <NoteTreeRow key={child.noteId} note={child} level={level + 1} scope={scope} />
           ))}

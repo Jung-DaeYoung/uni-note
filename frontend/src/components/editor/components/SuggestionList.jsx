@@ -58,7 +58,7 @@ const SuggestionList = forwardRef((props, ref) => {
 
   return (
     <div
-      className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-2 min-w-[220px] overflow-hidden animate-in fade-in zoom-in duration-100"
+      className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-2 min-w-[220px] overflow-hidden"
       // 메뉴 내부(버튼 사이 여백, 헤더 등)에서 마우스가 상호작용해도 기본 동작으로
       // 에디터의 포커스/ProseMirror selection이 옮겨가지 않도록 최상위에서 차단한다.
       // 버튼 자체의 onMouseDown(선택 처리)은 그대로 동작하며 이 핸들러와 중복 실행되지 않는다.
@@ -71,7 +71,7 @@ const SuggestionList = forwardRef((props, ref) => {
         <span>명령어</span>
         <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[8px]">{items.length}개</span>
       </div>
-      <div id="suggestion-list-container" className="max-h-[300px] overflow-y-auto custom-scrollbar scroll-smooth">
+      <div id="suggestion-list-container" className="max-h-[300px] overflow-y-auto custom-scrollbar">
         {items.map((item, index) => (
           <button
             key={index}
@@ -81,7 +81,7 @@ const SuggestionList = forwardRef((props, ref) => {
               selectItem(index);
             }}
             onMouseEnter={() => setSelectedIndex(index)}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all ${
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${
               index === selectedIndex ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
             }`}
           >

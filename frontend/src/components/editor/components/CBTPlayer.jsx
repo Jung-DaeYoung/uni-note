@@ -136,7 +136,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
                       {q.sourceBlockId && (
                         <button
                           onClick={() => handleViewSource(q)}
-                          className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-500/10 hover:bg-blue-600 hover:text-white px-2.5 py-1 rounded-full transition-all active:scale-95 shadow-sm"
+                          className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-500/10 hover:bg-blue-600 hover:text-white px-2.5 py-1 rounded-full transition-[background-color,color,scale] duration-150 ease-out active:scale-[0.97] motion-reduce:active:scale-100 shadow-sm"
                         >
                           <ExternalLink size={10} />
                           원문 보기
@@ -148,7 +148,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
                             setTargetQuestionId(q.questionId);
                             setIsIncorrectModalOpen(true);
                           }}
-                          className="flex items-center gap-1.5 text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-500/10 hover:bg-amber-600 hover:text-white px-2.5 py-1 rounded-full transition-all active:scale-95 shadow-sm"
+                          className="flex items-center gap-1.5 text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-500/10 hover:bg-amber-600 hover:text-white px-2.5 py-1 rounded-full transition-[background-color,color,scale] duration-150 ease-out active:scale-[0.97] motion-reduce:active:scale-100 shadow-sm"
                         >
                           <Bookmark size={10} />
                           오답노트 담기
@@ -175,7 +175,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
                     ) : q.type === 'OX' ? (
                       <div className="flex gap-4">
                         {['O', 'X'].map((opt) => (
-                          <div key={opt} className={`flex-1 p-3 rounded-xl border text-center font-black text-sm transition-all ${
+                          <div key={opt} className={`flex-1 p-3 rounded-xl border text-center font-black text-sm ${
                             opt === q.correctAnswer
                               ? 'border-green-500 dark:border-green-500/60 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400'
                               : (userAnswer === opt ? 'border-red-500 dark:border-red-500/60 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400' : 'border-slate-100 dark:border-slate-700 text-slate-300 dark:text-slate-600')
@@ -251,7 +251,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
               {currentQuestion?.type === 'SHORT_ANSWER' ? (
                 <input
                   type="text"
-                  className="w-full p-4 rounded-xl border-2 border-slate-100 dark:border-slate-700 dark:bg-slate-800 focus:border-blue-500 focus:bg-blue-50/30 dark:focus:bg-blue-500/10 outline-none text-sm font-bold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all"
+                  className="w-full p-4 rounded-xl border-2 border-slate-100 dark:border-slate-700 dark:bg-slate-800 focus:border-blue-500 focus:bg-blue-50/30 dark:focus:bg-blue-500/10 outline-none text-sm font-bold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="정답을 입력하세요..."
                   // user_answers.submitted_answer(VARCHAR 255)와 QuizAttemptRequest의 @Size와 같다.
                   maxLength={255}
@@ -264,7 +264,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
                     <button
                       key={opt}
                       onClick={() => handleSelect(opt)}
-                      className={`flex-1 p-6 rounded-2xl border-2 font-black text-lg transition-all ${
+                      className={`flex-1 p-6 rounded-2xl border-2 font-black text-lg transition-colors duration-100 ${
                         answers[currentIdx] === opt
                           ? 'border-blue-500 dark:border-blue-500/60 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 shadow-md shadow-blue-100 dark:shadow-none'
                           : 'border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 hover:border-slate-200 dark:hover:border-slate-700'
@@ -279,7 +279,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
                   <button
                     key={i}
                     onClick={() => handleSelect(opt)}
-                    className={`w-full text-left p-4 rounded-xl border-2 font-bold text-sm transition-all ${
+                    className={`w-full text-left p-4 rounded-xl border-2 font-bold text-sm transition-colors duration-100 ${
                       answers[currentIdx] === opt
                         ? 'border-blue-500 dark:border-blue-500/60 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 shadow-md shadow-blue-100 dark:shadow-none'
                         : 'border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 hover:border-slate-200 dark:hover:border-slate-700'
@@ -307,7 +307,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
           <button 
             onClick={handleSubmit} 
             disabled={isSaving}
-            className="px-10 py-2.5 text-xs font-black rounded-xl bg-blue-600 text-white flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95 shadow-lg shadow-blue-200 disabled:bg-blue-300"
+            className="px-10 py-2.5 text-xs font-black rounded-xl bg-blue-600 text-white flex items-center gap-2 hover:bg-blue-700 transition-[background-color,scale] duration-150 ease-out active:scale-[0.97] motion-reduce:active:scale-100 shadow-lg shadow-blue-200 disabled:bg-blue-300"
           >
             {isSaving && <Loader2 size={14} className="animate-spin" />}
             제출하고 채점하기
@@ -315,7 +315,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
         ) : (
           <button 
             onClick={() => setCurrentIdx(currentIdx + 1)} 
-            className="px-8 py-2.5 text-xs font-black rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all active:scale-95 shadow-lg shadow-blue-200"
+            className="px-8 py-2.5 text-xs font-black rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-[background-color,scale] duration-150 ease-out active:scale-[0.97] motion-reduce:active:scale-100 shadow-lg shadow-blue-200"
           >
             다음 문제
           </button>

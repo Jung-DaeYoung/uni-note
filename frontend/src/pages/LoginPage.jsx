@@ -1,18 +1,21 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { showAlert } from '../context/ConfirmContext';
+import './LoginPage.css';
 
 const LoginPage = () => {
   const [studentNum, setStudentNum] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const studentNumRef = useRef(null);
   const navigate = useNavigate();
   const { login } = useAuth();
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError('');
     setIsLoading(true);
     try {
       const response = await client.post('/auth/login', { studentNum, password });
@@ -21,54 +24,72 @@ const LoginPage = () => {
       navigate('/dashboard');
     } catch (error) {
       const errorMessage = error.response?.data?.message || '로그인에 실패했습니다. 학번과 비밀번호를 확인해주세요.';
-      showAlert(errorMessage);
+      setError(errorMessage);
+      studentNumRef.current?.focus();
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 font-sans">
-      <div className="max-w-sm w-full bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-black text-blue-600">UniNote</h1>
-        </div>
+    <main className="login-page">
+      <div className="login-panel">
+        <h1 className="login-wordmark">UniNote</h1>
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Student ID</label>
+        <form onSubmit={handleLogin} className="login-form">
+          <div className="login-field">
+            <label htmlFor="login-student-num" className="login-label">학번</label>
             <input
+              ref={studentNumRef}
+              id="login-student-num"
+              name="username"
               type="text"
+              autoComplete="username"
               value={studentNum}
               onChange={(e) => setStudentNum(e.target.value)}
-              placeholder="학번을 입력하세요"
-              className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-4 px-5 text-slate-900 font-semibold placeholder:text-slate-300 focus:bg-white focus:border-blue-500/20 focus:ring-4 focus:ring-blue-500/5 transition-all outline-none"
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? 'login-error' : undefined}
+              className="login-input"
               required
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Password</label>
+          <div className="login-field">
+            <label htmlFor="login-password" className="login-label">비밀번호</label>
             <input
+              id="login-password"
+              name="password"
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="비밀번호를 입력하세요"
-              className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-4 px-5 text-slate-900 font-semibold placeholder:text-slate-300 focus:bg-white focus:border-blue-500/20 focus:ring-4 focus:ring-blue-500/5 transition-all outline-none"
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? 'login-error' : undefined}
+              className="login-input"
               required
             />
           </div>
 
-          <button 
-            type="submit" 
+          <div className="login-status">
+            {error && (
+              <p id="login-error" role="alert" className="login-error">
+                {error}
+              </p>
+            )}
+          </div>
+
+          <button
+            type="submit"
             disabled={isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] disabled:opacity-70"
+            aria-busy={isLoading}
+            className="login-submit"
           >
+            {isLoading && <span className="login-spinner" aria-hidden="true" />}
             {isLoading ? '인증 중...' : '로그인'}
           </button>
         </form>
       </div>
-    </div>
+    </main>
   );
 };
 

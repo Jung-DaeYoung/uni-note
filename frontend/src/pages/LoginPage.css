@@ -1,0 +1,193 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full
+ * paper: oklch(20.8% 0.042 265.755) · accent: oklch(54.6% 0.245 262.881) · display: project stack · body: project stack
+ * nav: kept (none) · signature: the wordmark over fields written on ruled lines, on one dark page · states: default, hover, focus, active, disabled, loading, error
+ * axes: slate/project/blue · posture: centred column · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P3 H5 E4 S3 R5 V3 · weakest: S, a centred sign-in is familiar; the owner asked for it and for no white, so the ruled fields carry what is left */
+
+html:has(.login-page),
+body:has(.login-page) {
+  overflow-x: clip;
+}
+
+/* login- 접두사를 붙여 앱 전역 Tailwind 테마와 다른 화면의 토큰에 영향을 주지 않는다. */
+:root {
+  --login-color-night: oklch(20.8% 0.042 265.755); /* slate-900 */
+  --login-color-night-2: oklch(27.9% 0.041 260.031); /* slate-800 */
+  --login-color-ink: oklch(98.4% 0.003 247.858); /* slate-50 */
+  --login-color-ink-2: oklch(86.9% 0.022 252.894); /* slate-300 */
+  --login-color-muted: oklch(70.4% 0.04 256.788); /* slate-400 */
+  --login-color-accent: oklch(54.6% 0.245 262.881); /* blue-600 */
+  --login-color-accent-deep: oklch(48.8% 0.243 264.376); /* blue-700 */
+  --login-color-accent-ink: oklch(100% 0 0);
+  --login-color-focus: oklch(70.7% 0.165 254.624); /* blue-400: 어두운 배경에서 3:1 이상 */
+  --login-color-error: oklch(70.4% 0.191 22.216); /* red-400: 어두운 배경에서 읽히는 오류 색 */
+  --login-font-body: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+}
+
+.login-page {
+  --radius-control: 4px;
+  --dur-micro: 120ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 1.5rem;
+  background: var(--login-color-night);
+  color: var(--login-color-ink);
+  color-scheme: dark;
+  font-family: var(--login-font-body);
+}
+
+.login-panel {
+  display: grid;
+  gap: 2.5rem;
+  width: 100%;
+  max-width: 22rem;
+  min-width: 0;
+}
+
+.login-wordmark {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: break-word;
+  color: var(--login-color-ink);
+  font-size: 3.5rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.login-form {
+  display: grid;
+  gap: 1.75rem;
+}
+
+.login-field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.login-label {
+  color: var(--login-color-ink-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.login-input {
+  width: 100%;
+  height: 3rem;
+  padding-inline: 0;
+  border: 0;
+  border-bottom: 2px solid var(--login-color-muted);
+  border-radius: 0;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  background: transparent;
+  color: var(--login-color-ink);
+  font: inherit;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+
+.login-input:focus-visible {
+  outline-color: var(--login-color-focus);
+  background: var(--login-color-night-2);
+}
+
+.login-input[aria-invalid='true'] {
+  border-bottom-color: var(--login-color-error);
+}
+
+.login-status {
+  min-height: 1.5rem;
+  margin-block: -0.75rem;
+}
+
+.login-error {
+  margin: 0;
+  color: var(--login-color-error);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+  overflow-wrap: break-word;
+}
+
+.login-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  height: 3.25rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--login-color-accent);
+  color: var(--login-color-accent-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color var(--dur-micro) var(--ease-out),
+    transform var(--dur-micro) var(--ease-out);
+}
+
+.login-submit:focus-visible {
+  outline: 2px solid var(--login-color-focus);
+  outline-offset: 2px;
+}
+
+.login-submit:active:not(:disabled) {
+  transform: translateY(1px);
+  background: var(--login-color-accent-deep);
+}
+
+/* 요청 중에는 진행 상태를 읽을 수 있어야 하므로 흐리게 만들지 않는다. */
+.login-submit:disabled {
+  cursor: not-allowed;
+}
+
+.login-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: login-spin 700ms linear infinite;
+}
+
+@keyframes login-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (hover: hover) {
+  .login-input:hover:not(:focus-visible) {
+    background: var(--login-color-night-2);
+  }
+
+  .login-submit:hover:not(:disabled) {
+    background: var(--login-color-accent-deep);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-input,
+  .login-submit {
+    transition: none;
+  }
+
+  .login-submit:active:not(:disabled) {
+    transform: none;
+  }
+
+  .login-spinner {
+    animation: none;
+    border-right-color: currentColor;
+  }
+}

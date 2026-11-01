@@ -1,344 +1,175 @@
-# UniNote 프론트엔드 디자인 개선 계획
+# 노트 화면 상단 액션 디자인 정리 계획
 
 ## 목표
 
-- 기존 기능과 API 계약을 유지하면서 프론트엔드의 시각적 완성도를 높인다.
-- `slate + blue + 둥근 카드 + Tailwind 대시보드`의 반복을 줄여 AI가 만든 듯한 인상을 없앤다.
-- 트렌디하지만 과장되지 않은 UniNote 고유의 디자인 언어를 만든다.
-- 화면별 목적과 사용 흐름이 시각적으로 분명하게 느껴지도록 한다.
-- 접근성, 반응형, 자동 저장, 인증 및 기존 상호작용을 보존한다.
+노트 화면 오른쪽 위의 `AI 문제 생성`, `노트 공유`, `저장됨`, `커뮤니티`, `이름 변경`, `강의 삭제` 액션을 현재 `마이페이지`, `오답노트`, `나의 CBT 시험`에서 사용하는 깔끔한 목록형 디자인 언어와 통일한다.
 
-이 계획은 `PLANS.md`의 P0(보안)와 별개인 디자인 트랙이며, 사용자가 결정해 먼저 진행한다. 아래 `D0`~`D2`는 이 계획 안에서의 우선순위다.
+- 기존 기능, API, 상태 처리, 라우트는 유지한다.
+- 버튼이 서로 경쟁하지 않도록 주요 액션과 상태 표시의 위계를 분리한다.
+- 과도한 pill, 강한 배경색, 작은 텍스트, 기본 Tailwind 스타일 반복을 줄인다.
+- 라이트·다크 모드, 키보드 접근성, 모바일 헤더 대응을 함께 보존한다.
+
+## 현재 기준
+
+대상은 `frontend/src/pages/CourseDetailPage.jsx`의 `headerContent` 영역이다.
+
+- `AI 문제 생성`: 파란색 tinted 배경의 액션 버튼
+- `노트 공유`: 흰색 배경과 테두리의 액션 버튼
+- `저장됨`: 상태 dot와 tinted 배경을 가진 상태 표시
+- `커뮤니티`: 닫힘 상태는 흰색 버튼, 열림 상태는 어두운 filled 버튼
+- `이름 변경`, `강의 삭제`: 사용자 생성 강의에서 `커뮤니티`와 `노트 공유` 대신 같은 그룹에 표시되는 버튼
+
+참고할 기존 스타일:
+
+- `frontend/src/pages/QuizLibraryPage.css`의 `.lib-btn`, `.lib-icon`, `.lib-tab`
+- `frontend/src/pages/MyPage.css`의 `.my-row`, `.my-row-meta`
+- `frontend/src/pages/IncorrectNotesPage.css`의 요약·액션 스타일
+- `frontend/src/pages/SharedBoard.css`의 게시판 액션 및 상태 스타일
 
 ## 디자인 방향
 
-Hallmark 실행 전에 확정한 값이다.
+### 1. 공통 액션 형태
 
-- **실행 방식:** `/hallmark redesign <대상>`(full 깊이), `--scope app`. 경로, 라우트, 컴포넌트 로직은 유지한다.
-- **유지:** 줄 구분 목록, 다크 로그인, 라이트·다크 모드, 기능 아이콘.
-- **교체:** Tailwind 기본 slate·blue 팔레트, 강한 굵기, 작은 메타 라벨. 현재 파란 U 로고는 브랜드 자산으로 보지 않는다.
-- **토큰 연결:** `frontend/src/index.css`의 토큰을 Tailwind v4 `@theme`에 연결하고, JSX의 색상 유틸리티를 화면 작업 시 함께 옮긴다. 현재 JSX 18개 파일 364줄에 기본 색상 클래스가 있다.
-- **시스템 고정:** 여러 화면을 다루므로 `design.md`를 필수 산출물로 만든다.
-- **폰트:** Pretendard woff2를 저장소에 직접 포함한다. `frontend/index.html` CSP가 `font-src 'self'`이고 현재 폰트 파일이 없다.
+- 모든 액션을 동일한 높이와 수직 정렬로 맞춘다.
+- `padding`, `border`, `font-size`, `font-weight`, `gap`, `focus ring`은 `.lib-btn`과 `--lib-*` 토큰으로 통일하고, 새 액션 토큰은 만들지 않는다.
+- 액션 버튼은 얇은 테두리와 명확한 텍스트 중심으로 구성한다.
+- 아이콘은 보조 역할로 유지하고, 아이콘만으로 기능을 전달하지 않는다. 유일한 예외는 아래 `헤더 배치`의 좁은 헤더 축소이며, 이때도 숨김 글자로 접근 가능한 이름을 유지한다.
+- 반경은 기존 `lib` 계열의 절제된 값으로 맞추며 `rounded-xl`, `rounded-2xl`, pill 형태는 사용하지 않는다.
+- 버튼마다 다른 강한 색상 배경을 사용하지 않고 기본·주요·위험·상태 역할로만 구분한다.
 
-## 적용 원칙
+### 2. 액션 우선순위
 
-- **Hallmark**: 공통 디자인 시스템, 화면 구성, 타이포그래피, 색상, 표면, 레이아웃을 재정의한다.
-- **Emil design engineering**: 버튼 피드백, 패널·모달 전환, 저장 상태, 로딩·오류 상태를 정교하게 다듬는다.
-- 기능 로직과 API 호출은 변경하지 않고, 소유 컴포넌트 내부의 마크업과 스타일만 필요한 범위에서 수정한다.
-- 로직 변경 예외는 `AppLayout.jsx`의 작은 화면 사이드바 초기 상태와 모바일 overlay 전환뿐이다. 현재 `w-64` 고정이라 320px에서 본문이 56px만 남아, 이 변경 없이는 반응형 완료 기준을 맞출 수 없다.
-- 기존 라우트, 폼 필드, `id`, `name`, `data-testid`, 이벤트 핸들러, 테스트 계약을 유지한다.
-- 색상과 폰트는 전역 또는 화면 토큰을 통해 관리하고, 화면별 임의 색상 사용을 줄인다.
-- 애니메이션은 목적이 있을 때만 사용하며 `transform`, `opacity` 중심으로 기본 150~250ms, 예외도 300ms 이하로 설계한다.
-- 모든 인터랙티브 요소에 `:focus-visible`을 제공한다. disabled, loading, error, empty는 로직이 이미 있는 상태만 표현하고, 없는 상태는 `후속 작업`에 기록한다.
-- `prefers-reduced-motion`을 지원하고 모바일에서 hover 의존 동작을 사용하지 않는다.
+| 요소 | 역할 | 시각적 우선순위 |
+| --- | --- | --- |
+| AI 문제 생성 | 노트에서 수행하는 주요 작업 | accent 글자와 얇은 테두리 |
+| 노트 공유 | 조건부 콘텐츠 공유 | secondary outline action |
+| 저장 상태 | 조작 대상이 아닌 시스템 상태 | neutral status |
+| 커뮤니티 | 패널 열기·닫기 | secondary action, 활성 상태만 강조 |
+| 이름 변경 | 사용자 생성 강의 관리 | secondary outline action |
+| 강의 삭제 | 사용자 생성 강의 삭제 | danger 글자와 얇은 테두리 |
 
-## 우선순위별 개선 대상
+- `AI 문제 생성`은 가장 눈에 띄되 큰 filled button으로 과장하지 않는다. 어두운 채움 버튼인 `.lib-btn-primary`는 쓰지 않는다.
+- `노트 공유`는 저장 완료 상태에서만 활성화되는 조건을 시각적으로 명확히 한다.
+- `저장됨`은 버튼처럼 보이지 않도록 상태 표시 전용 구조로 구분한다.
+- `커뮤니티` 열림 상태는 `--lib-color-hover` 배경과 진한 테두리로 표시하고, 어두운 filled 버튼은 쓰지 않는다.
 
-### D0. 공통 레이아웃과 디자인 시스템
+### 3. 상태와 문구
 
-대상:
+- 저장 상태의 기존 문구와 의미를 유지한다.
+  - `저장 중...`
+  - `오류`
+  - `저장됨`
+  - 오류 시 `재시도`
+- 저장 상태 dot는 장식이 아니라 실제 상태를 나타내는 보조 표시로 유지한다.
+- 저장 오류 시 재시도 버튼이 작은 밑줄 링크로 묻히지 않도록 기존 목록형 액션과 같은 focus·hover·active 규칙을 적용한다.
+- 공유 버튼 disabled 상태의 이유를 `title`과 시각적 대비로 유지한다.
+- 커뮤니티가 열렸을 때 문구 `닫기`와 닫혔을 때 `커뮤니티`를 유지한다.
 
-- `frontend/src/components/layout/AppLayout.jsx`
-- `frontend/src/index.css`
-- 화면별 CSS 토큰 및 반복 스타일
-- 신규 `design.md`
-- Pretendard woff2 파일
-- 공통 구성요소
-  - `frontend/src/context/ConfirmContext.jsx`
-  - `frontend/src/components/quiz/QuestionComments.jsx`(게시판과 CBT 결과가 함께 사용)
-  - `frontend/src/components/shared-notes/SharedNoteViewer.jsx`
-- `QuizLibraryPage.css`의 `lib-` 클래스는 여러 화면이 공유하므로, 수정 시 관련 화면을 모두 확인한다.
+## 구현 범위
 
-작업:
-
-- 사이드바와 상단 헤더를 UniNote의 핵심 브랜드 구조로 재정의한다.
-- 메뉴는 라벨과 그룹 순서만 학습 목적 중심으로 조정하고, 목적지는 유지한다.
-- 전역 색상, 배경, 텍스트, 테두리, 간격, 반경, 그림자, 타입 스케일을 통합한다.
-- `--dash-*`, `--lib-*`, `--login-*`처럼 화면별로 분산된 토큰의 공통 축을 정리한다.
-- 기본 Tailwind 색상과 반복적인 `rounded-*`, `font-black`, 작은 uppercase 메타 표현을 줄인다.
-- 라이트·다크 모드가 같은 시스템 안에서 자연스럽게 대응하도록 토큰을 구성한다.
-- 사이드바 접기, 모바일 네비게이션, sticky header의 반응형 동작을 검토한다.
-
-완료 기준:
-
-- 모든 화면이 같은 토큰과 글꼴을 쓴다.
-- 공통 토큰만 조정해 색상과 밀도를 일관되게 변경할 수 있다.
-- 320px부터 데스크톱까지 가로 스크롤이나 레이아웃 충돌이 없다.
-
-### D0. 강의 상세 및 노트 에디터
-
-대상:
+### 1차 수정 대상
 
 - `frontend/src/pages/CourseDetailPage.jsx`
-- `frontend/src/components/editor/NotionEditor.jsx`
-- `frontend/src/components/course/NoteTreeItem.jsx`
-- `frontend/src/components/course/CourseBoardPanel.jsx`
-- `frontend/src/components/editor/components/KeywordExplainPanel.jsx`
-- `frontend/src/components/editor/components/KeywordSelectionMenu.jsx`
-- `frontend/src/components/editor/components/BlockHandle.jsx`
-- `frontend/src/components/editor/components/SuggestionList.jsx`
-- 업로드 및 자동 저장 관련 UI
+  - 노트 상단 액션의 className을 공통 스타일 클래스로 교체
+  - 기존 `onClick`, `disabled`, `title`, 상태 문구, 조건부 렌더링 유지
+  - 상단 액션의 DOM 의미와 접근성 속성 보존. 유일한 접근성 속성 변경은 저장 상태 문구의 `role="status"` 추가다.
+  - 마이페이지, 오답노트, 게시판과 같은 방식으로 `QuizLibraryPage.css`와 새 CSS를 import
 
-작업:
+- `frontend/src/pages/CourseDetailPage.css` (신규)
+  - `.lib-btn`과 `--lib-*` 색상 토큰을 재사용하고 부족한 값만 보완
+  - 헤더 액션 그룹에 `--dur-micro`, `--ease-out`을 선언한다. 이 값은 `.lib` 안에만 있어 헤더에서는 비어 있다.
+  - `flex: none`과 아이콘 정렬(`inline-flex`, `gap`)을 보완한다.
+  - 헤더에 `.lib` 클래스를 붙이지 않는다. `html:has(.lib)` 규칙이 작동하기 때문이다.
 
-- 노트 트리, 에디터, 게시판 패널, 키워드 패널의 우선순위를 명확히 한다.
-- 노트 작성에 집중할 수 있도록 에디터 영역을 핵심 작업대로 재구성한다.
-- breadcrumb와 상단 액션을 축소하고 현재 노트의 제목, 저장 상태, 주요 액션을 명확히 구분한다.
-- `CourseDetailPage.jsx`에 이미 있는 `저장 중`, `저장됨`, `오류`, `재시도`의 표현을 개선한다.
-- 게시판 패널과 키워드 패널이 동시에 열릴 때의 충돌과 모바일 overlay 동작을 정리한다.
-- slash command, block handle, tooltip, context action의 진입·퇴장과 focus 상태를 개선한다.
-- 에디터 내부의 작은 글자, 과도한 pill, 장식성 아이콘을 줄이고 콘텐츠 위계를 강화한다.
+### 수정하지 않는 대상
 
-완료 기준:
+- `frontend/src/pages/QuizLibraryPage.css`, `frontend/src/index.css`: 다른 화면에 영향을 주지 않도록 수정하지 않는다.
+- 모바일 사이드바: 이번 범위에서 제외한다.
 
-- 사용자가 현재 강의·노트·저장 상태를 즉시 파악할 수 있다.
-- `xl` 이상에서는 패널이 열려도 에디터의 주요 콘텐츠와 조작이 가려지지 않는다. 그 미만에서는 패널이 overlay로 열리고 닫기 경로가 분명하다.
-- 자동 저장 실패 상태와 재시도 경로가 분명하다.
+### 확인 대상
 
-### D0. 퀴즈 풀이와 결과 화면
-
-대상:
-
-- `frontend/src/components/editor/components/CBTPlayer.jsx`
-- `frontend/src/components/editor/components/QuizConfigModal.jsx`
-- `frontend/src/components/editor/components/QuizAttemptsModal.jsx`
-- `frontend/src/pages/QuizLibraryPage.jsx`
-- `frontend/src/components/quiz/QuizListPanel.jsx`
-- `frontend/src/components/quiz/QuizHistoryPanel.jsx`
-
-작업:
-
-- 카드, pill, 작은 uppercase 라벨의 반복을 줄이고 시험 화면을 차분한 학습 공간으로 만든다.
-- 문제 번호, 진행 상태, 답안 영역, 제출 액션의 위계를 재설계한다.
-- 풀이 중에는 집중을 우선하고, 결과 화면에서는 점수보다 학습 피드백을 우선한다.
-- 오답 문항에서 `해설`, `원문 보기`, `오답노트 담기`의 흐름을 명확히 한다.
-- 퀴즈 생성 모달의 설정 단계를 학생의 의사결정 순서에 맞게 그룹화한다.
-- 제출 중, 저장 실패, 빈 문제, 결과 없음 상태를 명확히 표현한다.
-- 문제 전환과 모달은 짧고 즉각적인 전환을 사용하며 키보드 조작에는 불필요한 애니메이션을 넣지 않는다.
-
-완료 기준:
-
-- 풀이 중 시선이 문제와 답안에 집중된다.
-- 결과 화면에서 다음 학습 행동을 바로 선택할 수 있다.
-- 기존 채점, 저장, 출처 이동, 댓글, 오답노트 연결 동작이 유지된다.
-
-### D0. 오답노트
-
-대상:
-
-- `frontend/src/pages/IncorrectNotesPage.jsx`
-- `frontend/src/pages/IncorrectNotesPage.css`
-- `frontend/src/components/quiz/IncorrectGroupsPanel.jsx`
-- `frontend/src/components/quiz/TodayReviewList.jsx`
-- `frontend/src/components/quiz/WeakAreaBreakdown.jsx`
-- `frontend/src/components/quiz/IncorrectSummaryCards.jsx`
-- `frontend/src/components/editor/components/IncorrectNoteModal.jsx`
-
-작업:
-
-- 요약 수치, 오늘의 복습, 취약 영역, 오답노트 모음의 위계를 새 디자인 시스템에 맞춘다.
-- 기존 `다시 풀기`와 오답노트 저장 흐름의 시각적 우선순위를 분명히 한다.
-
-완료 기준:
-
-- 오늘의 복습과 다시 풀기 동작이 기존과 같다.
-- 기존 테스트가 확인하는 `25% · 4회` 문구를 유지한다.
-
-### D1. 대시보드
-
-대상:
-
-- `frontend/src/pages/DashboardPage.jsx`
-- `frontend/src/pages/DashboardPage.css`
-
-작업:
-
-- 현재 ruled list 중심 구성을 유지하되, 첫 화면의 대표 행동을 `DashboardResponse`의 `recentNotes`로 표시하는 “최근 노트 이어 쓰기”로 명확히 한다. 새 API 호출은 추가하지 않는다.
-- 최근 노트, 수강 강의, 최신 커뮤니티의 우선순위를 재배치한다.
-- 대시보드와 마이페이지의 역할을 구분한다.
-- 활동 시각화는 마이페이지에만 둔다.
-- 동일한 리스트 패턴 안에서도 대표 콘텐츠와 보조 콘텐츠의 밀도와 시각적 무게를 다르게 한다.
-
-완료 기준:
-
-- 최근 노트가 있으면 첫 화면에서 한 번의 선택으로 이어 쓸 수 있다.
-- 대시보드가 단순 목록이 아니라 학습 흐름의 시작점으로 읽힌다.
-
-### D1. 마이페이지와 활동 시각화
-
-대상:
-
-- `frontend/src/pages/MyPage.jsx`
-- `frontend/src/pages/MyPage.css`
-- `frontend/src/components/mypage/ActivityHeatmap`
-
-작업:
-
-- GitHub형 히트맵을 단순 활동량 표시가 아니라 학습 리듬을 이해하는 도구로 보강한다.
-- 전체 통계, 강의별 현황, 최근 활동, 내 콘텐츠의 정보 우선순위를 조정한다.
-- 숫자만 크게 나열하는 통계 구성을 줄이고, 기존 `/incorrect-notes` 링크로 복습 행동과 연결한다.
-- 긴 목록의 날짜·메타 정보 밀도와 모바일 가독성을 개선한다.
-- 빈 상태와 데이터 없음 상태를 낙담시키지 않으면서 다음 행동을 제시하도록 만든다.
-
-완료 기준:
-
-- 활동 히트맵, 통계, 내 콘텐츠의 기존 데이터와 이동 동작이 유지된다.
-- 마이페이지에서 `/incorrect-notes`로 바로 이동할 수 있다.
-- 320px에서 가로 스크롤 없이 목록과 메타 정보를 읽을 수 있다.
-
-### D1. 게시판과 댓글
-
-대상:
-
-- `frontend/src/components/course/CourseBoardPanel.jsx`
-- `frontend/src/pages/SharedNoteBoardPage.jsx`
-- `frontend/src/pages/SharedQuizBoardPage.jsx`
-- `frontend/src/pages/SharedBoard.css`
-- 댓글 관련 컴포넌트
-
-작업:
-
-- `rounded card`가 반복되는 목록을 줄이고 제목·강의·댓글·최근 활동이 자연스럽게 읽히는 목록으로 개선한다.
-- 익명성은 유지하되 작성자, 본인 게시물, 수정·삭제 가능 상태를 명확히 구분한다.
-- 작성, 수정, 삭제, 댓글 전송의 성공·실패 피드백을 정교하게 한다.
-- 우측 패널, 최대화, 모바일 화면 전환을 하나의 공간 모델로 통합한다.
-- 빈 게시판에서 사용자가 무엇을 할 수 있는지 안내하되 불필요한 장식은 넣지 않는다.
-
-완료 기준:
-
-- 작성, 수정, 삭제, 댓글 전송과 익명 마스킹, 권한 동작이 유지된다.
-- 본인 글은 기존 `isAuthor` 값으로 구분되고, 수정·삭제 가능 여부가 분명하다.
-- 우측 패널, 최대화, 작은 화면에서 게시판을 열고 닫는 경로가 분명하다.
-
-### D2. 로그인 화면
-
-대상:
-
-- `frontend/src/pages/LoginPage.jsx`
-- `frontend/src/pages/LoginPage.css`
-
-작업:
-
-- 현재의 절제된 다크 로그인 방향은 유지하되 UniNote가 학습 도구라는 정체성을 최소한의 시각 언어로 강화한다.
-- 입력 오류, 로딩, focus, disabled 상태의 대비와 피드백을 점검한다.
-- 중앙 로그인 템플릿을 그대로 장식하기보다 워드마크, 입력 리듬, 여백으로 완성도를 높인다.
-
-완료 기준:
-
-- 로그인 성공, 실패, 로딩 동작과 `LoginPage.test.jsx`가 유지된다.
-- 다크 배경에서 입력 오류, focus, disabled 상태를 구분할 수 있다.
-
-## 공통 상호작용 개선 체크리스트
-
-- 버튼 press 상태에 `scale(0.97)` 수준의 즉각적인 피드백을 필요한 경우에만 적용한다.
-- `transition: all`을 사용하지 않고 실제 변경 속성만 지정한다.
-- UI 전환은 기본적으로 `ease-out` 계열을 사용하고, 기본 150~250ms, 예외도 300ms 이하로 한다.
-- popover와 tooltip은 trigger 방향을 기준으로 transform origin을 설정한다.
-- 모달은 중앙 기준을 유지하고, drawer·side panel은 열리는 방향과 일치하는 origin을 사용한다.
-- 자주 반복되는 키보드 액션에는 불필요한 애니메이션을 넣지 않는다.
-- hover 스타일은 `hover: hover`와 `pointer: fine` 환경에서만 적용한다.
-- 모든 애니메이션에 reduced-motion 대체 동작을 제공한다.
-- loading UI가 콘텐츠를 갑자기 밀어내지 않도록 공간을 예약한다.
-- 오류는 조용히 무시하지 않는다. 복구 로직이 이미 있는 오류만 복구 액션을 표현하고, 없는 경우는 `후속 작업`에 기록한다.
-
-## Hallmark 검증 기준
-
-- 공통 및 변경 화면의 모든 색상과 폰트가 토큰을 사용한다.
-- 테마, 글꼴, 강조색은 공유하고 화면별 구성만 다르게 한다.
-- 동일한 카드·리스트·버튼 패턴의 반복이 의도적으로 관리된다.
-- 작은 uppercase 라벨, 장식성 eyebrow, 중복 meta 문자열, 기본 그라디언트를 사용하지 않는다.
-- 카드 안의 카드, 과도한 pill, 프레임워크 기본 색상 의존을 제거한다.
-- 컨테이너 폭과 이미지·그리드 트랙이 반응형 기준을 충족한다.
-- 주요 제목, 설명, 액션의 정보량이 한 화면에서 과밀하지 않다.
-- 실제 제품 콘텐츠와 데이터만 사용하며 임의의 수치·후기·로고를 추가하지 않는다.
-- Hallmark 정적·렌더 검사를 실행하고 FAIL을 모두 해결한다.
-
-## 작업 순서
-
-1. `AGENTS.md`의 `Hallmark 스킬 사용 제한`을 지키고, 시작 전 추적 파일의 변경이 없는지 확인한다.
-2. 개발 서버를 켠 상태에서 `sloplint --render --before --url <route> --scope app`으로 기준을 새로 기록한다. 기존 `.hallmark/before.json`은 재사용하지 않는다.
-3. 시스템(토큰, 폰트, `design.md`, `AppLayout`)을 먼저 만든다.
-4. 노트, 퀴즈, 오답노트, 대시보드, 마이페이지, 게시판, 로그인 순서로 진행한다.
-5. 화면별 상태와 상호작용을 Emil 원칙에 맞춰 정리한다.
-6. 단계마다 검증 후 커밋 가능한 단위로 나눈다.
-7. 최종적으로 전체 화면의 디자인 일관성, 기능 보존, 반응형, 접근성을 검토한다.
-
-## 수정 후보 파일
-
-- `frontend/src/index.css`
 - `frontend/src/components/layout/AppLayout.jsx`
-- `frontend/src/pages/DashboardPage.jsx`
-- `frontend/src/pages/DashboardPage.css`
-- `frontend/src/pages/CourseDetailPage.jsx`
-- `frontend/src/components/editor/NotionEditor.jsx`
-- `frontend/src/components/course/NoteTreeItem.jsx`
-- `frontend/src/components/course/CourseBoardPanel.jsx`
-- `frontend/src/components/editor/components/KeywordExplainPanel.jsx`
-- `frontend/src/components/editor/components/KeywordSelectionMenu.jsx`
-- `frontend/src/components/editor/components/BlockHandle.jsx`
-- `frontend/src/components/editor/components/SuggestionList.jsx`
-- `frontend/src/components/editor/components/CBTPlayer.jsx`
-- `frontend/src/components/editor/components/QuizConfigModal.jsx`
-- `frontend/src/components/editor/components/QuizAttemptsModal.jsx`
-- `frontend/src/components/editor/components/IncorrectNoteModal.jsx`
-- `frontend/src/pages/QuizLibraryPage.jsx`
-- `frontend/src/pages/QuizLibraryPage.css`
-- `frontend/src/components/quiz/QuizListPanel.jsx`
-- `frontend/src/components/quiz/QuizHistoryPanel.jsx`
-- `frontend/src/components/quiz/QuestionComments.jsx`
-- `frontend/src/pages/IncorrectNotesPage.jsx`
-- `frontend/src/pages/IncorrectNotesPage.css`
-- `frontend/src/components/quiz/IncorrectGroupsPanel.jsx`
-- `frontend/src/components/quiz/TodayReviewList.jsx`
-- `frontend/src/components/quiz/WeakAreaBreakdown.jsx`
-- `frontend/src/components/quiz/IncorrectSummaryCards.jsx`
-- `frontend/src/pages/MyPage.jsx`
-- `frontend/src/pages/MyPage.css`
-- `frontend/src/components/mypage/ActivityHeatmap.jsx`
-- `frontend/src/pages/SharedNoteBoardPage.jsx`
-- `frontend/src/pages/SharedQuizBoardPage.jsx`
-- `frontend/src/pages/SharedBoard.css`
-- `frontend/src/components/shared-notes/SharedNoteViewer.jsx`
-- `frontend/src/context/ConfirmContext.jsx`
-- `frontend/src/pages/LoginPage.jsx`
-- `frontend/src/pages/LoginPage.css`
+  - 액션 그룹이 `shrink-0`이고 헤더 콘텐츠가 `overflow-hidden`이라 좁은 폭에서 잘릴 수 있다. 헤더 콘텐츠의 클리핑을 확인하고, 필요한 경우에만 최소한으로 조정한다.
 
-실제 구현 시에는 변경이 필요한 파일만 선택하고, 관련 없는 파일은 수정하지 않는다.
+## 구체적인 스타일 작업
+
+### 액션 버튼
+
+- 높이를 기존 `.lib-btn` 계열과 맞춘다.
+- 텍스트 크기는 노트 제목·breadcrumb보다 작되 기능을 읽을 수 있는 크기로 유지한다.
+- `background-color`, `color`, `border-color`, `scale`만 명시적으로 transition한다.
+- `:hover`는 마우스·트랙패드 환경에서만 적용한다.
+- `:active`에는 기존 `.lib-btn:active`와 같은 `scale: 0.97`을 적용한다.
+- `:focus-visible`은 기존 목록 화면과 동일한 accent outline 규칙을 사용한다.
+- disabled는 opacity만 낮추지 말고 cursor와 대비로 비활성 상태를 명확히 한다.
+
+### 저장 상태
+
+- 버튼과 구분되는 inline status로 표시한다. 현재 코드에는 `role`이 없으므로 상태 문구 `span`에만 `role="status"`를 새로 붙이고, `재시도` 버튼은 그 밖에 둔다.
+- 상태 배경은 화면을 지배하지 않는 neutral surface로 통일한다.
+- 저장 중 점의 `animate-pulse`는 유지하되 `prefers-reduced-motion`에서 끈다.
+- 오류 상태는 색상만으로 구분하지 않고 문구와 재시도 액션을 함께 표시한다.
+
+### 헤더 배치
+
+- 넓은 화면에서는 breadcrumb와 액션 그룹이 서로 밀어내지 않도록 `min-width: 0`, `flex-shrink`, `overflow`를 정리한다.
+- 1024px 전후에서는 액션 간격을 줄이고 텍스트가 잘리지 않도록 한다.
+- 좁은 헤더에서는 액션을 아이콘 버튼으로 축소하고, 글자는 시각적으로만 숨겨 접근 가능한 이름을 유지한다. `title`도 함께 둔다.
+- 축소 기준은 뷰포트가 아니라 헤더 폭이다. 사이드바 때문에 같은 뷰포트에서도 본문 폭이 달라지므로 컨테이너 쿼리를 쓴다.
+- 저장 상태는 좁은 헤더에서 점과 숨김 글자로 줄이되, 오류일 때는 `오류`와 `재시도`를 계속 보이게 한다.
+- 다음 방식은 쓰지 않는다.
+  - 보조 행: 헤더 높이 48px를 전제한 `h-[calc(100vh-48px)]`가 깨진다.
+  - overflow 메뉴: 새 상태와 키보드 처리가 필요해 기능 유지 원칙과 맞지 않는다.
+
+## 보존해야 할 동작
+
+- `AI 문제 생성` 클릭 시 `setIsQuizModalOpen(true)`
+- `노트 공유` 클릭 시 `handleShareNote(...)`
+- 저장 완료 전 노트 공유 disabled
+- 저장 실패 시 `saveState.retry`
+- `커뮤니티` 클릭 시 게시판 열기·닫기와 키워드 패널 닫기
+- 사용자 생성 강의에서는 기존 `이름 변경`, `강의 삭제` 액션이 계속 표시됨
+- 공유·삭제·퀴즈 생성에 대한 기존 모달과 API 호출 유지
+- 기존 라우트, 상태 이름, 테스트 선택자, 접근성 속성 보존
+
+## 구현 순서
+
+1. Hallmark 삭제 정리 변경을 먼저 커밋해 이번 변경과 섞이지 않게 한다.
+2. 작업 시작 전 `git status --short`로 사용자 변경 사항을 확인한다.
+3. `CourseDetailPage.jsx`의 현재 스타일과 헤더 폭을 확인한다.
+4. `CourseDetailPage.css`를 추가하고 `QuizLibraryPage.css`와 함께 import한다.
+5. 모든 액션의 className과 상태 스타일을 한 번에 교체한다.
+6. 320px, 375px, 768px, 1024px, 1440px에서 헤더 배치를 확인한다. 320px와 375px는 사이드바를 접은 상태로 확인한다. 사이드바가 `w-64`로 고정되어 펼친 상태에서는 본문이 56~119px뿐이기 때문이다. 1024px는 사이드바를 펼친 조합도 확인한다.
+7. 라이트·다크 모드와 저장 중·저장 오류·공유 disabled·커뮤니티 open 상태를 확인한다.
+8. 변경 범위와 기존 동작을 diff로 검토한다.
 
 ## 검증
 
-- Frontend lint: `cd frontend; npm run lint`
-- Frontend build: `cd frontend; npm run build`
-- Frontend tests: `cd frontend; npm run test`
-- 테스트를 재디자인에 맞춰 고치지 않는다. `QuizConfigModal.test.jsx`는 텍스트와 역할 기반 조회가 102줄이라 그룹 재배치 영향이 크다.
-- Hallmark: `sloplint --render --kept`로 링크, 필드, 핸들러, 테스트 훅 누락을 확인한다.
-- 확인 폭: 320, 375, 1024, 1920px
-- 변경 화면의 주요 상태 수동 검토:
-  - 로그인 성공·실패·로딩
-  - 사이드바 접기·펼치기와 모바일 전환
-  - 노트 자동 저장·실패·재시도
-  - 게시판 열기·최대화·작성·수정·삭제
-  - 퀴즈 생성·풀이·제출·결과·오답노트
-  - 오답노트 화면의 오늘의 복습·취약 영역·다시 풀기
-  - 공유 노트 상세
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+- `cd frontend; npm run test`
+  - `CourseDetailPage`를 직접 검사하는 테스트가 없으므로(`App.test.jsx`는 mock) 클릭 동작은 수동으로 확인한다.
+- 수동 확인:
+  - 각 액션의 클릭 동작: 퀴즈 모달, 공유 확인, 재시도, 커뮤니티 열기·닫기
+  - 노트 없이 `/course/:id`만 연 상태
+  - 노트가 없는 상태
+  - 노트 로딩 및 노트 제목이 긴 상태
+  - 저장 중
+  - 저장됨
+  - 저장 오류 및 재시도
+  - 저장 완료 전 공유 disabled
+  - 공유 가능 상태
+  - 커뮤니티 닫힘·열림
+  - 사용자 생성 강의의 이름 변경·삭제 액션
   - 라이트·다크 모드
-  - 키보드 focus와 reduced motion
+  - 키보드 focus-visible
+  - reduced motion
 
-## 보존해야 할 계약
+## 완료 기준
 
-- 기존 REST API 경로와 응답 필드
-- JWT 인증과 Axios interceptor 흐름
-- 노트 Tiptap JSON, 자동 저장 debounce, localStorage 복구
-- 블록 ID, 페이지 링크, 첨부 파일, 출처 이동
-- 퀴즈 생성·저장·풀이·오답노트 연결
-- 익명 게시글·댓글의 작성자 마스킹과 권한 동작
-- 기존 라우트, 폼 필드, 테스트 선택자 및 핵심 이벤트 핸들러
-
-## 후속 작업
-
-로직이나 데이터 변경이 필요해 이 계획에서 제외한 항목이다.
-
-- 자동 저장 실패 원인 표시
-- CBT 결과 화면에 `다시 풀기` 추가
-- 작업 중 발견한, 로직이 없는 로딩·오류·빈 상태와 복구 액션
+- 상단 액션 전체가 마이페이지·오답노트·나의 CBT 시험의 액션 스타일과 시각적으로 일관된다.
+- AI 문제 생성만 과도하게 튀지 않고, 각 액션의 역할이 명확하다.
+- 저장 상태는 버튼으로 오인되지 않으며 오류와 재시도가 분명하다.
+- 커뮤니티 열림 상태가 기존 기능을 유지하면서도 전체 헤더를 무겁게 만들지 않는다.
+- 사이드바를 접은 320px 이상의 화면에서 액션이 겹치거나 가려지지 않는다.
+- 기능/API/상태/접근성 계약이 깨지지 않는다.

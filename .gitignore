@@ -7,6 +7,9 @@ backend/uploads/
 # --- Generated logs (per-machine, not source) ---
 **/*.log
 
+# --- Hallmark working files and local tools (per-machine, not source) ---
+.hallmark/
+
 # --- Installed agent skills, restored from skills-lock.json (third-party, not source) ---
 .agents/
 .claude/skills/

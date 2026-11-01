@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNoteTree, findNote } from '../../../context/NoteTreeContext';
-import { X, Check, BookOpen, Loader2, ChevronRight, Minus, Plus, ListTree } from 'lucide-react';
+import { X, Loader2, ChevronRight, Minus, Plus } from 'lucide-react';
 import client from '../../../api/client';
 import { showAlert } from '../../../context/ConfirmContext';
+import '../../../pages/QuizLibraryPage.css';
+import './QuizConfigModal.css';
 
 // QuizService.java의 MAX_NOTES_PER_QUIZ / MAX_TOTAL_QUESTIONS, QuizRequest.java의 유형별 상한(@Max)과
 // 동일하게 유지한다(수동 미러링 - 백엔드 상수가 바뀌면 함께 갱신 필요).
@@ -156,64 +158,62 @@ const buildSummaryEntries = (nodes, selectedIds, blockSelections) => nodes.flatM
 });
 
 const SummaryStrip = ({ noteCount, blockNoteCount, blockCount, typeCount, totalQuestions, difficultyLabel }) => (
-  <div className="px-5 py-3 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400 shrink-0">
+  <p className="qz-summary">
     <span>
-      <span className="font-semibold text-blue-600 dark:text-blue-400">{noteCount}</span>개 노트
-      {blockNoteCount > 0 && (
-        <span className="text-slate-400 dark:text-slate-500"> (블록 선택 {blockNoteCount}개 노트 · {blockCount}블록)</span>
-      )}
+      <strong>{noteCount}</strong>개 노트
+      {blockNoteCount > 0 && <span> (블록 선택 {blockNoteCount}개 노트, {blockCount}블록)</span>}
     </span>
-    <span><span className="font-semibold text-blue-600 dark:text-blue-400">{typeCount}</span>개 유형</span>
-    <span>총 <span className="font-semibold text-blue-600 dark:text-blue-400">{totalQuestions}</span>문항</span>
+    <span><strong>{typeCount}</strong>개 유형</span>
+    <span>총 <strong>{totalQuestions}</strong>문항</span>
     <span>{difficultyLabel}</span>
-  </div>
+  </p>
 );
 
 const BlockTypeBadge = ({ block }) => (
-  <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+  <span className="qz-block-type">
     {block.type === 'heading' ? `제목 ${block.level}` : BLOCK_TYPE_LABELS[block.type] || block.type}
   </span>
 );
 
-// 노트 행 바로 아래에 펼쳐지는 그 노트의 블록 목록. 왼쪽 색 테두리와 들여쓰기로 노트 행과 구분한다.
+// 노트 행 바로 아래에 펼쳐지는 그 노트의 블록 목록. 왼쪽 선과 들여쓰기로 노트 행과 구분한다.
 const NoteBlockPanel = ({ note, level, isCurrent, blockState, isWhole, selectedBlockIds, onToggleBlock }) => {
   const { status, blocks = [], hasUnselectable, error } = blockState || { status: 'loading' };
   return (
     <div
       role="group"
       aria-label={`${note.title || '제목 없는 노트'}의 블록`}
-      className="my-1 mr-1 border-l-2 border-blue-300 dark:border-blue-500/50 bg-white/70 dark:bg-slate-900/40 rounded-r-md py-1.5 pr-1"
-      style={{ marginLeft: `${level * 16 + 30}px` }}
+      className="qz-blocks"
+      style={{ marginLeft: `${level * 16 + 36}px` }}
     >
       {isCurrent && (
-        <p className="px-2 text-[11px] text-slate-400 dark:text-slate-500">최근 입력은 자동 저장(약 2초) 후 목록에 반영됩니다</p>
+        <p className="qz-note">최근 입력은 자동 저장(약 2초) 후 목록에 반영됩니다</p>
       )}
       {status === 'loading' ? (
-        <p className="flex items-center gap-2 px-2 py-1 text-xs text-slate-500 dark:text-slate-400">
-          <Loader2 size={14} className="animate-spin" />
+        <p className="qz-note qz-note-loading">
+          <Loader2 size={14} className="animate-spin motion-reduce:animate-none" />
           블록 목록을 불러오는 중...
         </p>
       ) : status === 'error' ? (
-        <p className="px-2 py-1 text-xs text-red-600 dark:text-red-400">{error}</p>
+        <p className="qz-note qz-note-error">{error}</p>
       ) : blocks.length === 0 ? (
-        <p className="px-2 py-1 text-xs text-slate-500 dark:text-slate-400">선택할 수 있는 블록이 없습니다.</p>
+        <p className="qz-note">선택할 수 있는 블록이 없습니다.</p>
       ) : (
         blocks.map((block, index) => {
           const isSelected = isWhole || selectedBlockIds.includes(block.id);
           return (
             <label
               key={block.id}
-              className={`flex items-center gap-2 py-1 pr-1 rounded-md cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/70 dark:bg-blue-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+              className={`qz-block ${isSelected ? 'qz-is-selected' : ''}`}
               style={{ paddingLeft: `${(block.type === 'heading' ? (block.level - 1) * 12 : 0) + 8}px` }}
             >
               <input
                 type="checkbox"
-                className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+                className="qz-check"
                 checked={isSelected}
                 onChange={() => onToggleBlock(note.noteId, index)}
               />
               <BlockTypeBadge block={block} />
-              <span className={`flex-1 truncate text-xs ${block.type === 'heading' ? 'font-semibold' : ''} ${isSelected ? 'text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400'}`}>
+              <span className={`qz-truncate ${block.type === 'heading' ? 'qz-block-heading' : ''}`}>
                 {block.preview}
               </span>
             </label>
@@ -221,7 +221,7 @@ const NoteBlockPanel = ({ note, level, isCurrent, blockState, isWhole, selectedB
         })
       )}
       {status === 'loaded' && hasUnselectable && (
-        <p className="px-2 pt-1 text-[11px] text-slate-400 dark:text-slate-500">PDF 등 일부 블록은 노트 전체를 선택할 때만 포함됩니다</p>
+        <p className="qz-note">PDF 등 일부 블록은 노트 전체를 선택할 때만 포함됩니다</p>
       )}
     </div>
   );
@@ -244,51 +244,39 @@ const NoteTreeRow = ({ note, level, scope }) => {
   return (
     <React.Fragment>
       <div
-        className={`flex items-center gap-1 rounded-lg transition-colors group ${isWhole || isPartial ? 'bg-blue-50/70 dark:bg-blue-500/10' : 'hover:bg-white dark:hover:bg-slate-800'}`}
-        style={{ paddingLeft: `${level * 16 + 4}px` }}
+        className={`qz-row ${isWhole || isPartial ? 'qz-is-selected' : ''}`}
+        style={{ paddingLeft: `${level * 16}px` }}
       >
         <button
           type="button"
           onClick={(e) => hasChildren && onToggleExpand(e, note.noteId)}
           aria-label={isExpanded ? '하위 노트 접기' : '하위 노트 펼치기'}
           aria-expanded={isExpanded}
-          className={`p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors ${!hasChildren ? 'invisible' : ''}`}
+          className={`lib-icon qz-expand ${!hasChildren ? 'qz-hidden' : ''}`}
         >
-          <ChevronRight
-            size={14}
-            className={`text-slate-400 dark:text-slate-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-          />
+          <ChevronRight size={14} className={`qz-chevron ${isExpanded ? 'qz-chevron-open' : ''}`} />
         </button>
-        <label className="flex flex-1 min-w-0 items-center gap-2 py-1.5 cursor-pointer">
+        <label className="qz-row-label">
           {/* 일부 블록만 고른 노트는 indeterminate(부분 선택)로 표시한다. DOM 속성이라 ref로 설정한다. */}
           <input
             ref={el => { if (el) el.indeterminate = isPartial; }}
             type="checkbox"
-            className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 transition-all"
+            className="qz-check"
             checked={isWhole}
             onChange={() => onToggleNote(note.noteId)}
           />
-          <span className={`flex-1 truncate text-xs ${isWhole || isPartial ? 'font-medium text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100'}`}>
-            {title}
-          </span>
+          <span className="qz-truncate">{title}</span>
         </label>
-        {isCurrent && (
-          <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-slate-700 text-slate-500 dark:text-slate-300">현재 노트</span>
-        )}
-        {isWhole && (
-          <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300">전체</span>
-        )}
-        {isPartial && (
-          <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">블록 {partialBlockIds.length}개</span>
-        )}
+        {isCurrent && <span className="qz-tag">현재 노트</span>}
+        {isWhole && <span className="qz-tag qz-tag-on">전체</span>}
+        {isPartial && <span className="qz-tag qz-tag-on">블록 {partialBlockIds.length}개</span>}
         <button
           type="button"
           onClick={() => onToggleBlockPanel(note.noteId)}
           aria-expanded={isBlockPanelOpen}
           aria-label={`${title} 블록 선택 ${isBlockPanelOpen ? '닫기' : '열기'}`}
-          className={`shrink-0 flex items-center gap-0.5 px-1.5 py-1 rounded text-[11px] font-medium transition-colors ${isBlockPanelOpen ? 'text-blue-600 dark:text-blue-400 bg-blue-100/70 dark:bg-blue-500/20' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+          className="qz-link"
         >
-          <ListTree size={12} />
           블록
         </button>
       </div>
@@ -303,13 +291,9 @@ const NoteTreeRow = ({ note, level, scope }) => {
           onToggleBlock={onToggleBlock}
         />
       )}
-      {hasChildren && isExpanded && (
-        <div className="overflow-hidden">
-          {note.children.map(child => (
-            <NoteTreeRow key={child.noteId} note={child} level={level + 1} scope={scope} />
-          ))}
-        </div>
-      )}
+      {hasChildren && isExpanded && note.children.map(child => (
+        <NoteTreeRow key={child.noteId} note={child} level={level + 1} scope={scope} />
+      ))}
     </React.Fragment>
   );
 };
@@ -317,27 +301,24 @@ const NoteTreeRow = ({ note, level, scope }) => {
 // 선택한 노트를 노트 단위로 한눈에 보여준다. ✕는 그 노트 하나만 해제한다(하위 노트는 그대로).
 const SelectionSummary = ({ entries, onRemove }) => (
   entries.length === 0 ? (
-    <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">선택된 노트가 없습니다.</p>
+    <p className="qz-hint qz-hint-gap">선택된 노트가 없습니다.</p>
   ) : (
-    <div className="mt-2">
-      <p className="text-xs text-slate-400 dark:text-slate-500">선택 요약</p>
-      <ul aria-label="선택 요약" className="mt-1 flex flex-wrap gap-1.5">
+    <div className="qz-selection">
+      <p className="qz-hint">선택 요약</p>
+      <ul aria-label="선택 요약" className="qz-chips">
         {entries.map(entry => (
-          <li
-            key={entry.noteId}
-            className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-700 dark:text-slate-200"
-          >
-            <span className="max-w-[10rem] truncate">{entry.title}</span>
-            <span className={entry.blockCount ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'}>
+          <li key={entry.noteId} className="qz-chip">
+            <span className="qz-truncate qz-chip-title">{entry.title}</span>
+            <span className="qz-chip-scope">
               · {entry.blockCount ? `블록 ${entry.blockCount}개` : '전체'}
             </span>
             <button
               type="button"
               onClick={() => onRemove(entry.noteId)}
               aria-label={`${entry.title} 선택 해제`}
-              className="p-0.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
+              className="qz-chip-remove"
             >
-              <X size={10} />
+              <X size={12} />
             </button>
           </li>
         ))}
@@ -347,62 +328,50 @@ const SelectionSummary = ({ entries, onRemove }) => (
 );
 
 const NoteScopeSection = ({ noteTree, scope, summaryEntries, onRemoveSelection, onSelectWeakBlocks, weakLoading }) => (
-  <div>
-    <div className="flex items-center justify-between gap-2">
-      <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">학습 범위</label>
-      <button
-        type="button"
-        onClick={onSelectWeakBlocks}
-        disabled={weakLoading}
-        className="text-[11px] font-semibold px-2 py-1 rounded-md border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 disabled:opacity-50"
-      >
+  <section className="qz-section">
+    <div className="qz-section-head">
+      <h3 className="qz-heading">학습 범위</h3>
+      <button type="button" onClick={onSelectWeakBlocks} disabled={weakLoading} className="lib-btn">
         {weakLoading ? '불러오는 중...' : '취약 블록 선택'}
       </button>
     </div>
-    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">노트를 체크하면 노트 전체를, "블록"을 눌러 일부 블록만 선택할 수 있습니다</p>
-    <div className="mt-2 space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-slate-50/50 dark:bg-slate-800/50">
+    <p className="qz-hint">노트를 체크하면 노트 전체를, "블록"을 눌러 일부 블록만 선택할 수 있습니다</p>
+    <div className="qz-list">
       {noteTree.map(note => (
         <NoteTreeRow key={note.noteId} note={note} level={0} scope={scope} />
       ))}
     </div>
     <SelectionSummary entries={summaryEntries} onRemove={onRemoveSelection} />
-  </div>
+  </section>
 );
 
 const QuestionTypeSection = ({ activeTypes, typeCounts, onToggleType, onChangeCount, onBlurCount, onStepCount }) => (
-  <div>
-    <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">문제 유형 및 문항 수</label>
-    <div className="mt-2 space-y-2">
+  <section className="qz-section">
+    <h3 className="qz-heading">문제 유형 및 문항 수</h3>
+    <div className="qz-list">
       {Object.keys(activeTypes).map(type => {
         const active = activeTypes[type];
         const count = typeCounts[type];
         return (
-          <div
-            key={type}
-            className={`flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border transition-colors ${
-              active ? 'border-blue-300 dark:border-blue-500/40 bg-blue-50/60 dark:bg-blue-500/10' : 'border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            <label className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+          <div key={type} className="qz-type">
+            <label className="qz-row-label">
               <input
                 type="checkbox"
-                className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+                className="qz-check"
                 checked={active}
                 onChange={() => onToggleType(type)}
               />
-              <span className="min-w-0">
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{TYPE_LABELS[type]}</p>
-              </span>
+              <span>{TYPE_LABELS[type]}</span>
             </label>
-            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+            <div className="qz-stepper">
               <button
                 type="button"
                 onClick={() => onStepCount(type, -1)}
                 disabled={!active || count <= 1}
                 aria-label={`${TYPE_LABELS[type]} 문항 수 줄이기`}
-                className="w-6 h-6 flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 disabled:opacity-30 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                className="qz-step"
               >
-                <Minus size={12} />
+                <Minus size={14} />
               </button>
               <input
                 type="number"
@@ -413,29 +382,29 @@ const QuestionTypeSection = ({ activeTypes, typeCounts, onToggleType, onChangeCo
                 onBlur={() => onBlurCount(type)}
                 disabled={!active}
                 aria-label={`${TYPE_LABELS[type]} 문항 수`}
-                className="w-10 text-center text-sm font-semibold bg-transparent outline-none text-slate-900 dark:text-slate-100 disabled:opacity-40"
+                className="qz-count"
               />
               <button
                 type="button"
                 onClick={() => onStepCount(type, 1)}
                 disabled={!active || count >= MAX_QUESTIONS_PER_TYPE}
                 aria-label={`${TYPE_LABELS[type]} 문항 수 늘리기`}
-                className="w-6 h-6 flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 disabled:opacity-30 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                className="qz-step"
               >
-                <Plus size={12} />
+                <Plus size={14} />
               </button>
             </div>
           </div>
         );
       })}
     </div>
-  </div>
+  </section>
 );
 
 const ModeSection = ({ mode, onSelect, loading, referenceCount, coverAllNotes }) => (
-  <div>
-    <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">생성 모드</label>
-    <div role="radiogroup" aria-label="생성 모드 선택" className="mt-2 grid grid-cols-2 gap-2">
+  <section className="qz-section">
+    <h3 className="qz-heading">생성 모드</h3>
+    <div role="radiogroup" aria-label="생성 모드 선택" className="qz-list">
       {GENERATION_MODES.map(opt => (
         <button
           key={opt.value}
@@ -444,31 +413,27 @@ const ModeSection = ({ mode, onSelect, loading, referenceCount, coverAllNotes })
           aria-checked={mode === opt.value}
           onClick={() => onSelect(opt.value)}
           disabled={loading}
-          className={`p-3 rounded-lg border text-left transition-colors disabled:opacity-50 ${
-            mode === opt.value
-              ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 dark:border-blue-500/60'
-              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-          }`}
+          className="qz-mode"
         >
-          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{opt.label}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{opt.description}</p>
+          <span className="qz-mode-label">{opt.label}</span>
+          <span className="qz-mode-desc">{opt.description}</span>
         </button>
       ))}
     </div>
-    {loading && <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">불러오는 중...</p>}
+    {loading && <p className="qz-hint qz-hint-gap">불러오는 중...</p>}
     {referenceCount > 0 && (
-      <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">틀린 문제 {referenceCount}개를 다른 형태로 바꿔 출제합니다</p>
+      <p className="qz-hint qz-hint-gap qz-hint-accent">틀린 문제 {referenceCount}개를 다른 형태로 바꿔 출제합니다</p>
     )}
     {coverAllNotes && (
-      <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">선택한 노트마다 1문항 이상 출제합니다</p>
+      <p className="qz-hint qz-hint-gap qz-hint-accent">선택한 노트마다 1문항 이상 출제합니다</p>
     )}
-  </div>
+  </section>
 );
 
 const DifficultySection = ({ difficulty, onChange }) => (
-  <div>
-    <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">난이도</label>
-    <div role="radiogroup" aria-label="난이도 선택" className="mt-2 grid grid-cols-3 gap-2">
+  <section className="qz-section">
+    <h3 className="qz-heading">난이도</h3>
+    <div role="radiogroup" aria-label="난이도 선택" className="qz-segments">
       {DIFFICULTY_OPTIONS.map(opt => (
         <button
           key={opt.value}
@@ -476,23 +441,19 @@ const DifficultySection = ({ difficulty, onChange }) => (
           role="radio"
           aria-checked={difficulty === opt.value}
           onClick={() => onChange(opt.value)}
-          className={`p-3 rounded-lg border text-left transition-colors ${
-            difficulty === opt.value
-              ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 dark:border-blue-500/60'
-              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-          }`}
+          className="qz-segment"
         >
-          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{opt.label}</p>
+          {opt.label}
         </button>
       ))}
     </div>
-  </div>
+  </section>
 );
 
 const LearningObjectivesSection = ({ value, onChange }) => (
-  <div>
-    <label htmlFor="quiz-learning-objectives" className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-      학습 목표 <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(선택, 한 줄에 하나·최대 {MAX_LEARNING_OBJECTIVES}개)</span>
+  <section className="qz-section">
+    <label htmlFor="quiz-learning-objectives" className="qz-heading">
+      학습 목표 <span className="qz-optional">(선택, 한 줄에 하나·최대 {MAX_LEARNING_OBJECTIVES}개)</span>
     </label>
     <textarea
       id="quiz-learning-objectives"
@@ -500,37 +461,32 @@ const LearningObjectivesSection = ({ value, onChange }) => (
       onChange={(e) => onChange(e.target.value)}
       rows={3}
       placeholder={'예) 페이지 교체 알고리즘의 차이를 비교할 수 있다'}
-      className="mt-2 w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500 resize-y"
+      className="qz-textarea"
     />
-  </div>
+  </section>
 );
 
 const FocusConceptSection = ({ concepts, onLoad, onRemove, loading }) => (
-  <div>
-    <div className="flex items-center justify-between gap-2">
-      <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-        집중할 개념 <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(선택)</span>
-      </label>
-      <button
-        type="button"
-        onClick={onLoad}
-        disabled={loading}
-        className="text-[11px] font-semibold px-2 py-1 rounded-md border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 disabled:opacity-50"
-      >
+  <section className="qz-section">
+    <div className="qz-section-head">
+      <h3 className="qz-heading">
+        집중할 개념 <span className="qz-optional">(선택)</span>
+      </h3>
+      <button type="button" onClick={onLoad} disabled={loading} className="lib-btn">
         {loading ? '불러오는 중...' : '취약 개념 불러오기'}
       </button>
     </div>
-    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">자주 틀린 개념을 다른 형태의 문제로 다시 출제합니다. 선택한 노트 범위에 있는 개념만 출제됩니다</p>
+    <p className="qz-hint">자주 틀린 개념을 다른 형태의 문제로 다시 출제합니다. 선택한 노트 범위에 있는 개념만 출제됩니다</p>
     {concepts.length > 0 && (
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="qz-chips qz-chips-gap">
         {concepts.map(concept => (
-          <span key={concept} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400">
+          <span key={concept} className="qz-chip">
             {concept}
             <button
               type="button"
               onClick={() => onRemove(concept)}
               aria-label={`${concept} 개념 제외`}
-              className="p-0.5 rounded-full hover:bg-amber-100 dark:hover:bg-amber-500/20"
+              className="qz-chip-remove"
             >
               <X size={12} />
             </button>
@@ -538,7 +494,7 @@ const FocusConceptSection = ({ concepts, onLoad, onRemove, loading }) => (
         ))}
       </div>
     )}
-  </div>
+  </section>
 );
 
 // preset({ noteId, blockId, keyword })이 있으면 열 때 그 블록(없으면 노트 전체)을 범위로, 키워드를 집중 개념으로 채운다.
@@ -915,46 +871,30 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div className="qz-overlay">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="quiz-config-title"
-        className="bg-white dark:bg-slate-900 w-full max-w-xl max-h-[90vh] rounded-xl shadow-xl overflow-hidden flex flex-col"
+        className="qz"
       >
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-start justify-between gap-3 shrink-0 bg-slate-50 dark:bg-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0">
-              <BookOpen size={18} className="text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <h2 id="quiz-config-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">AI 문제 생성</h2>
-            </div>
-          </div>
+        <header className="qz-header">
+          <h2 id="quiz-config-title" className="qz-title">AI 문제 생성</h2>
           <button
             onClick={onClose}
             disabled={loading}
             aria-label="문제 생성 설정 닫기"
-            className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            className="lib-icon"
           >
             <X size={18} />
           </button>
-        </div>
-
-        <SummaryStrip
-          noteCount={selectedNoteCount}
-          blockNoteCount={partialNoteIds.length}
-          blockCount={selectedBlockCount}
-          typeCount={activeTypeCount}
-          totalQuestions={totalQuestions}
-          difficultyLabel={difficultyLabel}
-        />
+        </header>
 
         {/* fieldset 자체는 스크롤 컨테이너로 신뢰할 수 없어(overflow-y가 적용되어도 scrollTop이
             반영되지 않는 브라우저 렌더링 특이사항이 있음) 스크롤은 바깥 div가 맡고,
             fieldset은 안쪽에서 disabled 상속(로딩 중 입력 일괄 비활성화) 역할만 한다. */}
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
-          <fieldset disabled={loading} className="p-4 space-y-4 border-0 m-0 min-w-0">
+        <div className="qz-body custom-scrollbar">
+          <fieldset disabled={loading} className="qz-fields">
             <ModeSection
               mode={mode}
               onSelect={selectMode}
@@ -1000,37 +940,34 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
           </fieldset>
         </div>
 
-        <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 shrink-0">
+        <footer className="qz-footer">
+          <SummaryStrip
+            noteCount={selectedNoteCount}
+            blockNoteCount={partialNoteIds.length}
+            blockCount={selectedBlockCount}
+            typeCount={activeTypeCount}
+            totalQuestions={totalQuestions}
+            difficultyLabel={difficultyLabel}
+          />
           {!loading && disabledReason && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">{disabledReason}</p>
+            <p className="qz-reason">{disabledReason}</p>
           )}
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              disabled={loading}
-              className="flex-1 text-xs font-semibold py-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors disabled:opacity-50"
-            >
+          <div className="qz-footer-actions">
+            <button onClick={onClose} disabled={loading} className="lib-btn">
               취소
             </button>
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerateDisabled}
-              className="flex-[2] flex items-center justify-center gap-2 text-xs font-semibold py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 transition-colors shadow-sm"
-            >
+            <button onClick={handleGenerate} disabled={isGenerateDisabled} className="lib-btn lib-btn-primary">
               {loading ? (
                 <>
-                  <Loader2 size={16} className="animate-spin" />
+                  <Loader2 size={16} className="animate-spin motion-reduce:animate-none" />
                   <span>문제 생성 중...</span>
                 </>
               ) : (
-                <>
-                  <Check size={16} strokeWidth={3} />
-                  <span>문제 생성 시작</span>
-                </>
+                <span>문제 생성 시작</span>
               )}
             </button>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   );

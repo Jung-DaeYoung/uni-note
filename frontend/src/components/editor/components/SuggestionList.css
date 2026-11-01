@@ -1,0 +1,92 @@
+/* Hallmark · component: slash command menu · genre: modern-minimal · theme: brand · states: default, hover, focus, active, empty · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S3 R5 V3 · weakest: S, a filled selection row is familiar on purpose; arrow keys must read instantly, so tinted icon tiles, tiny tracked labels and the shadow went and the row carries it */
+
+/* 방향키가 즉시 반응하도록 전환 효과를 두지 않는다. 메뉴는 tippy로 body에 붙으므로 토큰은 :root의 --lib-*를 쓴다. */
+.slash {
+  min-width: 16rem;
+  max-width: 20rem;
+  overflow: hidden;
+  border: 1px solid var(--lib-color-control-edge);
+  border-radius: 4px;
+  background: var(--lib-color-field);
+  color: var(--lib-color-ink);
+  word-break: keep-all;
+}
+
+.slash-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--lib-color-rule);
+  color: var(--lib-color-ink-2);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.slash-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.slash-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.375rem 0.75rem;
+  border: 0;
+  color: var(--lib-color-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* 항목 데이터의 아이콘 색(text-blue-500 등)보다 우선해 모두 글자색을 따른다. */
+.slash-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.125rem;
+  color: var(--lib-color-ink-2);
+}
+
+.slash-icon svg {
+  width: 1rem;
+  height: 1rem;
+  color: inherit;
+}
+
+.slash-text {
+  display: grid;
+  min-width: 0;
+}
+
+.slash-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.slash-desc {
+  color: var(--lib-color-ink-2);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.slash-item-selected,
+.slash-item-selected .slash-icon,
+.slash-item-selected .slash-desc {
+  color: var(--lib-color-primary-ink);
+}
+
+.slash-item:active {
+  opacity: 0.9;
+}
+
+.slash-item:focus-visible {
+  outline: 2px solid var(--lib-color-accent);
+  outline-offset: -2px;
+}

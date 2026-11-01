@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronDown, ChevronRight, Menu, Moon, Plus, Sun } from 'lucide-react';
+import { ChevronDown, ChevronRight, Menu, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCourses } from '../../context/CourseContext';
 import { useTheme } from '../../context/ThemeContext';
 import { showAlert } from '../../context/ConfirmContext';
+import './AppLayout.css';
 
 const AppLayout = ({ children, sidebarContent, headerContent }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -48,12 +49,6 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
     }
   };
 
-  // 강의목록·게시판 하위 항목 공통 스타일
-  const subItemClass = (active) => `w-[calc(100%-0.5rem)] ml-2 flex items-center gap-3 p-2.5 rounded-lg transition-colors text-xs font-bold ${
-    active
-    ? 'bg-blue-600/10 text-blue-400'
-    : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'
-  }`;
   const isSharedQuizzesActive = location.pathname === '/shared-quizzes';
   const isSharedNotesActive = location.pathname.startsWith('/shared-notes');
 
@@ -69,12 +64,14 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
       <React.Fragment key={course.courseId}>
         <button
           onClick={() => navigate(`/course/${course.courseId}`)}
-          className={subItemClass(active)}
+          aria-current={active ? 'page' : undefined}
+          title={course.courseName}
+          className="side-sub"
         >
-          <span className="truncate">{course.courseName}</span>
+          {course.courseName}
         </button>
         {active && sidebarContent && (
-          <div className="ml-4 mt-1 mb-2 border-l border-slate-800">{sidebarContent}</div>
+          <div className="side-notes">{sidebarContent}</div>
         )}
       </React.Fragment>
     );
@@ -111,7 +108,7 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto custom-scrollbar">
+        <nav className="side-nav flex-1 py-4 px-3 space-y-1 overflow-y-auto custom-scrollbar">
           <button
             onClick={() => navigate('/mypage')}
             className={`w-full flex items-center gap-3 py-2.5 pl-2.5 pr-2.5 border-l-2 rounded-r-lg transition-colors whitespace-nowrap mb-2 ${
@@ -141,33 +138,37 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
             </div>
 
             {showSidebarUnderHeader && (
-              <div className="mt-1 ml-4 border-l border-slate-800">{sidebarContent}</div>
+              <div className="side-notes">{sidebarContent}</div>
             )}
 
             {/* Course List (Nested): 수강 중인 강의 / 내가 만든 강의 */}
             {isDashboardExpanded && (
-              <div className="mt-1 ml-4 space-y-1 border-l border-slate-800">
-                <p className="px-4 pt-1 pb-1 text-[10px] font-bold text-slate-600">수강 중인 강의</p>
-                {enrolledCourses.length === 0 ? (
-                  <p className="px-6 py-2 text-[10px] text-slate-600 font-bold uppercase tracking-widest italic">수강 중인 강의 없음</p>
-                ) : (
-                  enrolledCourses.map(renderCourse)
-                )}
-
-                <div className="flex items-center justify-between pl-4 pr-2 pt-3 pb-1">
-                  <p className="text-[10px] font-bold text-slate-600">내가 만든 강의</p>
-                  <button
-                    onClick={() => setNewCourseName('')}
-                    title="새 강의 만들기"
-                    aria-label="새 강의 만들기"
-                    className="p-1 hover:bg-white/10 rounded text-slate-500 hover:text-white transition-colors"
-                  >
-                    <Plus size={12} />
-                  </button>
+              <div className="side-nested">
+                <div className="side-group">
+                  <div className="side-group-head">
+                    <p className="side-group-label">수강 중인 강의</p>
+                  </div>
+                  {enrolledCourses.length === 0 ? (
+                    <p className="side-empty">수강 중인 강의 없음</p>
+                  ) : (
+                    enrolledCourses.map(renderCourse)
+                  )}
                 </div>
-                {myCourses.map(renderCourse)}
-                {newCourseName !== null && (
-                  <div className="w-[calc(100%-0.5rem)] ml-2 flex items-center gap-3 p-2 rounded-lg bg-white/5">
+
+                <div className="side-group">
+                  <div className="side-group-head">
+                    <p className="side-group-label">내가 만든 강의</p>
+                    <button
+                      onClick={() => setNewCourseName('')}
+                      title="새 강의 만들기"
+                      aria-label="새 강의 만들기"
+                      className="side-add"
+                    >
+                      추가
+                    </button>
+                  </div>
+                  {myCourses.map(renderCourse)}
+                  {newCourseName !== null && (
                     <input
                       autoFocus
                       value={newCourseName}
@@ -183,10 +184,10 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
                         if (e.key === 'Escape') setNewCourseName(null);
                       }}
                       onBlur={submitNewCourse}
-                      className="flex-1 min-w-0 bg-transparent border-b border-blue-500 text-xs font-bold text-slate-100 placeholder:text-slate-600 outline-none py-0.5"
+                      className="side-input"
                     />
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -225,12 +226,12 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
             </button>
 
             {isBoardExpanded && (
-              <div className="mt-1 ml-4 space-y-1 border-l border-slate-800">
-                <button onClick={() => navigate('/shared-quizzes')} className={subItemClass(isSharedQuizzesActive)}>
-                  <span className="truncate">CBT 시험 공유게시판</span>
+              <div className="side-nested">
+                <button onClick={() => navigate('/shared-quizzes')} aria-current={isSharedQuizzesActive ? 'page' : undefined} className="side-sub">
+                  CBT 시험 공유게시판
                 </button>
-                <button onClick={() => navigate('/shared-notes')} className={subItemClass(isSharedNotesActive)}>
-                  <span className="truncate">노트 공유 게시판</span>
+                <button onClick={() => navigate('/shared-notes')} aria-current={isSharedNotesActive ? 'page' : undefined} className="side-sub">
+                  노트 공유 게시판
                 </button>
               </div>
             )}

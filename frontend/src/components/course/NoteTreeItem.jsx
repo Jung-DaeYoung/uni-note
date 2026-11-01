@@ -1,54 +1,45 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Trash2 } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 const NoteTreeItem = ({ item, courseId, currentNoteId, onDelete }) => {
   const [isOpen, setIsOpen] = useState(true);
   const navigate = useNavigate();
   const hasChildren = item.children && item.children.length > 0;
   const isActive = parseInt(currentNoteId) === item.noteId;
+  const title = item.title || '제목 없음';
 
   return (
     <div className="select-none">
-      <div
-        className={`group flex items-center gap-1.5 py-1.5 pl-2 pr-2 border-l-2 rounded-r-md cursor-pointer transition-colors duration-200 ${
-          isActive
-          ? 'border-blue-500 bg-blue-500/10 text-white'
-          : 'border-transparent hover:bg-slate-800 text-slate-400 hover:text-slate-100'
-        }`}
-        onClick={() => navigate(`/course/${courseId}/note/${item.noteId}`)}
-      >
+      <div className={`side-note ${isActive ? 'side-note-active' : ''}`}>
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsOpen(!isOpen);
-          }}
+          onClick={() => setIsOpen(!isOpen)}
           aria-expanded={isOpen}
           aria-label={isOpen ? '하위 노트 접기' : '하위 노트 펼치기'}
-          className={`p-0.5 rounded hover:bg-white/10 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''} ${!hasChildren ? 'invisible' : ''}`}
+          className={`side-note-toggle ${!hasChildren ? 'side-note-hidden' : ''}`}
         >
           <ChevronRight size={14} />
         </button>
-        <span className={`text-[11px] font-medium truncate flex-1 ${isActive ? 'text-white' : ''}`}>
-          {item.title || '제목 없음'}
-        </span>
-
-        {/* Delete Button (Visible on Hover) */}
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(item.noteId, item.title);
-          }}
-          className={`p-1 rounded hover:bg-red-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100 ${isActive ? 'text-blue-200' : 'text-slate-500'}`}
+          onClick={() => navigate(`/course/${courseId}/note/${item.noteId}`)}
+          aria-current={isActive ? 'page' : undefined}
+          title={title}
+          className="side-note-title"
+        >
+          {title}
+        </button>
+        <button
+          onClick={() => onDelete(item.noteId, item.title)}
           title="노트 삭제"
           aria-label="노트 삭제"
+          className="side-note-delete"
         >
-          <Trash2 size={12} />
+          삭제
         </button>
       </div>
 
       {isOpen && hasChildren && (
-        <div className="mt-0.5 border-l border-slate-800/50 ml-3">
+        <div className="side-notes-children">
           {item.children.map(child => (
             <NoteTreeItem
               key={child.noteId}

@@ -1,14 +1,10 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
-  MessageSquare,
-  Plus,
   ChevronRight,
   FileText,
   Home,
   FolderOpen,
-  BrainCircuit,
-  Share2,
   PenLine,
   Trash2
 } from 'lucide-react';
@@ -25,6 +21,8 @@ import NoteTreeItem from '../components/course/NoteTreeItem';
 import CourseBoardPanel from '../components/course/CourseBoardPanel';
 import useCourseNotes from '../hooks/useCourseNotes';
 import useCourseBoard from '../hooks/useCourseBoard';
+import './QuizLibraryPage.css';
+import './CourseDetailPage.css';
 
 const CourseDetailPage = () => {
   const { courseId, noteId } = useParams();
@@ -124,18 +122,18 @@ const CourseDetailPage = () => {
   // --- Sidebar Content ---
   const sidebarContent = (
     <div className="flex flex-col h-full">
-      <div className="px-2 mb-4 flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-500 px-2">노트</span>
+      <div className="side-group-head">
+        <p className="side-group-label">노트</p>
         <button
           onClick={handleCreateRootNote}
-          className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors"
+          className="side-add"
           title="새 노트 추가"
           aria-label="새 노트 추가"
         >
-          <Plus size={14} />
+          추가
         </button>
       </div>
-      <div className="space-y-0.5">
+      <div>
         {noteTree.map(item => (
           <NoteTreeItem
             key={item.noteId}
@@ -151,8 +149,8 @@ const CourseDetailPage = () => {
 
   // --- Unified Header Content ---
   const headerContent = (
-    <div className="flex items-center justify-between w-full pr-4 h-full">
-      <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+    <div className="note-header flex items-center justify-between w-full pr-4 h-full">
+      <nav className="flex items-center gap-1.5 min-w-0 overflow-x-auto no-scrollbar py-1">
         <Link to="/dashboard" className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition-colors">
           <Home size={14} />
         </Link>
@@ -184,78 +182,70 @@ const CourseDetailPage = () => {
         )}
       </nav>
 
-      <div className="flex items-center gap-2 shrink-0 ml-4">
+      <div className="note-actions">
         {noteId && (
-          <>
+          <div className={`note-status ${saveState.status === 'error' ? 'note-status-error' : ''}`}>
+            <span className={`note-status-dot ${saveState.status === 'saving' ? 'note-status-dot-saving animate-pulse motion-reduce:animate-none' : ''}`} />
+            <span role="status" className="note-status-text">
+              {saveState.status === 'saving' ? '저장 중...' : saveState.status === 'error' ? '오류' : '저장됨'}
+            </span>
+            {saveState.status === 'error' && (
+              <button onClick={saveState.retry} className="note-retry">
+                재시도
+              </button>
+            )}
+          </div>
+        )}
+        <div role="group" aria-label="노트 작업" className="note-seg-group">
+          {noteId && (
             <button
               onClick={() => setIsQuizModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
+              className="note-seg note-seg-accent"
             >
-              <BrainCircuit size={12} />
-              AI 문제 생성
+              <span className="note-seg-extra">AI </span>문제 생성
             </button>
-            {!isUserCreated && (
+          )}
+          {noteId && !isUserCreated && (
             <button
               onClick={() => handleShareNote(noteData?.title || '제목 없음')}
               disabled={!noteData || saveState.status !== 'synced'}
               title={saveState.status !== 'synced' ? '저장이 끝난 뒤 공유할 수 있습니다' : '현재 노트와 하위 노트를 공유합니다'}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="note-seg"
             >
-              <Share2 size={12} />
-              노트 공유
+              <span className="note-seg-extra">노트 </span>공유
             </button>
-            )}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <div className={`w-1.5 h-1.5 rounded-full ${saveState.status === 'saving' ? 'bg-blue-500 animate-pulse' : saveState.status === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                {saveState.status === 'saving' ? '저장 중...' : saveState.status === 'error' ? '오류' : '저장됨'}
-              </span>
-              {saveState.status === 'error' && (
-                <button
-                  onClick={saveState.retry}
-                  className="text-xs font-medium text-red-600 dark:text-red-400 underline hover:text-red-700 dark:hover:text-red-300"
-                >
-                  재시도
-                </button>
-              )}
-            </div>
-          </>
-        )}
-        {isUserCreated ? (
-          <>
+          )}
+          {isUserCreated ? (
+            <>
+              <button
+                onClick={handleRenameCourse}
+                title="강의 이름 변경"
+                className="note-seg note-seg-icon"
+              >
+                <PenLine size={14} />
+                <span className="note-seg-label">이름 변경</span>
+              </button>
+              <button
+                onClick={handleDeleteCourse}
+                title="강의 삭제"
+                className="note-seg note-seg-icon note-seg-danger"
+              >
+                <Trash2 size={14} />
+                <span className="note-seg-label">강의 삭제</span>
+              </button>
+            </>
+          ) : (
             <button
-              onClick={handleRenameCourse}
-              title="강의 이름 변경"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              onClick={() => {
+                setIsBoardOpen(!isBoardOpen);
+                setKeywordTarget(null);
+              }}
+              className={`note-seg ${isBoardOpen ? 'note-seg-open' : ''}`}
             >
-              <PenLine size={12} />
-              이름 변경
+              {isBoardOpen ? '닫기' : '커뮤니티'}
             </button>
-            <button
-              onClick={handleDeleteCourse}
-              title="강의 삭제"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-            >
-              <Trash2 size={12} />
-              강의 삭제
-            </button>
-          </>
-        ) : (
-        <button
-          onClick={() => {
-            setIsBoardOpen(!isBoardOpen);
-            setKeywordTarget(null);
-          }}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-            isBoardOpen
-            ? 'bg-slate-900 dark:bg-slate-700 text-white'
-            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <MessageSquare size={12} />
-          {isBoardOpen ? '닫기' : '커뮤니티'}
-        </button>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

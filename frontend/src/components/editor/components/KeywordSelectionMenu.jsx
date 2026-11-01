@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { NodeSelection } from '@tiptap/pm/state';
-import { BookOpen } from 'lucide-react';
 
 // KeywordExplainRequest의 keyword @Size(max = 80) / context @Size(max = 2000)와 같게 유지한다.
 export const MAX_KEYWORD_LENGTH = 80;
@@ -66,9 +65,8 @@ const KeywordSelectionMenu = ({ editor, onExplain, onQuiz }) => {
         type="button"
         disabled={tooLong}
         onClick={() => onExplain(menu.selection)}
-        className="flex items-center gap-1.5 text-xs font-semibold text-white hover:text-blue-300 disabled:opacity-40 disabled:pointer-events-none"
+        className="text-xs font-semibold text-white hover:text-blue-300 disabled:opacity-40 disabled:pointer-events-none"
       >
-        <BookOpen size={13} />
         키워드 설명
       </button>
       {onQuiz && (

@@ -1,0 +1,257 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full
+ * paper: var(--side-surface) · accent: var(--side-accent) · display: project stack · body: project stack
+ * nav: kept (AppLayout) · signature: courses and their notes as one quiet outline, with one bright line on where you are · states: default, hover, focus, active, disabled, empty
+ * axes: slate/project/blue · posture: outline · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S3 R5 V3 · weakest: S, a nested outline is familiar on purpose; tiny labels, pills and hidden icons went, so the course and note names are what you read */
+/* Hallmark · dropped onClick={(e) => { e.stopPropagation(); onDelete…, onClick={(e) => { e.stopPropagation(); setIsOpe… · the row is no longer clickable, the title is its own button, so the same actions no longer need to stop propagation */
+
+/* 사이드바는 라이트·다크 모드와 상관없이 어두운 면이다. */
+:root {
+  --side-surface: oklch(20.8% 0.042 265.755); /* slate-900 */
+  --side-ink: oklch(96.8% 0.007 247.896); /* slate-100 */
+  --side-ink-2: oklch(70.4% 0.04 256.788); /* slate-400 */
+  --side-rule: oklch(27.9% 0.041 260.031); /* slate-800 */
+  --side-hover: oklch(27.9% 0.041 260.031); /* slate-800 */
+  --side-accent: oklch(70.7% 0.165 254.624); /* blue-400 */
+  --side-danger: oklch(70.4% 0.191 22.216); /* red-400 */
+}
+
+.side-nav {
+  --dur-micro: 120ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.side-nested {
+  margin: 0.25rem 0 0.25rem 0.75rem;
+  border-left: 1px solid var(--side-rule);
+}
+
+.side-group + .side-group {
+  margin-top: 0.75rem;
+}
+
+.side-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1.75rem;
+  padding-left: 0.75rem;
+}
+
+.side-group-label {
+  margin: 0;
+  color: var(--side-ink-2);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.side-empty {
+  margin: 0;
+  padding: 0.25rem 0.75rem;
+  color: var(--side-ink-2);
+  font-size: 0.8125rem;
+}
+
+.side-sub {
+  display: block;
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
+  overflow: hidden;
+  margin-left: -1px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: none;
+  color: var(--side-ink-2);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-micro) var(--ease-out),
+    color var(--dur-micro) var(--ease-out);
+}
+
+.side-sub[aria-current='page'] {
+  border-left-color: var(--side-accent);
+  color: var(--side-ink);
+  font-weight: 700;
+}
+
+.side-add {
+  flex: none;
+  min-height: 1.75rem;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--side-ink-2);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-micro) var(--ease-out),
+    color var(--dur-micro) var(--ease-out);
+}
+
+.side-input {
+  display: block;
+  width: calc(100% - 1.5rem);
+  min-height: 2.25rem;
+  margin: 0 0.75rem;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--side-accent);
+  background: none;
+  color: var(--side-ink);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.side-input::placeholder {
+  color: var(--side-ink-2);
+}
+
+.side-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* 현재 강의 아래의 노트 목록 */
+.side-notes {
+  margin: 0.25rem 0 0.5rem 0.75rem;
+  border-left: 1px solid var(--side-rule);
+}
+
+.side-notes-children {
+  margin-left: 0.75rem;
+  border-left: 1px solid var(--side-rule);
+}
+
+.side-note {
+  display: flex;
+  align-items: center;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+
+.side-note-active {
+  border-left-color: var(--side-accent);
+}
+
+.side-note-toggle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.5rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--side-ink-2);
+  cursor: pointer;
+}
+
+.side-note-toggle svg {
+  transition: rotate var(--dur-micro) var(--ease-out);
+}
+
+.side-note-toggle[aria-expanded='true'] svg {
+  rotate: 90deg;
+}
+
+.side-note-hidden {
+  visibility: hidden;
+}
+
+.side-note-title {
+  flex: 1;
+  min-width: 0;
+  min-height: 2rem;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--side-ink-2);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-micro) var(--ease-out);
+}
+
+.side-note-active .side-note-title {
+  color: var(--side-ink);
+  font-weight: 700;
+}
+
+.side-note-delete {
+  flex: none;
+  min-height: 1.75rem;
+  padding: 0 0.375rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--side-danger);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* 마우스가 있는 환경에서만 숨기고, 키보드 포커스가 들어오면 바로 보여 준다. */
+@media (hover: hover) and (pointer: fine) {
+  .side-note-delete {
+    opacity: 0;
+  }
+
+  .side-note:hover .side-note-delete,
+  .side-note:focus-within .side-note-delete {
+    opacity: 1;
+  }
+
+  .side-sub:hover,
+  .side-note:hover,
+  .side-add:hover {
+    background: var(--side-hover);
+    color: var(--side-ink);
+  }
+
+  .side-note:hover .side-note-title {
+    color: var(--side-ink);
+  }
+}
+
+.side-nav :is(button, input):focus-visible {
+  outline: 2px solid var(--side-accent);
+  outline-offset: -2px;
+}
+
+.side-nav .side-input:focus-visible {
+  outline-offset: 2px;
+}
+
+.side-sub:active,
+.side-add:active {
+  background: var(--side-rule);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-sub,
+  .side-add,
+  .side-note,
+  .side-note-title,
+  .side-note-toggle svg {
+    transition: none;
+  }
+}

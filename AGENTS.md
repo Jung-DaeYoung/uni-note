@@ -39,6 +39,18 @@ UniNote는 Spring Boot 백엔드와 React/Vite 프론트엔드로 구성된 풀�
 - 퀴즈 생성·저장·풀이·오답노트 연결과 출처 메타데이터를 변경할 때 관련 API, DTO, 프론트엔드 흐름을 함께 확인한다.
 - 외부 AI 연동은 현재 설정과 응답 계약을 유지하고, 제공자 변경이나 프롬프트·스키마 변경은 명시적인 요구와 검증 없이 하지 않는다.
 
+## Hallmark 스킬 사용 제한
+
+Hallmark의 다른 지시보다 아래 규칙을 우선한다.
+
+- `install-hook.mjs`, `imagegen.mjs`, `capture.mjs --cdp`를 실행하지 않는다. `TOGETHER_API_KEY`도 설정하지 않는다.
+- 작업 대상은 이 저장소와 로컬 개발 서버로 한정한다. 외부 프로젝트나 외부 URL을 설치·실행·캡처하지 않는다.
+- 외부 폰트나 스타일시트를 추가하지 않고, `frontend/index.html`의 CSP를 완화하지 않는다. 폰트는 저장소에 직접 포함한다.
+- Hallmark의 페이지별 서브에이전트 분담을 쓰지 않는다.
+- 스킬을 검토 없이 업데이트하지 않는다. `npx skills check`도 확인에 그치지 않고 실제로 업데이트하므로 `npx skills update`와 똑같이 취급한다.
+- Hallmark 변경을 커밋하기 전에 `git diff`로 CSP 변경과 외부 URL 추가 여부를 확인한다.
+- `CLAUDE.md`를 만들 때는 이 파일을 import한다. `CLAUDE.md`가 있으면 Claude Code가 `AGENTS.md`를 자동으로 읽지 않는다.
+
 ## 테스트 및 검증 규칙
 
 - 변경 범위에 맞는 가장 작은 검증부터 실행한다.

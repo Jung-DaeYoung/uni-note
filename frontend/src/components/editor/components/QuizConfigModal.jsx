@@ -593,9 +593,8 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
       setMode('CUSTOM');
       setReferenceQuestions([]);
       setCoverAllNotes(false);
-      if (preset) {
-        setFocusConcepts(preset.keyword.length <= MAX_FOCUS_CONCEPT_LENGTH ? [preset.keyword] : []);
-      }
+      setObjectivesText('');
+      setFocusConcepts(preset && preset.keyword.length <= MAX_FOCUS_CONCEPT_LENGTH ? [preset.keyword] : []);
     }
   }, [isOpen, currentNoteId, preset]);
 

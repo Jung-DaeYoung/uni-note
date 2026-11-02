@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useCourses } from '../../context/CourseContext';
 import { useTheme } from '../../context/ThemeContext';
 import { showAlert } from '../../context/ConfirmContext';
+import GlobalSearch from '../search/GlobalSearch';
 import './AppLayout.css';
 
 const AppLayout = ({ children, sidebarContent, headerContent }) => {
@@ -251,7 +252,7 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto relative flex flex-col">
-        <header className="h-12 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 flex items-center px-4 sticky top-0 z-50 shrink-0">
+        <header className="app-header h-12 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 flex items-center px-4 sticky top-0 z-50 shrink-0">
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-[background-color,color,scale] duration-150 ease-out text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 active:scale-[0.97] motion-reduce:active:scale-100"
@@ -263,6 +264,9 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
           <div className="ml-4 flex-1 flex items-center h-full overflow-hidden">
             {headerContent}
           </div>
+
+          {/* 검색 화면에는 자체 입력창이 있다. 위 영역은 overflow-hidden이라 결과 패널이 잘리므로 밖에 둔다. */}
+          {location.pathname !== '/search' && <GlobalSearch />}
 
           <button
             onClick={toggleTheme}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import client from '../api/client';
 import { showAlert, useConfirm } from '../context/ConfirmContext';
 
@@ -10,14 +11,36 @@ const useSharedQuizzes = () => {
   const [posts, setPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
+  // 통합 검색 결과에서 넘어온 시험. 강의 필터에 가려지지 않게 전체 목록에서 찾고, 처리 뒤 파라미터를 지워 다시 열리지 않게 한다.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedQuizId = searchParams.get('sharedQuizId');
+
+  // 상세를 열면 서버에서 조회수가 1 오른다. 풀이는 공유 스냅샷의 quizSetId로 저장된다.
+  const openQuiz = async (post) => {
+    try {
+      const res = await client.get(`/shared-quizzes/${post.sharedQuizId}`);
+      setSelectedQuiz({ ...res.data, courseId: post.courseId, sharedQuizId: post.sharedQuizId });
+      setPosts(prev => prev.map(p => (
+        p.sharedQuizId === post.sharedQuizId ? { ...p, viewCount: p.viewCount + 1 } : p
+      )));
+    } catch (err) {
+      showAlert(err.response?.data?.message || '시험을 불러오지 못했습니다.');
+    }
+  };
 
   const fetchPosts = async () => {
     setIsLoading(true);
     try {
       const res = await client.get('/shared-quizzes', {
-        params: courseId ? { sort, courseId } : { sort },
+        params: courseId && !linkedQuizId ? { sort, courseId } : { sort },
       });
       setPosts(res.data);
+      if (linkedQuizId) {
+        setSearchParams({}, { replace: true });
+        const linked = res.data.find(post => String(post.sharedQuizId) === linkedQuizId);
+        if (linked) openQuiz(linked);
+        else showAlert('시험을 찾을 수 없습니다. 게시판에서 내려갔을 수 있습니다.');
+      }
     } catch (err) {
       console.error(err);
       showAlert(err.response?.data?.message || '공유 시험 목록을 불러오지 못했습니다.');
@@ -31,7 +54,7 @@ const useSharedQuizzes = () => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPosts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort, courseId]);
+  }, [sort, courseId, linkedQuizId]);
 
   const toggleLike = async (post) => {
     try {
@@ -41,19 +64,6 @@ const useSharedQuizzes = () => {
       )));
     } catch (err) {
       showAlert(err.response?.data?.message || '추천하지 못했습니다.');
-    }
-  };
-
-  // 상세를 열면 서버에서 조회수가 1 오른다. 풀이는 공유 스냅샷의 quizSetId로 저장된다.
-  const openQuiz = async (post) => {
-    try {
-      const res = await client.get(`/shared-quizzes/${post.sharedQuizId}`);
-      setSelectedQuiz({ ...res.data, courseId: post.courseId, sharedQuizId: post.sharedQuizId });
-      setPosts(prev => prev.map(p => (
-        p.sharedQuizId === post.sharedQuizId ? { ...p, viewCount: p.viewCount + 1 } : p
-      )));
-    } catch (err) {
-      showAlert(err.response?.data?.message || '시험을 불러오지 못했습니다.');
     }
   };
 

@@ -1,6 +1,8 @@
 package com.uninote.backend.repository;
 
 import com.uninote.backend.domain.SharedQuiz;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -14,6 +16,14 @@ public interface SharedQuizRepository extends JpaRepository<SharedQuiz, Long> {
     // 강의를 fetch join해, 목록 변환 중 글마다 강의를 lazy loading하는 N+1을 없앤다.
     @Query("SELECT s FROM SharedQuiz s JOIN FETCH s.course WHERE s.course.courseId IN :courseIds")
     List<SharedQuiz> findByCourseIds(@Param("courseIds") List<Long> courseIds, Sort sort);
+
+    // 통합 검색: 공유된 시험에서 시작하므로 공유되지 않은 퀴즈의 문항은 찾지 않는다.
+    @Query("SELECT s FROM SharedQuiz s JOIN FETCH s.course JOIN FETCH s.quizSet qs WHERE s.course.courseId IN :courseIds " +
+            "AND (LOWER(qs.title) LIKE CONCAT('%', :pattern, '%') ESCAPE '!' " +
+            "OR EXISTS (SELECT 1 FROM Question q WHERE q.quizSet = qs " +
+            "AND LOWER(q.questionText) LIKE CONCAT('%', :pattern, '%') ESCAPE '!')) " +
+            "ORDER BY s.createdAt DESC, s.sharedQuizId DESC")
+    Slice<SharedQuiz> search(@Param("courseIds") List<Long> courseIds, @Param("pattern") String pattern, Pageable pageable);
 
     boolean existsBySourceQuizSetId(Long sourceQuizSetId);
 

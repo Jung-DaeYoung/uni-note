@@ -135,7 +135,7 @@ public class KeywordService {
             throw new InvalidRequestException("키워드(1~" + MAX_KEYWORD_LENGTH + "자)와 강의를 지정해 주세요.");
         }
         String needle = keyword.toLowerCase(Locale.ROOT);
-        String pattern = needle.replace("!", "!!").replace("%", "!%").replace("_", "!_");
+        String pattern = likePattern(needle);
         List<KeywordMentionResponse> mentions = new ArrayList<>();
         for (Note note : noteRepository.searchByContent(student.getStudId(), courseId, pattern,
                 PageRequest.of(0, MAX_MENTIONS))) {
@@ -160,7 +160,12 @@ public class KeywordService {
         return mentions;
     }
 
-    private static String collectText(JsonNode node) {
+    // LIKE의 %·_·!를 '!'로 이스케이프한다. 쿼리는 ESCAPE '!'를 써야 한다.
+    static String likePattern(String needle) {
+        return needle.replace("!", "!!").replace("%", "!%").replace("_", "!_");
+    }
+
+    static String collectText(JsonNode node) {
         if ("text".equals(node.path("type").asText())) {
             return node.path("text").asText("");
         }

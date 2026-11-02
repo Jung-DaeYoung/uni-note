@@ -1,0 +1,446 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full
+ * paper: oklch(98.4% 0.003 247.858) · accent: oklch(54.6% 0.245 262.881) · display: project stack · body: project stack
+ * nav: kept (AppLayout) · signature: quizzes filed under their course and attempts led by the score, as ruled ledgers · states: default, hover, focus, active, loading, empty
+ * axes: slate/project/blue · posture: ruled ledger · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V3 · weakest: V, it shares the dashboard's ruled lists on purpose so the app reads as one tool; cards and decorative icons went, the course grouping and the large score carry it */
+
+html:has(.lib),
+body:has(.lib) {
+  overflow-x: clip;
+}
+
+/* lib- 접두사를 붙여 앱 전역 Tailwind 테마와 다른 화면의 토큰에 영향을 주지 않는다. */
+:root {
+  --lib-color-ink: oklch(20.8% 0.042 265.755); /* slate-900 */
+  --lib-color-ink-2: oklch(44.6% 0.043 257.281); /* slate-600 */
+  --lib-color-rule: oklch(92.9% 0.013 255.508); /* slate-200 */
+  --lib-color-rule-strong: oklch(20.8% 0.042 265.755); /* slate-900 */
+  --lib-color-control-edge: oklch(55.4% 0.046 257.417); /* slate-500 */
+  --lib-color-hover: oklch(96.8% 0.007 247.896); /* slate-100 */
+  --lib-color-accent: oklch(54.6% 0.245 262.881); /* blue-600 */
+  --lib-color-perfect: oklch(50.8% 0.118 165.612); /* emerald-700 */
+  --lib-color-danger: oklch(57.7% 0.245 27.325); /* red-600 */
+  --lib-color-primary: oklch(20.8% 0.042 265.755); /* slate-900 */
+  --lib-color-primary-hover: oklch(27.9% 0.041 260.031); /* slate-800 */
+  --lib-color-primary-ink: oklch(100% 0 0);
+  --lib-color-field: oklch(100% 0 0);
+
+  --lib-dark-ink: oklch(96.8% 0.007 247.896); /* slate-100 */
+  --lib-dark-ink-2: oklch(70.4% 0.04 256.788); /* slate-400 */
+  --lib-dark-rule: oklch(27.9% 0.041 260.031); /* slate-800 */
+  --lib-dark-hover: oklch(20.8% 0.042 265.755); /* slate-900 */
+  --lib-dark-accent: oklch(70.7% 0.165 254.624); /* blue-400 */
+  --lib-dark-perfect: oklch(76.5% 0.177 163.223); /* emerald-400 */
+  --lib-dark-danger: oklch(70.4% 0.191 22.216); /* red-400 */
+  --lib-dark-primary: oklch(37.2% 0.044 257.287); /* slate-700 */
+  --lib-dark-primary-hover: oklch(44.6% 0.043 257.281); /* slate-600 */
+  --lib-dark-field: oklch(20.8% 0.042 265.755); /* slate-900 */
+}
+
+/* 앱의 야간 모드 스위치(ThemeContext의 .dark 클래스)에 맞춰 토큰을 바꾼다. */
+.dark {
+  --lib-color-ink: var(--lib-dark-ink);
+  --lib-color-ink-2: var(--lib-dark-ink-2);
+  --lib-color-rule: var(--lib-dark-rule);
+  --lib-color-rule-strong: var(--lib-dark-ink-2);
+  --lib-color-control-edge: var(--lib-dark-ink-2);
+  --lib-color-hover: var(--lib-dark-hover);
+  --lib-color-accent: var(--lib-dark-accent);
+  --lib-color-perfect: var(--lib-dark-perfect);
+  --lib-color-danger: var(--lib-dark-danger);
+  --lib-color-primary: var(--lib-dark-primary);
+  --lib-color-primary-hover: var(--lib-dark-primary-hover);
+  --lib-color-field: var(--lib-dark-field);
+}
+
+/* AppLayout 사이드바가 본문 폭을 바꾸므로 화면 폭이 아니라 본문 폭을 기준으로 배치한다.
+   container-type은 fixed 자손의 기준이 되므로 CBTPlayer·모달은 이 요소 밖에 둔다. */
+.lib-frame {
+  container-type: inline-size;
+}
+
+.lib {
+  --dur-micro: 120ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  max-width: 64rem;
+  margin-inline: auto;
+  padding: 2rem 1.5rem 4rem;
+  color: var(--lib-color-ink);
+}
+
+.lib-title {
+  margin: 0 0 1.25rem;
+  min-width: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  overflow-wrap: break-word;
+}
+
+.lib-tabs {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--lib-color-rule);
+}
+
+.lib-tab {
+  min-height: 2.75rem;
+  margin-bottom: -1px;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--lib-color-ink-2);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--dur-micro) var(--ease-out);
+}
+
+.lib-tab[aria-pressed='true'] {
+  border-bottom-color: var(--lib-color-accent);
+  color: var(--lib-color-ink);
+  font-weight: 700;
+}
+
+.lib-group + .lib-group {
+  margin-top: 2.5rem;
+}
+
+.lib-heading {
+  margin: 0;
+  min-width: 0;
+  padding-bottom: 0.625rem;
+  border-bottom: 2px solid var(--lib-color-rule-strong);
+  font-size: 1rem;
+  font-weight: 700;
+  overflow-wrap: break-word;
+}
+
+.lib-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lib-list > li {
+  border-bottom: 1px solid var(--lib-color-rule);
+}
+
+/* 탭 아래 선이 목록의 윗선 역할을 하므로 간격만 줄인다. */
+.lib-history {
+  margin-top: -2rem;
+}
+
+.lib-quiz {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 0.5rem;
+}
+
+.lib-quiz-body {
+  min-width: 0;
+}
+
+.lib-item-title {
+  display: block;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  transition: color var(--dur-micro) var(--ease-out);
+}
+
+.lib-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.125rem 1rem;
+  margin-top: 0.25rem;
+  color: var(--lib-color-ink-2);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.lib-shared {
+  color: var(--lib-color-perfect);
+  font-weight: 600;
+}
+
+.lib-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lib-icons {
+  display: flex;
+  align-items: center;
+  margin-right: auto;
+}
+
+.lib-icon,
+.lib-icon-slot {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+}
+
+.lib-icon {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--lib-color-ink-2);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-micro) var(--ease-out),
+    color var(--dur-micro) var(--ease-out);
+}
+
+.lib-btn {
+  flex: 1 1 auto;
+  min-height: 2.25rem;
+  padding: 0 0.875rem;
+  border: 1px solid var(--lib-color-control-edge);
+  border-radius: 4px;
+  background: none;
+  color: var(--lib-color-ink);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color var(--dur-micro) var(--ease-out),
+    scale var(--dur-micro) var(--ease-out);
+}
+
+.lib-btn-primary {
+  border-color: var(--lib-color-primary);
+  background: var(--lib-color-primary);
+  color: var(--lib-color-primary-ink);
+}
+
+.lib-btn:active,
+.lib-attempt-main:active {
+  scale: 0.99;
+}
+
+.lib-btn:active {
+  scale: 0.97;
+}
+
+.lib-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.lib-select {
+  min-height: 2.25rem;
+  width: 14rem;
+  max-width: 100%;
+  padding: 0 0.5rem;
+  border: 1px solid var(--lib-color-control-edge);
+  border-radius: 4px;
+  background-color: var(--lib-color-field);
+  color: var(--lib-color-ink);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lib-select:focus-visible {
+  outline: 2px solid var(--lib-color-accent);
+  outline-offset: 2px;
+}
+
+.lib-select:active {
+  background-color: var(--lib-color-hover);
+}
+
+.lib-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.lib-attempt {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-right: 0.5rem;
+}
+
+.lib-attempt-main {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1rem 0.5rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+
+.lib-score {
+  color: var(--lib-color-accent);
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.lib-score.is-perfect {
+  color: var(--lib-color-perfect);
+}
+
+.lib-attempt-body {
+  min-width: 0;
+}
+
+.lib-tab:focus-visible,
+.lib-icon:focus-visible,
+.lib-btn:focus-visible,
+.lib-attempt-main:focus-visible {
+  outline: 2px solid var(--lib-color-accent);
+  outline-offset: -2px;
+}
+
+.lib-btn:focus-visible {
+  outline-offset: 2px;
+}
+
+.lib-empty,
+.lib-loading {
+  margin: 0;
+  padding: 1.5rem 0.5rem;
+  border-bottom: 1px solid var(--lib-color-rule);
+  color: var(--lib-color-ink-2);
+  font-size: 0.875rem;
+}
+
+.lib-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.lib-spinner {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  border: 2px solid var(--lib-color-accent);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: lib-spin 700ms linear infinite;
+}
+
+@keyframes lib-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lib-tab:hover {
+    color: var(--lib-color-ink);
+  }
+
+  .lib-select:hover {
+    background-color: var(--lib-color-hover);
+  }
+
+  .lib-icon:hover {
+    background: var(--lib-color-hover);
+    color: var(--lib-color-accent);
+  }
+
+  .lib-icon-danger:hover {
+    color: var(--lib-color-danger);
+  }
+
+  .lib-btn:hover {
+    background: var(--lib-color-hover);
+  }
+
+  .lib-btn-primary:hover {
+    background: var(--lib-color-primary-hover);
+  }
+
+  .lib-attempt-main:hover {
+    background: var(--lib-color-hover);
+  }
+
+  .lib-attempt-main:hover .lib-item-title {
+    color: var(--lib-color-accent);
+  }
+}
+
+@container (min-width: 44rem) {
+  .lib {
+    padding: 2.5rem 2.5rem 4rem;
+  }
+
+  .lib-quiz {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 1.5rem;
+  }
+
+  .lib-actions {
+    flex-wrap: nowrap;
+  }
+
+  .lib-icons {
+    margin-right: 0.5rem;
+  }
+
+  .lib-btn {
+    flex: none;
+  }
+
+  .lib-attempt-main {
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+  }
+
+  .lib-score {
+    font-size: 1.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lib-tab,
+  .lib-item-title,
+  .lib-icon,
+  .lib-btn,
+  .lib-attempt-main {
+    transition: none;
+  }
+
+  .lib-btn:active,
+  .lib-attempt-main:active {
+    scale: 1;
+  }
+
+  .lib-spinner {
+    animation: none;
+  }
+}

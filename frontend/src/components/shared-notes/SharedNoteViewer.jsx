@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
-import { ArrowLeft, Calendar, ChevronRight, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import client from '../../api/client';
 import { noteSchemaExtensions, NoteEditorStyles } from '../editor/NotionEditor';
 import { NoteTreeProvider, findNote } from '../../context/NoteTreeContext';
@@ -82,23 +82,19 @@ const SharedNoteViewer = ({ postId, onBack, onDelete }) => {
 
   return (
     <NoteTreeProvider noteTree={post.notes}>
-      <div className="p-8 max-w-6xl mx-auto">
-        <button
-          onClick={onBack}
-          className="mb-4 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
-          <ArrowLeft size={14} /> 목록으로
+      {/* 본문 블록이 화면 기준 fixed를 쓸 수 있어 container-type을 주는 lib-frame으로 감싸지 않는다. */}
+      <div className="lib board-viewer">
+        <button onClick={onBack} className="board-back">
+          목록으로
         </button>
 
-        <header className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <span className="text-[11px] font-semibold px-2 py-0.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-md">
-              {post.courseName}
-            </span>
-            <h1 className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">{post.title || '제목 없음'}</h1>
-            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 font-medium flex items-center gap-3">
+        <header className="board-head">
+          <div className="board-head-body">
+            <h1 className="lib-title">{post.title || '제목 없음'}</h1>
+            <p className="lib-meta">
+              <span className="board-course">{post.courseName}</span>
               <span>{post.authorName}{post.isAuthor && ' (나)'}</span>
-              <span className="flex items-center gap-1"><Calendar size={12} />{new Date(post.createdAt).toLocaleDateString()}</span>
+              <span>{new Date(post.createdAt).toLocaleDateString()}</span>
               <span>공유 시점의 내용입니다</span>
             </p>
           </div>
@@ -106,39 +102,37 @@ const SharedNoteViewer = ({ postId, onBack, onDelete }) => {
             <button
               onClick={() => onDelete(post)}
               title="게시판에서 내리기"
-              className="text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+              aria-label="게시판에서 내리기"
+              className="lib-icon lib-icon-danger"
             >
-              <Trash2 size={18} />
+              <Trash2 size={16} />
             </button>
           )}
         </header>
 
         {path.length > 1 && (
-          <nav aria-label="노트 경로" className="mb-3 flex items-center gap-1.5 flex-wrap text-xs font-semibold">
+          <nav aria-label="노트 경로" className="board-path">
             {path.map((node, i) => (
               <React.Fragment key={node.noteId}>
-                {i > 0 && <ChevronRight size={12} className="text-slate-300 dark:text-slate-600" />}
+                {i > 0 && <span className="board-path-sep" aria-hidden="true">/</span>}
                 {i < path.length - 1 ? (
-                  <button
-                    onClick={() => setSelectedId(node.noteId)}
-                    className="text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                  >
+                  <button onClick={() => setSelectedId(node.noteId)} className="board-crumb">
                     {node.title || '제목 없음'}
                   </button>
                 ) : (
-                  <span className="text-slate-700 dark:text-slate-200">{node.title || '제목 없음'}</span>
+                  <span>{node.title || '제목 없음'}</span>
                 )}
               </React.Fragment>
             ))}
           </nav>
         )}
 
-        <section className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 px-6 py-6">
+        <section className="board-note">
           <NoteEditorStyles />
           {selected && <ReadOnlyNote key={selected.noteId} content={selected.content} onOpenNote={openNote} />}
         </section>
 
-        <section className="mt-6 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-5">
+        <section className="board-comments">
           <QuestionComments
             addUrl={`/shared-notes/${post.sharedNotePostId}/comments`}
             commentUrl="/shared-notes/comments"

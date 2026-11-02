@@ -133,6 +133,16 @@
 
 `KeywordExplainResponse`는 `keyword`, `summary`(3줄 요약), `easyExplanation`, `advancedExplanation`, `relatedKeywords`(최대 5개), `resources`(최대 3개, `{ title, url, source, reason }`)를 가진다. `url`은 AI가 만든 주소가 아니라 서버가 허용 사이트(한국어 위키백과, Google 검색)의 검색 URL에 AI가 고른 검색어를 넣어 만든 링크다. AI 호출 실패·응답 형식 오류·빈 설명은 503(`EXTERNAL_SERVICE_ERROR`/`AI_RESPONSE_INVALID`)이다.
 
+## 통합 검색
+
+| Method | Endpoint | 인증 | 요청 | 응답 |
+|---|---|---:|---|---|
+| GET | `/search` | 예 | query `q`(trim 후 2~100자), `type`(`all` 기본, `note`, `post`, `shared_note`, `shared_quiz`), `courseId`(선택), `page`(기본 0), `size`(기본 20, 최대 50). `type=all`은 `page`·`size`를 무시하고 유형별 최대 5개를 준다. 검색어·유형·페이지 오류는 400 `INVALID_REQUEST`, 수강도 소유도 아닌 `courseId`는 403 | `SearchResponse` |
+
+`SearchResponse`는 `query`와 `groups`를 가지며, 결과가 있는 유형만 `groups`에 담는다. 각 그룹은 `type`(`NOTE`, `COURSE_POST`, `SHARED_NOTE`, `SHARED_QUIZ`), `hasMore`, `results`를 가진다. 결과 항목은 `type`, `targetId`(유형별 원본 ID), `blockId`, `title`, `preview`, `courseId`, `courseName`, `authorName`, `date`(노트는 수정 시각, 나머지는 작성 시각)이고 `blockId`·`preview`·`authorName`은 null일 수 있다.
+
+내 노트는 요청 학생의 노트(직접 만든 강의 포함)에서 제목과 `searchContent`를 찾는다. 노트당 결과는 하나이며, 일치한 최상위 블록을 찾지 못하면 `blockId`는 null이다. 강의 게시판(제목·본문), 노트 공유(제목), 문제 공유(시험 제목·문항)는 수강 강의로 제한한다. 공유되지 않은 퀴즈와 정답·선택지·해설은 찾지 않으며, 작성자는 익명 표기만 준다. 직접 만든 강의를 `courseId`로 고르면 노트만 찾는다.
+
 ## 파일
 
 | Method | Endpoint | 인증 | 요청 | 응답 |

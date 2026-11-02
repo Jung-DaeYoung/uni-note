@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(*install-hook.mjs*)",
+      "PowerShell(*install-hook.mjs*)",
+      "Bash(*imagegen.mjs*)",
+      "PowerShell(*imagegen.mjs*)",
+      "Bash(*capture.mjs*--cdp*)",
+      "PowerShell(*capture.mjs*--cdp*)",
+      "Bash(*skills check*)",
+      "PowerShell(*skills check*)",
+      "Bash(*skills update*)",
+      "PowerShell(*skills update*)"
+    ]
+  }
+}

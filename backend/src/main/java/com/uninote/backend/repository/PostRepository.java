@@ -2,6 +2,8 @@ package com.uninote.backend.repository;
 
 import com.uninote.backend.domain.Course;
 import com.uninote.backend.domain.Post;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -23,4 +25,11 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
     // 주어진 강의 목록(수강 중인 강의)에 속한 게시글 중 최신순으로 5개 조회
     List<Post> findTop5ByCourseInOrderByCreatedAtDesc(List<Course> courses);
+
+    // 통합 검색: 주어진 강의의 게시글 중 제목이나 본문에 검색어가 든 글.
+    @Query("SELECT p FROM Post p JOIN FETCH p.course WHERE p.course.courseId IN :courseIds " +
+            "AND (LOWER(p.title) LIKE CONCAT('%', :pattern, '%') ESCAPE '!' " +
+            "OR LOWER(p.content) LIKE CONCAT('%', :pattern, '%') ESCAPE '!') " +
+            "ORDER BY p.createdAt DESC, p.postId DESC")
+    Slice<Post> search(@Param("courseIds") List<Long> courseIds, @Param("pattern") String pattern, Pageable pageable);
 }

@@ -1,0 +1,254 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full
+ * paper: oklch(98.4% 0.003 247.858) · accent: oklch(54.6% 0.245 262.881) · display: project stack · body: project stack
+ * nav: kept (AppLayout) · signature: the last edited note set large on a dark slate panel, the rest as ruled lists · states: default, hover, focus, active, empty
+ * axes: slate/project/blue · posture: ruled ledger · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H5 E4 S4 R5 V4 · weakest: P, a dashboard argues little; it now claims the next thing to do is the note left open, and dropped every icon and card */
+/* Hallmark · dropped onClick={() => navigate(`/course/${course.courseId}`)}, onClick={() => navigate(`/course/${note.courseId}/note/${note.noteId}`)}, onClick={() => navigate(`/course/${post.courseId}?postId=${post.postId}`)} · the same routes are now real links, which adds keyboard and new-tab use */
+
+html:has(.dash),
+body:has(.dash) {
+  overflow-x: clip;
+}
+
+/* dash- 접두사를 붙여 앱 전역 Tailwind 테마와 다른 화면의 토큰에 영향을 주지 않는다. */
+:root {
+  --dash-color-ink: oklch(20.8% 0.042 265.755); /* slate-900 */
+  --dash-color-ink-2: oklch(44.6% 0.043 257.281); /* slate-600 */
+  --dash-color-rule: oklch(92.9% 0.013 255.508); /* slate-200 */
+  --dash-color-rule-strong: oklch(20.8% 0.042 265.755); /* slate-900 */
+  --dash-color-hover: oklch(96.8% 0.007 247.896); /* slate-100 */
+  --dash-color-accent: oklch(54.6% 0.245 262.881); /* blue-600 */
+  --dash-color-focus: oklch(54.6% 0.245 262.881); /* blue-600 */
+  --dash-color-lead: oklch(20.8% 0.042 265.755); /* slate-900 */
+  --dash-color-lead-hover: oklch(27.9% 0.041 260.031); /* slate-800 */
+  --dash-color-lead-ink: oklch(98.4% 0.003 247.858); /* slate-50 */
+  --dash-color-lead-ink-2: oklch(86.9% 0.022 252.894); /* slate-300 */
+
+  --dash-dark-ink: oklch(96.8% 0.007 247.896); /* slate-100 */
+  --dash-dark-ink-2: oklch(70.4% 0.04 256.788); /* slate-400 */
+  --dash-dark-rule: oklch(27.9% 0.041 260.031); /* slate-800 */
+  --dash-dark-hover: oklch(20.8% 0.042 265.755); /* slate-900 */
+  --dash-dark-accent: oklch(70.7% 0.165 254.624); /* blue-400 */
+  --dash-dark-lead-hover: oklch(37.2% 0.044 257.287); /* slate-700 */
+}
+
+/* 앱의 야간 모드 스위치(ThemeContext의 .dark 클래스)에 맞춰 토큰을 바꾼다. */
+.dark {
+  --dash-color-ink: var(--dash-dark-ink);
+  --dash-color-ink-2: var(--dash-dark-ink-2);
+  --dash-color-rule: var(--dash-dark-rule);
+  --dash-color-rule-strong: var(--dash-dark-ink-2);
+  --dash-color-hover: var(--dash-dark-hover);
+  --dash-color-accent: var(--dash-dark-accent);
+  --dash-color-focus: var(--dash-dark-accent);
+  --dash-color-lead: var(--dash-dark-rule);
+  --dash-color-lead-hover: var(--dash-dark-lead-hover);
+}
+
+/* AppLayout 사이드바가 본문 폭을 바꾸므로 화면 폭이 아니라 본문 폭을 기준으로 배치한다. */
+.dash-frame {
+  container-type: inline-size;
+}
+
+.dash {
+  --dur-micro: 120ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3rem;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding: 2rem 1.5rem 4rem;
+  color: var(--dash-color-ink);
+}
+
+.dash-section {
+  min-width: 0;
+}
+
+.dash-heading {
+  margin: 0;
+  padding-bottom: 0.625rem;
+  border-bottom: 2px solid var(--dash-color-rule-strong);
+  font-size: 1rem;
+  font-weight: 700;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.dash-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dash-list > li {
+  border-bottom: 1px solid var(--dash-color-rule);
+}
+
+.dash-row {
+  display: grid;
+  gap: 0.25rem;
+  min-height: 2.75rem;
+  padding: 0.875rem 0.5rem;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+
+.dash-row:focus-visible,
+.dash-lead:focus-visible {
+  outline: 2px solid var(--dash-color-focus);
+  outline-offset: -2px;
+}
+
+.dash-row:active {
+  background: var(--dash-color-rule);
+}
+
+.dash-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--dur-micro) var(--ease-out);
+}
+
+.dash-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+  color: var(--dash-color-ink-2);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.dash-meta > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-meta > :last-child {
+  flex-shrink: 0;
+}
+
+.dash-code {
+  color: var(--dash-color-accent);
+  font-weight: 600;
+}
+
+.dash-empty {
+  margin: 0;
+  padding: 1.5rem 0.5rem;
+  border-bottom: 1px solid var(--dash-color-rule);
+  color: var(--dash-color-ink-2);
+  font-size: 0.875rem;
+}
+
+/* 마지막으로 수정한 노트: 이 화면에서 가장 먼저 눈이 가는 한 곳 */
+.dash-lead {
+  display: grid;
+  gap: 1.5rem;
+  align-content: space-between;
+  min-height: 11rem;
+  margin-top: 1rem;
+  padding: 1.5rem;
+  border-radius: 4px;
+  background: var(--dash-color-lead);
+  color: var(--dash-color-lead-ink);
+  text-decoration: none;
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+
+.dash-lead:focus-visible {
+  outline-offset: 2px;
+}
+
+.dash-lead-title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dash-lead-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+  color: var(--dash-color-lead-ink-2);
+  font-size: 0.875rem;
+}
+
+.dash-lead-meta > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-lead-meta > :last-child {
+  flex-shrink: 0;
+}
+
+@media (hover: hover) {
+  .dash-row:hover {
+    background: var(--dash-color-hover);
+  }
+
+  .dash-row:hover .dash-title {
+    color: var(--dash-color-accent);
+  }
+
+  .dash-lead:hover {
+    background: var(--dash-color-lead-hover);
+  }
+}
+
+@container (min-width: 56rem) {
+  .dash {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    column-gap: 3.5rem;
+    padding: 2.5rem 2.5rem 4rem;
+  }
+
+  .dash-section-wide {
+    grid-column: 1 / -1;
+  }
+
+  .dash-post {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 14rem) minmax(0, 7rem) 5rem;
+    align-items: baseline;
+    column-gap: 1.5rem;
+  }
+
+  .dash-post .dash-meta {
+    display: contents;
+  }
+
+  .dash-post .dash-meta > :last-child {
+    text-align: right;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-row,
+  .dash-title,
+  .dash-lead {
+    transition: none;
+  }
+}

@@ -1,13 +1,14 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
-import { BarChart3, FolderOpen } from 'lucide-react';
 import CBTPlayer from '../components/editor/components/CBTPlayer';
 import IncorrectGroupsPanel from '../components/quiz/IncorrectGroupsPanel';
 import IncorrectSummaryCards from '../components/quiz/IncorrectSummaryCards';
 import TodayReviewList from '../components/quiz/TodayReviewList';
 import WeakAreaBreakdown from '../components/quiz/WeakAreaBreakdown';
 import useIncorrectNotes from '../hooks/useIncorrectNotes';
+import './QuizLibraryPage.css';
+import './IncorrectNotesPage.css';
 
 const IncorrectNotesPage = () => {
   const location = useLocation();
@@ -45,63 +46,61 @@ const IncorrectNotesPage = () => {
         />
       )}
 
-      <div className="p-8 max-w-5xl mx-auto">
-        <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">오답노트</h1>
-          </div>
+      <div className="lib-frame">
+        <div className="lib">
+          <h1 className="lib-title">오답노트</h1>
 
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
+          <div className="lib-tabs">
             <button
               onClick={() => navigate('/incorrect-notes')}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${view === 'overview' ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+              aria-pressed={view === 'overview'}
+              className="lib-tab"
             >
-              <BarChart3 size={14} />
               오답 통계
             </button>
             <button
               onClick={() => navigate('/incorrect-notes/groups')}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${view === 'groups' ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+              aria-pressed={view === 'groups'}
+              className="lib-tab"
             >
-              <FolderOpen size={14} />
               오답노트 모음
             </button>
           </div>
-        </header>
 
-        {view === 'overview' ? (
-          <div className="space-y-8">
-            <IncorrectSummaryCards
-              summary={incorrectSummary}
-              todayReviewCount={todayReview.length}
-              savedCount={incorrectGroups.reduce((sum, g) => sum + g.itemCount, 0)}
-              isLoading={isOverviewLoading}
+          {view === 'overview' ? (
+            <>
+              <IncorrectSummaryCards
+                summary={incorrectSummary}
+                todayReviewCount={todayReview.length}
+                savedCount={incorrectGroups.reduce((sum, g) => sum + g.itemCount, 0)}
+                isLoading={isOverviewLoading}
+              />
+              <TodayReviewList
+                items={todayReview}
+                isLoading={isOverviewLoading}
+                courseOptions={courseStats}
+                courseFilter={reviewCourseFilter}
+                onCourseFilterChange={handleReviewCourseFilterChange}
+                onViewSource={handleViewReviewSource}
+                onPracticeOne={handlePracticeReviewQuestion}
+              />
+              <WeakAreaBreakdown
+                courseStats={courseStats}
+                typeStats={typeStats}
+                conceptStats={conceptStats}
+                isLoading={isOverviewLoading}
+              />
+            </>
+          ) : (
+            <IncorrectGroupsPanel
+              incorrectGroups={incorrectGroups}
+              isLoading={isGroupsLoading}
+              onPracticeIncorrect={handlePracticeIncorrect}
+              onDeleteGroup={handleDeleteGroup}
+              onRenameGroup={handleRenameGroup}
             />
-            <TodayReviewList
-              items={todayReview}
-              isLoading={isOverviewLoading}
-              courseOptions={courseStats}
-              courseFilter={reviewCourseFilter}
-              onCourseFilterChange={handleReviewCourseFilterChange}
-              onViewSource={handleViewReviewSource}
-              onPracticeOne={handlePracticeReviewQuestion}
-            />
-            <WeakAreaBreakdown
-              courseStats={courseStats}
-              typeStats={typeStats}
-              conceptStats={conceptStats}
-              isLoading={isOverviewLoading}
-            />
-          </div>
-        ) : (
-          <IncorrectGroupsPanel
-            incorrectGroups={incorrectGroups}
-            isLoading={isGroupsLoading}
-            onPracticeIncorrect={handlePracticeIncorrect}
-            onDeleteGroup={handleDeleteGroup}
-            onRenameGroup={handleRenameGroup}
-          />
-        )}
+          )}
+        </div>
       </div>
     </AppLayout>
   );

@@ -105,7 +105,7 @@ const BlockHandle = ({ editor }) => {
   return (
     <div
       ref={containerRef}
-      className="absolute z-20 transition-all duration-100 group"
+      className="absolute z-20 group"
       style={{ top, left: 0 }}
     >
       <button
@@ -118,7 +118,7 @@ const BlockHandle = ({ editor }) => {
       </button>
 
       {isMenuOpen && (
-        <div className="absolute left-8 top-0 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-1 animate-in fade-in zoom-in duration-100">
+        <div className="absolute left-8 top-0 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-1 origin-top-left transition-[opacity,scale] duration-150 ease-out starting:opacity-0 starting:scale-95 motion-reduce:transition-none">
           <div className="px-3 py-1.5 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-b border-slate-50 dark:border-slate-800 mb-1">
             Block ID: {currentNode?.node.attrs.id}
           </div>

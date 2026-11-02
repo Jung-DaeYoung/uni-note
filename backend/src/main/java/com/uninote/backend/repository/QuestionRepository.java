@@ -24,4 +24,9 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
             "FROM Question q WHERE q.quizSet.quizSetId IN :quizSetIds " +
             "GROUP BY q.quizSet.quizSetId")
     List<QuizSetQuestionCount> countByQuizSetIdIn(@Param("quizSetIds") List<Long> quizSetIds);
+
+    // 통합 검색 미리보기: 결과에 오른 공유 시험의 문항 중 검색어가 든 문항.
+    @Query("SELECT q FROM Question q WHERE q.quizSet.quizSetId IN :quizSetIds " +
+            "AND LOWER(q.questionText) LIKE CONCAT('%', :pattern, '%') ESCAPE '!' ORDER BY q.questionId")
+    List<Question> findMatching(@Param("quizSetIds") List<Long> quizSetIds, @Param("pattern") String pattern);
 }

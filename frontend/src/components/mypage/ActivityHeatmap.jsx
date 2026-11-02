@@ -1,13 +1,7 @@
 import React from 'react';
 
 // 색 단계: 0 / 1–2 / 3–5 / 6–9 / 10 이상
-const LEVEL_CLASSES = [
-  'bg-slate-100 dark:bg-slate-800',
-  'bg-blue-200 dark:bg-blue-900',
-  'bg-blue-400 dark:bg-blue-700',
-  'bg-blue-600 dark:bg-blue-500',
-  'bg-blue-800 dark:bg-blue-300',
-];
+const LEVEL_CLASSES = ['my-heat-0', 'my-heat-1', 'my-heat-2', 'my-heat-3', 'my-heat-4'];
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const levelOf = (count) => {
@@ -54,29 +48,30 @@ const ActivityHeatmap = ({ startDate, endDate, heatmap }) => {
 
   return (
     <div>
-      <div className="overflow-x-auto pb-2">
-        <div className="flex gap-1 w-max">
+      <div className="my-heat-scroll">
+        <div className="my-heat-grid">
           {weeks.map((week, wi) => (
-            <div key={wi} className="flex flex-col gap-1">
+            <div key={wi} className="my-heat-week">
               {week.map((day, di) => day ? (
                 <div
                   key={day.date}
-                  title={`${day.date} · 활동 ${day.count}회`}
+                  role="img"
+                  title={`${day.date} 활동 ${day.count}회`}
                   aria-label={`${day.date} 활동 ${day.count}회`}
                   data-level={levelOf(day.count)}
-                  className={`w-3 h-3 rounded-sm ${LEVEL_CLASSES[levelOf(day.count)]}`}
+                  className={`my-heat-cell ${LEVEL_CLASSES[levelOf(day.count)]}`}
                 />
               ) : (
-                <div key={`empty-${wi}-${di}`} className="w-3 h-3" />
+                <div key={`empty-${wi}-${di}`} className="my-heat-cell" />
               ))}
             </div>
           ))}
         </div>
       </div>
-      <div className="flex items-center justify-end gap-1 mt-2 text-[11px] text-slate-400 dark:text-slate-500">
-        <span className="mr-1">적음</span>
-        {LEVEL_CLASSES.map((cls, i) => <div key={i} className={`w-3 h-3 rounded-sm ${cls}`} />)}
-        <span className="ml-1">많음</span>
+      <div className="my-heat-legend">
+        <span>적음</span>
+        {LEVEL_CLASSES.map((cls, i) => <div key={i} className={`my-heat-cell ${cls}`} />)}
+        <span>많음</span>
       </div>
     </div>
   );

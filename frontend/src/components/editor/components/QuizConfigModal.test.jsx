@@ -357,6 +357,56 @@ describe('QuizConfigModal', () => {
     });
   });
 
+  describe('다시 열 때 초기화', () => {
+    const modal = (props) => (
+      <NoteTreeProvider noteTree={noteTree}>
+        <QuizConfigModal isOpen currentNoteId={1} courseId="1" onClose={vi.fn()} onGenerated={vi.fn()} {...props} />
+      </NoteTreeProvider>
+    );
+
+    it('닫았다 다시 열면 학습 목표가 비워지고 payload에 담기지 않는다', async () => {
+      const user = userEvent.setup();
+      client.post.mockResolvedValueOnce({ data: { quizSetId: 7 } });
+      const { rerender } = render(modal());
+
+      await user.type(screen.getByLabelText(/학습 목표/), 'LRU와 FIFO를 비교할 수 있다');
+      rerender(modal({ isOpen: false }));
+      rerender(modal());
+
+      expect(screen.getByLabelText(/학습 목표/)).toHaveValue('');
+      await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+
+      await waitFor(() => expect(client.post).toHaveBeenCalled());
+      expect(client.post.mock.calls[0][1]).not.toHaveProperty('learningObjectives');
+    });
+
+    it('현재 노트가 바뀌면 학습 목표가 비워진다', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(modal());
+
+      await user.type(screen.getByLabelText(/학습 목표/), 'LRU와 FIFO를 비교할 수 있다');
+      rerender(modal({ currentNoteId: 2 }));
+
+      expect(screen.getByLabelText(/학습 목표/)).toHaveValue('');
+    });
+
+    it('키워드 preset으로 연 뒤 preset 없이 다시 열면 집중 개념이 payload에 담기지 않는다', async () => {
+      const user = userEvent.setup();
+      client.post.mockResolvedValueOnce({ data: { quizSetId: 7 } });
+      const { rerender } = render(modal({ preset: { noteId: 2, blockId: null, keyword: 'LRU' } }));
+
+      expect(screen.getByText('LRU')).toBeInTheDocument();
+      rerender(modal({ isOpen: false }));
+      rerender(modal());
+
+      expect(screen.queryByText('LRU')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '문제 생성 시작' }));
+
+      await waitFor(() => expect(client.post).toHaveBeenCalled());
+      expect(client.post.mock.calls[0][1]).not.toHaveProperty('focusConcepts');
+    });
+  });
+
   it('학습 목표가 5개를 넘거나 한 줄이 100자를 넘으면 생성 버튼이 비활성화된다', async () => {
     const user = userEvent.setup();
     renderModal({ currentNoteId: 1 });

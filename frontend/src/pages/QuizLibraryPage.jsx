@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import AppLayout from '../components/layout/AppLayout';
-import { BookOpen, History } from 'lucide-react';
 import CBTPlayer from '../components/editor/components/CBTPlayer';
 import QuizAttemptsModal from '../components/editor/components/QuizAttemptsModal';
 import QuizListPanel from '../components/quiz/QuizListPanel';
 import QuizHistoryPanel from '../components/quiz/QuizHistoryPanel';
 import useQuizLibrary from '../hooks/useQuizLibrary';
+import './QuizLibraryPage.css';
 
 const QuizLibraryPage = () => {
   const [activeTab, setActiveTab] = useState('quizzes'); // 'quizzes' | 'history'
@@ -55,47 +55,45 @@ const QuizLibraryPage = () => {
         onViewAttempt={handleViewAttempt}
       />
 
-      <div className="p-8 max-w-5xl mx-auto">
-        <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">학습 보관함</h1>
-          </div>
+      <div className="lib-frame">
+        <div className="lib">
+          <h1 className="lib-title">학습 보관함</h1>
 
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
+          <div className="lib-tabs">
             <button
               onClick={() => setActiveTab('quizzes')}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'quizzes' ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+              aria-pressed={activeTab === 'quizzes'}
+              className="lib-tab"
             >
-              <BookOpen size={14} />
               문제 모음
             </button>
             <button
               onClick={() => setActiveTab('history')}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'history' ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+              aria-pressed={activeTab === 'history'}
+              className="lib-tab"
             >
-              <History size={14} />
               풀이 기록
             </button>
           </div>
-        </header>
 
-        {activeTab === 'quizzes' ? (
-          <QuizListPanel
-            quizzes={quizzes}
-            onRetake={handleRetake}
-            onOpenAttempts={handleOpenAttempts}
-            onDelete={handleDelete}
-            onShare={handleShare}
-            onRename={handleRename}
-          />
-        ) : (
-          <QuizHistoryPanel
-            attempts={attempts}
-            isLoading={isLoading}
-            onViewAttempt={handleViewAttempt}
-            onDelete={handleDeleteAttempt}
-          />
-        )}
+          {activeTab === 'quizzes' ? (
+            <QuizListPanel
+              quizzes={quizzes}
+              onRetake={handleRetake}
+              onOpenAttempts={handleOpenAttempts}
+              onDelete={handleDelete}
+              onShare={handleShare}
+              onRename={handleRename}
+            />
+          ) : (
+            <QuizHistoryPanel
+              attempts={attempts}
+              isLoading={isLoading}
+              onViewAttempt={handleViewAttempt}
+              onDelete={handleDeleteAttempt}
+            />
+          )}
+        </div>
       </div>
     </AppLayout>
   );

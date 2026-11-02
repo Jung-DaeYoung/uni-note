@@ -4,6 +4,7 @@ import com.uninote.backend.domain.Course;
 import com.uninote.backend.domain.Note;
 import com.uninote.backend.domain.Student;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -23,4 +24,13 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
             "AND LOWER(n.searchContent) LIKE CONCAT('%', :pattern, '%') ESCAPE '!' ORDER BY n.updatedAt DESC")
     List<Note> searchByContent(@Param("studId") Long studId, @Param("courseId") Long courseId,
                                @Param("pattern") String pattern, Pageable pageable);
+
+    // 통합 검색: 내 노트 중 제목이나 검색용 평문에 검색어가 든 노트. courseId가 null이면 모든 강의를 찾는다.
+    @Query("SELECT n FROM Note n JOIN FETCH n.course WHERE n.student.studId = :studId " +
+            "AND (:courseId IS NULL OR n.course.courseId = :courseId) " +
+            "AND (LOWER(n.title) LIKE CONCAT('%', :pattern, '%') ESCAPE '!' " +
+            "OR LOWER(n.searchContent) LIKE CONCAT('%', :pattern, '%') ESCAPE '!') " +
+            "ORDER BY n.updatedAt DESC, n.noteId DESC")
+    Slice<Note> search(@Param("studId") Long studId, @Param("courseId") Long courseId,
+                       @Param("pattern") String pattern, Pageable pageable);
 }

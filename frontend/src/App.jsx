@@ -11,6 +11,7 @@ const IncorrectNotesPage = lazy(() => import('./pages/IncorrectNotesPage'));
 const SharedQuizBoardPage = lazy(() => import('./pages/SharedQuizBoardPage'));
 const SharedNoteBoardPage = lazy(() => import('./pages/SharedNoteBoardPage'));
 const MyPage = lazy(() => import('./pages/MyPage'));
+const SearchPage = lazy(() => import('./pages/SearchPage'));
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -33,6 +34,7 @@ function App() {
             <Route path="/incorrect-notes" element={<IncorrectNotesPage />} />
             <Route path="/incorrect-notes/groups" element={<IncorrectNotesPage />} />
             <Route path="/mypage" element={<MyPage />} />
+            <Route path="/search" element={<SearchPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" />} />

@@ -1,0 +1,174 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full
+ * paper: oklch(98.4% 0.003 247.858) · accent: oklch(54.6% 0.245 262.881) · display: project stack · body: project stack
+ * nav: kept (AppLayout) · signature: both boards as one ruled list under a single filter bar, the shared note read without a card · states: default, hover, focus, active, empty
+ * axes: slate/project/blue · posture: ruled ledger · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V3 · weakest: V, it reuses the study archive's ledger classes on purpose so the boards read as the same tool; two-column cards and decorative icons went, the title and its action lead each row */
+
+/* 제목·목록·버튼·선택 상자는 QuizLibraryPage.css의 lib- 클래스를 함께 쓴다. 여기에는 게시판에만 있는 요소를 둔다. */
+.board-bar {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.board-bar .lib-tab {
+  margin-bottom: -0.5625rem;
+}
+
+.board-sorts {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.board-bar-end {
+  margin-left: auto;
+}
+
+/* 필터 줄 아래 선이 목록의 윗선 역할을 하므로 간격만 줄인다. */
+.board-list {
+  margin-top: -2rem;
+}
+
+.board-course {
+  color: var(--lib-color-accent);
+  font-weight: 600;
+}
+
+.board-actions {
+  justify-content: flex-end;
+}
+
+.board-actions .lib-icons {
+  margin-right: auto;
+}
+
+.board-like {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-width: 4.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-like[aria-pressed='true'] {
+  border-color: var(--lib-color-accent);
+  color: var(--lib-color-accent);
+}
+
+.board-hint {
+  display: block;
+  margin-top: 0.25rem;
+}
+
+/* 공유 노트 상세 */
+.board-viewer {
+  max-width: 64rem;
+}
+
+.board-back {
+  min-height: 2.25rem;
+  margin-bottom: 0.75rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--lib-color-ink-2);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--dur-micro) var(--ease-out);
+}
+
+.board-back:focus-visible,
+.board-crumb:focus-visible {
+  outline: 2px solid var(--lib-color-accent);
+  outline-offset: 2px;
+}
+
+.board-back:active,
+.board-crumb:active {
+  color: var(--lib-color-ink);
+}
+
+.board-back:disabled,
+.board-crumb:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.board-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 2px solid var(--lib-color-rule-strong);
+}
+
+.board-head-body {
+  min-width: 0;
+}
+
+.board-head .lib-title {
+  margin-bottom: 0.5rem;
+}
+
+.board-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  padding-top: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.board-crumb {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--lib-color-ink-2);
+  font: inherit;
+  cursor: pointer;
+  transition: color var(--dur-micro) var(--ease-out);
+}
+
+.board-path-sep {
+  color: var(--lib-color-ink-2);
+  font-weight: 400;
+}
+
+.board-note {
+  min-width: 0;
+  padding-block: 1.5rem 2.5rem;
+}
+
+.board-comments {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--lib-color-rule);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .board-back:hover,
+  .board-crumb:hover {
+    color: var(--lib-color-accent);
+  }
+}
+
+@media (min-width: 60rem) {
+  .board-viewer {
+    padding-inline: 2.5rem;
+    padding-top: 2.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-back,
+  .board-crumb {
+    transition: none;
+  }
+}

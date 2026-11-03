@@ -1,0 +1,86 @@
+/* Hallmark · component: quiz attempts modal · genre: modern-minimal · theme: brand · redesign: full · states: default, hover, focus, active, loading, empty · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H5 E4 S3 R5 V3 · weakest: S, it repeats the library's attempt ledger on purpose so the same record reads the same everywhere; score tiles, icons and the chevron went, the large score leads */
+/* Hallmark · waive 26b · not a form control, no aria-disabled anywhere · this file styles no control of its own: the buttons use lib-btn, lib-icon and lib-attempt-main, whose active and disabled states live in QuizLibraryPage.css */
+
+/* 색·배경은 학습 보관함(--lib-*)과 공통 확인창(--cf-*) 토큰을 그대로 쓴다. */
+.att-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: var(--cf-scrim);
+}
+
+.att {
+  --dur-micro: 120ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 28rem;
+  max-height: 80dvh;
+  border: 1px solid var(--lib-color-rule);
+  border-radius: 4px;
+  background: var(--cf-surface);
+  color: var(--lib-color-ink);
+  word-break: keep-all;
+}
+
+.att-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 0.875rem;
+  border-bottom: 2px solid var(--lib-color-rule-strong);
+}
+
+.att-heading {
+  min-width: 0;
+}
+
+.att-quiz {
+  margin: 0.125rem 0 0;
+  color: var(--lib-color-ink-2);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* 행의 안쪽 여백(0.5rem)과 합쳐 머리글·바닥글의 1.5rem 선에 맞춘다. */
+.att-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-inline: 1rem;
+}
+
+/* 스크롤 영역은 키보드로 포커스될 수 있다. 버튼의 나머지 상태는 lib-btn·lib-icon·lib-attempt-main에 있다. */
+.att-body:focus-visible {
+  outline: 2px solid var(--lib-color-accent);
+  outline-offset: -2px;
+}
+
+.att-body .lib-attempt {
+  padding-right: 0;
+}
+
+.att-hint {
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.att-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 1rem 1.5rem 1.25rem;
+}
+
+.att-foot .lib-btn {
+  flex: none;
+}

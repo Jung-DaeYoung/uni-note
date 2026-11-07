@@ -13,8 +13,8 @@ public class RestClientConfig {
     public RestTemplate restTemplate(RestTemplateBuilder builder) {
         return builder
                 .connectTimeout(Duration.ofSeconds(5))
-                // AI 퀴즈 생성은 응답까지 수십 초가 걸릴 수 있어 read timeout을 넉넉하게 둔다.
-                .readTimeout(Duration.ofSeconds(60))
+                // AI 퀴즈 생성은 최대 약 90초 걸린다. Nginx proxy_read_timeout(120s)과 맞춘다.
+                .readTimeout(Duration.ofSeconds(120))
                 .build();
     }
 }

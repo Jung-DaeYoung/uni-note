@@ -2,14 +2,17 @@
 # 개발 기본값 위에 운영에 필요한 값만 덮어쓴다. 활성화: SPRING_PROFILES_ACTIVE=prod
 #
 # 필요한 환경 변수: DB_HOST, DB_PORT(기본 3306), DB_NAME(기본 uninote_db),
-#                  DB_USERNAME, DB_PASSWORD, JWT_SECRET, JWT_EXPIRATION, CORS_ALLOWED_ORIGINS
+#                  DB_USERNAME, DB_PASSWORD, TRUSTSTORE_PASSWORD, JWT_SECRET, JWT_EXPIRATION, CORS_ALLOWED_ORIGINS
 # (DB_USERNAME/DB_PASSWORD/JWT_SECRET/JWT_EXPIRATION/CORS_ALLOWED_ORIGINS는
 #  플레이스홀더로 선언되어 있어, 값이 없으면 그 시점에 기동이 실패한다.
 #  CORS_ALLOWED_ORIGINS는 값이 있어도 비어있거나 localhost/127.0.0.1을 포함하면
 #  SecurityConfig.validateCorsConfigForProd()가 기동을 실패시킨다.)
 spring:
   datasource:
-    url: jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/${DB_NAME:uninote_db}?serverTimezone=Asia/Seoul&useSSL=true&requireSSL=true&allowPublicKeyRetrieval=false
+    # RDS 인증서와 호스트명을 검증한다(DB_HOST는 IP가 아닌 RDS 엔드포인트). truststore는 JDBC에만 지정해
+    # JVM 기본 cacerts(Gemini HTTPS)에는 영향을 주지 않는다. 컨테이너에
+    # /home/ubuntu/rds-certs/rds-truststore.p12:/run/secrets/rds-truststore.p12:ro로 마운트한다.
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/${DB_NAME:uninote_db}?serverTimezone=Asia/Seoul&sslMode=VERIFY_IDENTITY&trustCertificateKeyStoreUrl=file:/run/secrets/rds-truststore.p12&trustCertificateKeyStoreType=PKCS12&trustCertificateKeyStorePassword=${TRUSTSTORE_PASSWORD}&allowPublicKeyRetrieval=false
 
   jpa:
     hibernate:

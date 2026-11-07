@@ -1,252 +1,134 @@
-# AI 문제 생성 학습 목표 미반영 문제
+# AWS 배포 사전 점검: 환경변수 · 업로드 경로 · RDS SSL · DB 마이그레이션
 
-## 1. 문제 요약
+2026-11-06 기준 코드와 로컬 DB를 조회해 확인한 결과다. 코드 수정·배포는 하지 않았고 민감한 값은 기록하지 않았다. `docs/배포환경 설계.md`와 대조해 확인·보강한 내용이다.
 
-AI 문제 생성 패널에서 학습 목표를 입력해도 생성된 문제가 해당 목표를 충분히 평가하지 않는다.
+표기: **[확인]** 코드·실행 결과로 확인한 사실 · **[추론]** 동작 원리에서 끌어낸 판단(배포 후 확인 필요) · **[확인 필요]** AWS 등 외부 사실이라 콘솔·문서로 확인해야 하는 것
 
-현재 백엔드는 학습 목표를 Gemini 프롬프트에 참고사항으로 전달할 뿐이며, Gemini 응답에 목표와 문항의 연결 정보를 요구하지 않는다. 또한 생성 결과가 학습 목표를 실제로 반영했는지 검증하지 않고 저장한다.
+---
 
-따라서 현재 기능은 엄밀한 의미의 **학습 목표 기반 문제 생성**이 아니라 **학습 목표를 참고로 제공하는 문제 생성**에 가깝다.
+## 1. 환경변수
 
-## 2. 관련 코드
+| 변수 | 읽는 위치 | 비고 |
+|---|---|---|
+| `SPRING_PROFILES_ACTIVE=prod` | `application-prod.yaml` | 이 값이 있어야 운영 설정이 적용됨 |
+| `DB_HOST` | `application-prod.yaml` datasource url | 기본값 없음. 없으면 기동 실패 |
+| `DB_PORT` | 같은 곳 | 기본 3306 |
+| `DB_NAME` | 같은 곳 | 기본 `uninote_db` |
+| `DB_USERNAME`, `DB_PASSWORD` | `application.yaml` | 필수 |
+| `JWT_SECRET` | `application.yaml` → `JwtUtil.java:19` | 필수, 32바이트 이상 |
+| `JWT_EXPIRATION` | 같은 곳 | 필수. 로컬 값은 86400000 |
+| `FILE_SIGNING_SECRET` | `application.yaml` → `FileAccessSigner.java:24` | 없으면 `jwt.secret`을 대신 씀 |
+| `CORS_ALLOWED_ORIGINS` | `application-prod.yaml` → `SecurityConfig.java:35` | 비어 있거나 localhost가 들어 있으면 기동 실패 |
+| `GEMINI_API_KEY` | `GeminiClient.java:29` | 아래 참고 |
+| `TZ=Asia/Seoul` | JVM | 코드에서 직접 읽지는 않지만 문서대로 필요 |
 
-- 프롬프트 생성: `backend/src/main/java/com/uninote/backend/service/QuizAiGenerationService.java`
-- 요청 DTO: `backend/src/main/java/com/uninote/backend/dto/QuizRequest.java`
-- Gemini 호출: `backend/src/main/java/com/uninote/backend/service/GeminiClient.java`
-- 응답 DTO:
-  - `backend/src/main/java/com/uninote/backend/dto/QuizResponse.java`
-  - `backend/src/main/java/com/uninote/backend/dto/QuestionResponse.java`
-- 생성 결과 검증: `backend/src/main/java/com/uninote/backend/service/QuizQualityValidator.java`
+- **[확인]** `GEMINI_API_KEY`만 Spring 설정을 거치지 않고 `System.getenv()`로 직접 읽는다. 그래서 yaml이나 `-D` 옵션으로는 넣을 수 없고 실제 OS 환경변수로만 들어간다. `docker --env-file`은 OS 환경변수로 넣으므로 문제없다. 값이 없으면 `@PostConstruct`에서 기동이 실패한다.
+- **[확인]** 로컬 `application-local.yaml`에는 `file.signing-secret`이 `jwt.secret`과 별도로 지정되어 있다(이전 JWT secret). 운영의 `FILE_SIGNING_SECRET`에는 **이 로컬 값을 그대로** 넣어야 한다. 서명된 파일 URL이 노트 본문에 저장되기 때문이다.
+- **[추론]** `JWT_SECRET`은 새 값을 써도 된다. 기존 토큰만 무효가 되어 사용자가 다시 로그인하면 된다.
 
-## 3. Gemini에 전달하는 현재 프롬프트
+## 2. 파일 업로드 저장 경로
 
-학습 목표가 있으면 다음 지시가 기본 문제 생성 프롬프트 중간에 삽입된다.
+- **[확인]** 저장 경로는 상대 경로 `"uploads"`이고, 프로세스가 실행된 디렉터리를 기준으로 정해진다. 이 경로를 쓰는 곳은 두 군데다.
+  - `ImageUploadController.java:47, 49, 197`: 저장과 조회
+  - `QuizAiGenerationService.java:312`: AI 퀴즈 생성 때 첨부 파일을 읽음
+- **[확인]** Dockerfile은 `WORKDIR /app`이고 실행은 `java -jar /app/app.jar`이므로 컨테이너 안의 실제 경로는 **`/app/uploads`** 다. `USER` 지시자가 없어 root로 실행되므로 마운트 권한 문제도 없다.
+- 볼륨 마운트는 다음과 같다. `docker run`에 `-w` 옵션을 주면 경로가 바뀌므로 넣지 않는다.
+  ```
+  -v /opt/uninote/uploads:/app/uploads
+  ```
+- **[확인]** 로컬 `backend/uploads`는 현재 **비어 있다(0개).** DB의 `notes`, `posts`, `quiz_sets.source_notes`, `shared_note_snapshots`에서도 업로드 URL 참조가 **0건**이다. `legacy-allowed-files`에 있는 3개 파일도 디스크와 DB 어디에도 없다. 지금 시점에는 옮길 파일이 사실상 없지만, 덤프 직전에 문서의 누락 파일 점검 스크립트는 한 번 실행해 둔다.
 
-```text
-학습 목표:
-- {목표 1}
-- {목표 2}
+## 3. RDS SSL (VERIFY_IDENTITY)
 
-가능한 한 각 문항이 위 학습 목표 중 하나를 평가하도록 출제하라.
-단, 노트에 근거가 없는 목표는 건너뛰고 내용을 지어내지 마라.
+- **[확인]** 실제로 쓰이는 드라이버는 `mysql-connector-j` **9.1.0**이다. Spring Boot 3.4.2가 관리하는 버전이며 `gradlew dependencyInsight`로 확인했다.
+- **[확인]** 현재 운영 url은 `useSSL=true&requireSSL=true`이다. Connector/J 8.0.13 이후로 이 옵션은 `sslMode=REQUIRED`로 해석되어, **암호화만 하고 서버 인증서는 검증하지 않는다.**
+
+### 적용 방법 (제안, 미반영)
+
+① EC2에서 RDS CA 번들로 PKCS12 truststore를 만든다. 비밀번호는 화면과 프로세스 인자에 남지 않게 입력한다.
+
+```bash
+sudo mkdir -p /home/ubuntu/rds-certs && cd /home/ubuntu/rds-certs
+sudo curl -fsSLo rds-bundle.pem https://truststore.pki.rds.amazonaws.com/ap-southeast-2/ap-southeast-2-bundle.pem
+# keytool은 PEM 파일에서 첫 인증서만 가져오므로 인증서별로 나눈다
+sudo awk '/BEGIN CERT/{n++} {print > ("rds-ca-" n ".pem")}' rds-bundle.pem
+read -rs TSPW; export TSPW
+for f in rds-ca-*.pem; do
+  sudo -E docker run --rm -e TSPW -v /home/ubuntu/rds-certs:/certs eclipse-temurin:21-jre \
+    keytool -importcert -noprompt -alias "${f%.pem}" -file "/certs/$f" \
+    -keystore /certs/rds-truststore.p12 -storetype PKCS12 -storepass:env TSPW
+done
+sudo -E docker run --rm -e TSPW -v /home/ubuntu/rds-certs:/certs eclipse-temurin:21-jre \
+  keytool -list -keystore /certs/rds-truststore.p12 -storepass:env TSPW | grep -c trustedCertEntry
 ```
 
-프롬프트 전체 흐름은 다음과 같다.
+[확인 필요] 번들 URL은 AWS 문서의 형식이니 다운로드할 때 확인한다. `global/global-bundle.pem`을 써도 된다.
 
-```text
-강의 내용(텍스트, 이미지, PDF)을 기반으로 퀴즈를 생성하라.
-텍스트 내용에는 [[REF:noteId/blockId]] 형태의 출처 메타데이터가 포함되어 있다.
-모든 문항은 제공된 출처 중 하나를 근거로 생성해야 한다.
-난이도: {난이도}. 문항은 {난이도 기준}으로 출제하라.
-유형별 문제 수 배분: {유형별 문항 수}.
-{학습 목표 지시}
-{집중 개념 지시}
-{오답 문제 재출제 지시}
-{노트별 출제 지시}
-응답 구조: {JSON 구조}
-엄격 준수 사항: ...
-텍스트 내용: {노트 내용}
+② `application-prod.yaml`의 url을 이렇게 바꾼다(`useSSL`, `requireSSL`은 제거).
+
+```
+jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/${DB_NAME:uninote_db}?serverTimezone=Asia/Seoul&sslMode=VERIFY_IDENTITY&trustCertificateKeyStoreUrl=file:/run/secrets/rds-truststore.p12&trustCertificateKeyStoreType=PKCS12&trustCertificateKeyStorePassword=${TRUSTSTORE_PASSWORD}&allowPublicKeyRetrieval=false
 ```
 
-## 4. 현재 Gemini 응답 구조
+③ `backend.env`에 `TRUSTSTORE_PASSWORD`를 추가하고, `docker run`에 `-v /home/ubuntu/rds-certs/rds-truststore.p12:/run/secrets/rds-truststore.p12:ro`를 추가한다.
 
-Gemini에는 다음 형태의 JSON Schema가 전달된다.
+### 주의할 점
 
-```json
-{
-  "title": "제목",
-  "difficulty": "NORMAL",
-  "questions": [
-    {
-      "type": "MULTIPLE_CHOICE",
-      "questionText": "내용",
-      "options": ["A", "B"],
-      "correctAnswer": "정답",
-      "explanation": "해설",
-      "sourceNoteId": 1,
-      "sourceBlockId": "b1",
-      "conceptTags": ["개념"]
-    }
-  ]
-}
-```
+- **[확인]** `DB_HOST`에는 RDS 엔드포인트 호스트명(`*.rds.amazonaws.com`)을 그대로 넣어야 한다. IP나 별칭(CNAME)을 쓰면 VERIFY_IDENTITY의 호스트명 검증에서 실패한다.
+- **[추론]** truststore를 `-Djavax.net.ssl.trustStore`로 JVM 전체에 걸면 안 된다. 기본 cacerts를 대체해 버려서 Gemini(googleapis) HTTPS 호출이 실패한다. 위처럼 JDBC 옵션으로만 지정한다.
+- 코드를 바꾸지 않는 대안도 있다. `backend.env`에 `SPRING_DATASOURCE_URL=<위 url>`을 넣으면 yaml보다 우선 적용된다. 다만 설정이 두 곳으로 나뉘므로 yaml 수정을 권장한다.
+- CLI로 덤프를 넣을 때도 검증을 켠다: `mysql --ssl-mode=VERIFY_IDENTITY --ssl-ca=/home/ubuntu/rds-certs/rds-bundle.pem ...`
 
-문항별로 요구되는 필드는 다음과 같다.
+## 4. DB 마이그레이션
 
-- `type`
-- `questionText`
-- `correctAnswer`
-- `explanation`
-- `conceptTags`
-- 출처가 있는 입력이면 `sourceNoteId`, `sourceBlockId`
+### [확인] 로컬 DB 현황
 
-응답에는 학습 목표 자체나 학습 목표와 문항의 관계를 나타내는 필드가 없다.
+- MySQL 8.0.45, DB 문자셋 `utf8mb4` / `utf8mb4_0900_ai_ci`, 테이블 20개.
+- 프로시저, 트리거, 뷰가 모두 0개라 DEFINER 문제는 없다.
+- 엔티티가 없는 테이블이 하나 있다: `boards` (0행). `comment`는 `@Table`이 없는 `Comment` 엔티티의 기본 테이블명이다. `validate`는 엔티티에 없는 테이블을 검사하지 않으므로 그대로 옮겨도 무방하다.
 
-예를 들어 다음과 같은 매핑 정보가 요구되지 않는다.
+### ⚠ 문서에 없던 위험: 시간대 [추론, 배포 후 확인 필요]
 
-```json
-{
-  "objectiveIndices": [0]
-}
-```
+- `notes.created_at` 하나만 `TIMESTAMP` 타입이고 나머지 12개는 `DATETIME`이다.
+- 로컬 DB 세션 시간대는 SYSTEM(KST)인데 RDS 기본값은 UTC다. mysqldump는 TIMESTAMP를 UTC로 내보내므로, RDS가 UTC 세션이면 기존 노트의 생성 시각이 **9시간 이르게** 보이게 된다.
+- 해결책은 **RDS 커스텀 파라미터 그룹에서 `time_zone = Asia/Seoul`** 로 설정하는 것이다. 기본 파라미터 그룹은 수정할 수 없으니 새로 만들어 RDS 생성 시 지정한다. 컨테이너의 `TZ`는 JVM 설정일 뿐이라 이 문제를 해결하지 못한다.
 
-또는:
+### 절차 (`docs/배포환경 설계.md` 12장 3단계 보강)
 
-```json
-{
-  "learningObjectives": ["LRU와 FIFO를 비교할 수 있다"]
-}
-```
+1. RDS 생성: MySQL 8.4, 위 파라미터 그룹 적용, 퍼블릭 액세스 끔.
+2. EC2에서 DB를 만들고, 권장 사항으로 앱 전용 계정을 둔다.
+   ```sql
+   CREATE DATABASE uninote_db CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+   CREATE USER '<app_user>'@'%' IDENTIFIED BY '<pw>' REQUIRE SSL;
+   GRANT SELECT, INSERT, UPDATE, DELETE ON uninote_db.* TO '<app_user>'@'%';
+   ```
+   운영은 `ddl-auto: validate`라서 DDL 권한이 없어도 된다. 스키마 변경 SQL은 admin 계정으로 적용한다.
+3. 로컬 백엔드를 중지한 뒤 덤프한다. 문서의 명령 그대로이며, 덤프 파일은 저장소 밖에 저장한다.
+   ```powershell
+   mysqldump -u <user> -p --single-transaction --no-tablespaces --set-gtid-purged=OFF `
+     --default-character-set=utf8mb4 --result-file="$HOME\uninote.sql" uninote_db
+   ```
+4. scp로 EC2에 옮긴 뒤 가져온다.
+   ```bash
+   mysql --ssl-mode=VERIFY_IDENTITY --ssl-ca=/home/ubuntu/rds-certs/rds-bundle.pem \
+     --default-character-set=utf8mb4 -h <RDS endpoint> -u <admin> -p uninote_db < ~/uninote.sql
+   ```
+5. 검증:
+   - 테이블별 `SELECT COUNT(*)`를 로컬과 비교한다. `information_schema.table_rows`는 추정치라 쓰면 안 된다. 로컬 기준값: students 7, notes 10, questions 46, user_answers 54, quiz_attempts 23 등.
+   - `SELECT id, created_at FROM notes LIMIT 3;`로 시간이 로컬과 같은지 확인한다.
+   - 앱이 `validate`를 통과해 기동되는지 확인한다.
+   - 로그인, 노트 저장, 퀴즈 생성처럼 쓰기 동작까지 확인한다.
+6. 덤프에는 비밀번호 해시가 들어 있으므로 로컬과 EC2의 덤프 파일을 모두 삭제한다.
 
-## 5. 핵심 원인
+**[확인 필요]** RDS MySQL 8.4는 `mysql_native_password`가 기본으로 꺼져 있고 `caching_sha2_password`를 쓴다. TLS 연결에서는 `allowPublicKeyRetrieval=false`여도 인증이 되므로 현재 설정으로 문제는 없을 것으로 본다. 첫 접속 때 확인한다.
 
-### 5.1 학습 목표 지시가 강제사항이 아님
+---
 
-현재 프롬프트는 다음과 같이 작성되어 있다.
+## 요약
 
-```text
-가능한 한 각 문항이 위 학습 목표 중 하나를 평가하도록 출제하라.
-```
+실제로 반영할 변경은 두 가지다.
 
-`가능한 한`이라는 표현은 목표 반영을 선택사항으로 만든다. Gemini는 출처, 문항 수, 난이도, 문제 유형 등의 다른 제약은 지키면서 학습 목표를 생략할 수 있다.
+1. `application-prod.yaml`의 SSL url 변경과 인증서 마운트
+2. RDS 파라미터 그룹의 `time_zone` 설정
 
-### 5.2 응답에 목표-문항 매핑이 없음
-
-Gemini가 어떤 문항이 어떤 학습 목표를 평가하는지 응답하지 않는다. 따라서 생성 후 다음을 판단할 수 없다.
-
-- 각 문항이 어떤 목표에 대응하는지
-- 모든 목표가 최소 한 번씩 다뤄졌는지
-- 목표와 무관한 문항이 포함됐는지
-
-### 5.3 서버 검증기가 학습 목표를 검사하지 않음
-
-`QuizQualityValidator`는 다음 항목을 검증한다.
-
-- 문항 존재 여부
-- 요청한 유형별 문항 수
-- 문제 내용과 정답 존재 여부
-- 객관식 보기와 정답 형식
-- 세트 내 중복 문제
-- 출처 유효성
-- 개념 태그 정리
-
-하지만 다음은 검증하지 않는다.
-
-- 학습 목표별 최소 문항 수
-- 학습 목표와 문항의 매핑 유효성
-- 학습 목표가 하나라도 반영됐는지
-- 목표 매핑이 없는 문항의 비율
-
-검증에 통과한 결과는 목표 반영 여부와 무관하게 저장된다.
-
-### 5.4 노트 근거 제한이 목표 반영을 약화시킬 수 있음
-
-프롬프트에는 다음 조건도 있다.
-
-```text
-노트에 근거가 없는 목표는 건너뛰고 내용을 지어내지 마라.
-```
-
-이 조건은 환각을 막는 데 필요하지만, 목표와 노트 표현이 다르거나 노트에 관련 내용이 부분적으로만 있으면 Gemini가 목표를 건너뛸 수 있다. 현재 서버는 목표가 누락되어도 정상 생성으로 처리한다.
-
-## 6. 재현 예시
-
-학습 목표:
-
-```text
-LRU와 FIFO의 차이를 비교할 수 있다
-```
-
-현재 요청에는 목표가 프롬프트에 포함되지만, 응답은 다음처럼 목표 연결 없이 반환된다.
-
-```json
-{
-  "title": "운영체제 퀴즈",
-  "difficulty": "NORMAL",
-  "questions": [
-    {
-      "type": "SHORT_ANSWER",
-      "questionText": "페이지 폴트란 무엇인가?",
-      "correctAnswer": "페이지 폴트",
-      "explanation": "필요한 페이지가 메모리에 없을 때 발생한다.",
-      "conceptTags": ["페이지 폴트"],
-      "sourceNoteId": 1,
-      "sourceBlockId": "b1"
-    }
-  ]
-}
-```
-
-이 응답은 형식과 출처 검증은 통과할 수 있지만, 입력한 학습 목표인 LRU와 FIFO 비교를 평가하지 않는다.
-
-## 7. 문제의 영향
-
-- 학습자가 입력한 목표와 무관한 문제를 받을 수 있음
-- 문제 생성 결과의 예측 가능성이 낮음
-- 학습 목표 기능의 사용자 가치가 약화됨
-- 목표별 학습 성취도나 커버리지를 추후 분석할 수 없음
-- 테스트가 프롬프트에 목표 문자열이 포함되는지만 확인하면 실제 목표 반영 실패를 발견하지 못함
-
-## 8. 필요한 개선 방향
-
-### 8.1 응답에 목표 매핑 필드 추가
-
-학습 목표를 요청 순서의 인덱스로 식별하고, 각 문항에 대응 목표를 포함하도록 한다.
-
-```json
-{
-  "type": "SHORT_ANSWER",
-  "questionText": "LRU와 FIFO의 차이로 옳은 것은?",
-  "correctAnswer": "...",
-  "explanation": "...",
-  "objectiveIndices": [0],
-  "conceptTags": ["페이지 교체"],
-  "sourceNoteId": 1,
-  "sourceBlockId": "b1"
-}
-```
-
-목표가 여러 개면 `objectiveIndices`에 여러 인덱스를 허용할 수 있다.
-
-### 8.2 프롬프트를 강제형으로 변경
-
-현재의 `가능한 한` 대신 다음 제약을 명시해야 한다.
-
-```text
-각 학습 목표는 최소 1개 이상의 문항에서 평가되어야 한다.
-각 문항은 반드시 하나 이상의 학습 목표에 대응해야 한다.
-각 문항의 objectiveIndices에 실제로 평가하는 목표의 인덱스를 기입하라.
-노트에 근거가 없는 목표는 내용을 지어내지 말고 objectiveIndices에서 제외하라.
-```
-
-단, 목표 수가 총 문항 수보다 많을 때의 정책은 별도로 정해야 한다.
-
-### 8.3 서버 검증 추가
-
-`QuizQualityValidator`에서 다음을 검증해야 한다.
-
-- `objectiveIndices`가 존재하면 목표 범위 내 인덱스인지 확인
-- 각 문항에 최소 하나의 목표 인덱스가 있는지 확인
-- 목표별 대응 문항이 있는지 확인
-- 목표가 노트 근거 부족으로 제외되는 경우의 허용 정책 적용
-- 검증 실패 시 재생성하거나 명확한 생성 실패 응답 반환
-
-### 8.4 목표 수와 문항 수의 정책 정의
-
-현재는 학습 목표 최대 5개, 총 문항 수 최대 30개지만 목표별 최소 문항 수가 정의되어 있지 않다.
-
-다음 중 하나를 명시해야 한다.
-
-- 목표마다 최소 1문항
-- 목표별 문항 비율 배분
-- 문항 수가 목표 수보다 적으면 일부 목표를 허용
-- 목표 수가 문항 수보다 많으면 요청 자체를 거부
-
-## 9. 결론
-
-가장 핵심적인 원인은 다음과 같다.
-
-> 학습 목표를 프롬프트에 참고 지시로만 전달하고, Gemini 응답에 목표-문항 매핑을 요구하지 않으며, 서버도 목표 반영 여부를 검증하지 않는다.
-
-따라서 현재 구조에서는 Gemini가 학습 목표에 맞지 않는 문제를 생성해도 백엔드가 이를 식별하거나 거부할 방법이 없다.
-
+나머지는 현재 코드와 `docs/배포환경 설계.md` 그대로 진행해도 된다.

@@ -49,6 +49,32 @@ Hallmark의 다른 지시보다 아래 규칙을 우선한다.
 - Hallmark의 페이지별 서브에이전트 분담을 쓰지 않는다.
 - Hallmark 변경을 커밋하기 전에 `git diff`로 CSP 변경과 외부 URL 추가 여부를 확인한다.
 
+## 디자인 스킬 역할 분담
+
+UniNote 화면은 모두 앱 화면(대시보드·편집기·설정 등)이다. 한 작업에는 주 스킬 하나만 쓰고, 충돌하면 이 파일 → 기존 화면의 디자인 토큰과 구조 → 스킬 지시 순으로 따른다.
+
+| 작업 | 주 스킬 |
+|---|---|
+| 새 화면·새 페이지 설계 | `hallmark` |
+| 기존 화면 개선: critique, audit, polish, layout, clarify, harden, distill 등 | `impeccable` (Operate 모드) |
+| 애니메이션·전환·마이크로인터랙션 디테일 | `emil-design-eng` |
+| 시각 방향·"AI가 만든 듯한" 화면 판단 기준 참고 | `design-taste-frontend` (참고용) |
+
+- 기존 화면 개선은 리디자인이 아니라 refinement로 다룬다. 기존 동작·문구·토큰을 유지한다.
+
+## impeccable 스킬 사용 제한
+
+- `scripts/impeccable`, `scripts/impeccable.cmd` 런처를 실행하지 않는다. 첫 실행 때 GitHub에서 바이너리를 내려받아 실행한다. 스킬이 정한 "Launcher unavailable" 경로대로 `reference/*.md`와 PRODUCT.md·DESIGN.md(있을 때)를 직접 읽어 진행한다.
+- `hooks`, `live`, `generate`, `serve-question`, `pin`, `doctor`는 쓰지 않는다. 훅 설치, 페이지 스크립트 주입, CSP 허용 변경, 로컬 서버 띄우기, 이미지 생성이 따른다.
+- 서브에이전트 분담(`agents/*.toml`, 카드별 fan-out)을 쓰지 않는다.
+- 폰트는 저장소에 포함한 파일만 쓴다. Google Fonts 등 외부 폰트·스타일시트를 추가하지 않는다.
+
+## design-taste-frontend 스킬 사용 제한
+
+- 이 스킬은 회사·랜딩 웹사이트용이다. "한 화면에 한 섹션", 히어로, 사진·셰이더 효과 같은 하우스 룰을 앱 화면에 적용하지 않는다. 시각 판단 기준(템플릿처럼 보이는 패턴, 금지 목록)만 참고한다.
+- `scripts/`·`assets/`의 `.mjs` 스크립트(`gate.mjs`, `start.mjs`, `photos.mjs`, `icons.mjs`, `shoot.mjs` 등)를 실행하지 않는다. 외부 사진·아이콘 검색과 다운로드, Google Fonts·CDN 링크 생성, 브라우저 캡처를 한다.
+- 스킬 frontmatter에 Stop 훅(`gate.mjs`)이 있다. `.taste-skill/` 빌드 파일이 없으면 아무것도 하지 않지만, 이 스킬로 `.taste-skill/`을 만들지 않는다.
+
 ## 외부 스킬과 지침 파일
 
 - 스킬을 검토 없이 업데이트하지 않는다. `npx skills check`도 확인에 그치지 않고 실제로 업데이트하므로 `npx skills update`와 똑같이 취급한다.

@@ -27,7 +27,7 @@
   flex-direction: column;
   width: 25rem;
   max-width: 100%;
-  height: calc(100vh - 48px);
+  height: calc(100dvh - 48px); /* 모바일 주소창을 뺀 실제 보이는 높이 */
   border-left: 1px solid var(--lib-color-rule);
   background: var(--board-surface);
   color: var(--lib-color-ink);

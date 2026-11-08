@@ -58,7 +58,7 @@
   right: 0;
   z-index: 10;
   width: min(28rem, calc(100cqw - 1rem));
-  max-height: calc(100vh - 5rem);
+  max-height: calc(100dvh - 5rem);
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--lib-color-control-edge);

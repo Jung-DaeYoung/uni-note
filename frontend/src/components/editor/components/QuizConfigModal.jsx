@@ -3,6 +3,7 @@ import { useNoteTree, findNote } from '../../../context/NoteTreeContext';
 import { X, Loader2, ChevronRight, Minus, Plus } from 'lucide-react';
 import client from '../../../api/client';
 import { showAlert } from '../../../context/ConfirmContext';
+import useModalDialog from '../../../hooks/useModalDialog';
 import '../../../pages/QuizLibraryPage.css';
 import './QuizConfigModal.css';
 
@@ -554,6 +555,9 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
     }
   }, [isOpen, currentNoteId, preset]);
 
+  // 생성 중에는 닫기 버튼처럼 ESC 닫기도 막는다.
+  const dialogRef = useModalDialog(isOpen, onClose, { closeOnEscape: !loading });
+
   if (!isOpen) return null;
 
   const currentId = parseInt(currentNoteId);
@@ -873,10 +877,12 @@ const QuizConfigModal = ({ isOpen, onClose, currentNoteId, courseId, onGenerated
   return (
     <div className="qz-overlay">
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="quiz-config-title"
-        className="qz"
+        tabIndex={-1}
+        className="qz outline-none"
       >
         <header className="qz-header">
           <h2 id="quiz-config-title" className="qz-title">AI 문제 생성</h2>

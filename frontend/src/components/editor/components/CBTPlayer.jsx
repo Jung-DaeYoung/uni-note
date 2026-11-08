@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import useModalDialog from '../../../hooks/useModalDialog';
 import client from '../../../api/client';
 import IncorrectNoteModal from './IncorrectNoteModal';
 import QuestionComments from '../../quiz/QuestionComments';
@@ -21,6 +22,9 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
   const [targetQuestionId, setTargetQuestionId] = useState(null);
 
   const scrollRef = useRef(null);
+  const titleId = useId();
+  // 풀이 중 ESC로 닫히면 답안이 사라지므로 ESC 닫기는 끈다(종료·학습 완료 버튼으로만 닫는다).
+  const dialogRef = useModalDialog(true, onClose, { closeOnEscape: false });
 
   // 공유 시험 댓글은 제출 후 결과 화면에서만 보여 준다(풀이 중 정답 노출 방지). 글 전체를 한 번에 받는다.
   const [commentsByQuestion, setCommentsByQuestion] = useState({});
@@ -110,7 +114,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
     const total = questions.length;
 
     return (
-      <div className="cbt">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="cbt outline-none">
         <IncorrectNoteModal
           isOpen={isIncorrectModalOpen}
           onClose={() => setIsIncorrectModalOpen(false)}
@@ -119,7 +123,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
         <div className="cbt-scroll custom-scrollbar" ref={scrollRef}>
           <div className="cbt-col cbt-report">
             <header className="cbt-score-head">
-              <h2 className="cbt-report-title">{mode === 'report' ? '과거 학습 결과' : '학습 결과 리포트'}</h2>
+              <h2 id={titleId} className="cbt-report-title">{mode === 'report' ? '과거 학습 결과' : '학습 결과 리포트'}</h2>
               <p className="cbt-score">{score} / {total} 점</p>
               {mode === 'report' && (
                 <p className="cbt-score-date">풀이 일시: {new Date(quizData.createdAt).toLocaleString()}</p>
@@ -222,10 +226,10 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
 
   // 문제 풀이 화면
   return (
-    <div className="cbt">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="cbt outline-none">
       <header className="cbt-header">
         <div className="cbt-col cbt-header-row">
-          <h2 className="cbt-title">{quizData.title}</h2>
+          <h2 id={titleId} className="cbt-title">{quizData.title}</h2>
           <span className="cbt-difficulty">{quizData.difficulty}</span>
           <button onClick={onClose} className="lib-btn">종료</button>
         </div>
@@ -242,6 +246,7 @@ const CBTPlayer = ({ quizData, onClose, courseId, mode = 'solve', initialAnswers
             <input
               type="text"
               className="cbt-input"
+              aria-label="정답"
               placeholder="정답을 입력하세요..."
               // user_answers.submitted_answer(VARCHAR 255)와 QuizAttemptRequest의 @Size와 같다.
               maxLength={255}

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GripVertical, Trash2, Copy } from 'lucide-react';
+import '../../../pages/QuizLibraryPage.css';
+import './BlockHandle.css';
 
 const BlockHandle = ({ editor }) => {
   const [top, setTop] = useState(-100);
@@ -105,28 +107,28 @@ const BlockHandle = ({ editor }) => {
   return (
     <div
       ref={containerRef}
-      className="absolute z-20 group"
-      style={{ top, left: 0 }}
+      className="bh"
+      style={{ top }}
     >
       <button
         draggable="true"
         onDragStart={handleDragStart}
         onClick={selectBlock}
-        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded cursor-grab active:cursor-grabbing text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300"
+        aria-label="블록 선택·이동"
+        aria-expanded={isMenuOpen}
+        className="bh-grip"
       >
         <GripVertical size={16} />
       </button>
 
       {isMenuOpen && (
-        <div className="absolute left-8 top-0 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-1 origin-top-left transition-[opacity,scale] duration-150 ease-out starting:opacity-0 starting:scale-95 motion-reduce:transition-none">
-          <div className="px-3 py-1.5 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-b border-slate-50 dark:border-slate-800 mb-1">
-            Block ID: {currentNode?.node.attrs.id}
-          </div>
-          <button onClick={duplicateBlock} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg">
-            <Copy size={14} /> 복제하기
+        <div className="bh-menu">
+          <p className="bh-id">Block ID: {currentNode?.node.attrs.id}</p>
+          <button onClick={duplicateBlock} className="bh-item">
+            <Copy size={14} aria-hidden="true" /> 복제하기
           </button>
-          <button onClick={deleteBlock} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg">
-            <Trash2 size={14} /> 삭제하기
+          <button onClick={deleteBlock} className="bh-item bh-item-danger">
+            <Trash2 size={14} aria-hidden="true" /> 삭제하기
           </button>
         </div>
       )}

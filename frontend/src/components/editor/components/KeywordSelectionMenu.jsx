@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import '../../../pages/QuizLibraryPage.css';
+import './KeywordSelectionMenu.css';
 import { NodeSelection } from '@tiptap/pm/state';
 
 // KeywordExplainRequest의 keyword @Size(max = 80) / context @Size(max = 2000)와 같게 유지한다.
@@ -56,7 +58,7 @@ const KeywordSelectionMenu = ({ editor, onExplain, onQuiz }) => {
 
   return (
     <div
-      className="absolute z-30 flex items-center gap-2 px-2 py-1.5 rounded-lg border border-slate-900 dark:border-slate-500 bg-slate-900 dark:bg-slate-700 shadow-lg"
+      className="ksm"
       style={{ top: menu.top, left: menu.left }}
       // 버튼을 눌러도 에디터 선택이 풀리지 않게 한다.
       onMouseDown={(e) => e.preventDefault()}
@@ -65,7 +67,7 @@ const KeywordSelectionMenu = ({ editor, onExplain, onQuiz }) => {
         type="button"
         disabled={tooLong}
         onClick={() => onExplain(menu.selection)}
-        className="text-xs font-semibold text-white hover:text-blue-300 disabled:opacity-40 disabled:pointer-events-none"
+        className="ksm-btn"
       >
         키워드 설명
       </button>
@@ -73,13 +75,13 @@ const KeywordSelectionMenu = ({ editor, onExplain, onQuiz }) => {
         <button
           type="button"
           onClick={() => onQuiz(menu.selection)}
-          className="pl-2 border-l border-slate-600 dark:border-slate-500 text-xs font-semibold text-white hover:text-blue-300"
+          className="ksm-btn ksm-btn-split"
         >
           문제 만들기
         </button>
       )}
       {tooLong && (
-        <span className="text-[11px] text-amber-300">{MAX_KEYWORD_LENGTH}자 이하로 선택하세요</span>
+        <span className="ksm-warn">{MAX_KEYWORD_LENGTH}자 이하로 선택하세요</span>
       )}
     </div>
   );

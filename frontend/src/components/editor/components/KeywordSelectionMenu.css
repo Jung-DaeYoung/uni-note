@@ -1,0 +1,72 @@
+/* 노트에서 단어를 고르면 뜨는 작은 도구 막대. 본문 위에서 눈에 띄도록 주 버튼 색(--lib-color-primary)을 바탕으로 쓴다. */
+.ksm {
+  --dur-micro: 120ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  padding: 0.125rem;
+  border-radius: 4px;
+  background: var(--lib-color-primary);
+  color: var(--lib-color-primary-ink);
+  box-shadow: 0 4px 12px oklch(0% 0 0 / 0.18);
+}
+
+.ksm-btn {
+  min-height: 2rem;
+  padding: 0 0.625rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+
+.ksm-btn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.ksm-btn-split {
+  position: relative;
+}
+
+/* 두 버튼 사이 구분선 */
+.ksm-btn-split::before {
+  content: '';
+  position: absolute;
+  inset-block: 0.5rem;
+  left: 0;
+  width: 1px;
+  background: oklch(100% 0 0 / 0.25);
+}
+
+.ksm-warn {
+  padding: 0 0.625rem;
+  color: oklch(87.9% 0.169 91.605); /* amber-300: 어두운 바탕에서 경고 */
+  font-size: 0.75rem;
+}
+
+.ksm-btn:focus-visible {
+  outline: 2px solid var(--lib-color-primary-ink);
+  outline-offset: -2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ksm-btn:hover {
+    background: var(--lib-color-primary-hover);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ksm-btn {
+    transition: none;
+  }
+}

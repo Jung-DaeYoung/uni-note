@@ -1,0 +1,77 @@
+/* 노트 안 PDF 첨부. 카드 대신 위아래 선으로 구분한 한 줄이며 --lib-* 토큰을 쓴다. */
+.pdfb {
+  --dur-micro: 120ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.5rem;
+  border-block: 1px solid var(--lib-color-rule);
+  color: var(--lib-color-ink);
+  cursor: default;
+  user-select: none;
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+
+.pdfb-icon {
+  flex: none;
+  color: var(--lib-color-ink-2);
+}
+
+.pdfb-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.pdfb-title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdfb-meta {
+  margin: 0.125rem 0 0;
+  color: var(--lib-color-ink-2);
+  font-size: 0.75rem;
+}
+
+.pdfb-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.125rem;
+  transition: opacity var(--dur-micro) var(--ease-out);
+}
+
+.pdfb .lib-icon:disabled,
+.pdfb-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pdfb:hover {
+    background: var(--lib-color-hover);
+  }
+
+  .pdfb-actions {
+    opacity: 0;
+  }
+
+  .pdfb:hover .pdfb-actions,
+  .pdfb-actions:focus-within {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdfb,
+  .pdfb-actions {
+    transition: none;
+  }
+}

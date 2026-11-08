@@ -7,7 +7,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
-import { all, createLowlight } from 'lowlight'
+import { common, createLowlight } from 'lowlight'
 import BaseImage from '@tiptap/extension-image';
 import Heading from '@tiptap/extension-heading';
 import Paragraph from '@tiptap/extension-paragraph';
@@ -43,8 +43,12 @@ import useSourceBlockScroll from './hooks/useSourceBlockScroll';
 import { showAlert } from '../../context/ConfirmContext';
 
 import 'highlight.js/styles/atom-one-dark.css'
+import '../../pages/QuizLibraryPage.css';
+import './NotionEditor.css';
 
-const lowlight = createLowlight(all)
+// 자주 쓰는 37개 언어만 등록한다(all은 192개로 에디터 번들의 대부분을 차지). 목록에 없는 언어로
+// 저장된 블록도 language 속성은 그대로 보존되고, 강조만 없이 표시된다.
+const lowlight = createLowlight(common)
 
 // 커스텀 코드 블록 확장 정의
 const CustomCodeBlock = CodeBlockLowlight.extend({
@@ -317,7 +321,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
     content: getInitialContent(),
     editorProps: {
       attributes: {
-        class: 'uninote-editor focus:outline-none min-h-[700px] text-lg leading-relaxed',
+        class: 'uninote-editor focus:outline-none min-h-[50vh] md:min-h-[700px] text-lg leading-relaxed',
         spellcheck: 'false',
       },
       handleClickOn: (view, pos, node) => {
@@ -408,24 +412,18 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
 
   return (
     <div className="relative">
-      {uploadStatus === 'uploading' && (
-        <div className="absolute -top-10 left-0 flex items-center gap-1.5 px-3 py-1 bg-blue-50 dark:bg-blue-500/10 rounded-full border border-blue-100 dark:border-blue-500/30 z-10 shadow-sm">
-          <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider">업로드 중...</span>
-        </div>
-      )}
-      {uploadStatus === 'error' && uploadError && (
-        <div className="absolute -top-10 left-0 flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-500/10 rounded-full border border-red-100 dark:border-red-500/20 z-10 shadow-sm">
-          <span className="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider">{uploadError}</span>
-          <button
-            onClick={clearUploadError}
-            className="text-[9px] font-black text-red-400 dark:text-red-400/70 hover:text-red-600 dark:hover:text-red-300 uppercase tracking-wider"
-          >
-            닫기
-          </button>
-        </div>
-      )}
+      {/* 업로드 상태. 위치를 고정해 본문이 밀리지 않게 하고, 화면 낭독기에도 알린다. */}
+      <div role="status" className="ne-status">
+        {uploadStatus === 'uploading' && <span>업로드 중...</span>}
+        {uploadStatus === 'error' && uploadError && (
+          <>
+            <span className="ne-status-error">{uploadError}</span>
+            <button onClick={clearUploadError} className="ne-status-close">닫기</button>
+          </>
+        )}
+      </div>
 
-      <section className="relative min-h-[850px] bg-white dark:bg-slate-900 rounded-[2.5rem] px-12 py-8 shadow-2xl shadow-slate-200/40 dark:shadow-slate-950/40 border border-slate-100 dark:border-slate-700 ring-1 ring-slate-50 dark:ring-slate-800">
+      <section className="relative min-h-[60vh] md:min-h-[850px] bg-white dark:bg-slate-900 rounded px-4 py-6 md:px-12 md:py-8 border border-slate-200 dark:border-slate-700">
         <NoteEditorStyles />
         <div className="relative z-20">
           {editor && <BlockHandle editor={editor} />}

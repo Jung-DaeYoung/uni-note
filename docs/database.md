@@ -9,7 +9,7 @@ Entity는 JPA로 관리되며 기본 키는 자동 증가 ID다. 실제 테이�
 | `Student` / `students` | `studId` PK, `studentNum` unique, `name`, `password` | 노트·게시글·수강·퀴즈·오답그룹의 학생 |
 | `Professor` / `professors` | `profId` PK, 교수 정보 | `Course`의 담당 교수 |
 | `Course` / `courses` | `courseId` PK, `courseName`, `courseCode` unique(nullable), `userCreated` | `Professor` N:1(직접 생성 강의는 null), `Student`(`owner`, 직접 생성 강의 소유자) N:1, 다른 기능의 강의 기준 |
-| `Enrollment` / `enrollments` | `enrollId` PK | `Student` N:1, `Course` N:1 |
+| `Enrollment` / `enrollments` | `enrollId` PK, `academicYear`(1~4), `semester`(1·2), unique(`stud_id`, `course_id`) | `Student` N:1, `Course` N:1 |
 
 직접 생성 강의(`userCreated = true`)는 소유자에게 `Enrollment`를 만들지 않는다. 노트 접근은 수강 또는 소유자로 허용한다. 삭제 시 소유자의 이 강의 퀴즈 → 루트 노트(하위 노트 cascade) → 강의 순으로 지운다.
 
@@ -20,6 +20,62 @@ ALTER TABLE courses
     ADD COLUMN owner_stud_id BIGINT NULL,
     ADD COLUMN user_created BIT(1) NOT NULL DEFAULT 0,
     ADD FOREIGN KEY (owner_stud_id) REFERENCES students (stud_id);
+```
+
+### 학년·학기별 수강
+
+수강(`Enrollment`)은 학교 시스템이 등록한다고 보고, 앱에는 등록 API가 없다. 각 수강에 학년·학기를 두고, 한 강의는 학생당 한 학기에만 둔다(재수강 미지원). 현재 학기는 저장하지 않고 수강 중 가장 늦은 학년·학기로 본다. 지난 학기 강의도 `Enrollment`가 있으므로 노트·게시판 접근은 그대로다.
+
+운영(`ddl-auto: validate`) 배포 전 실행할 DDL. 기존 수강은 4학년 1학기로 옮긴다:
+
+```sql
+ALTER TABLE enrollments
+    ADD COLUMN academic_year INT NULL,
+    ADD COLUMN semester INT NULL;
+-- 로컬은 ddl-auto: update가 컬럼을 먼저 만들며 기존 행을 0으로 채운다.
+UPDATE enrollments SET academic_year = 4, semester = 1 WHERE academic_year IS NULL OR academic_year = 0;
+ALTER TABLE enrollments
+    MODIFY academic_year INT NOT NULL,
+    MODIFY semester INT NOT NULL,
+    ADD UNIQUE KEY uk_enroll_student_course (stud_id, course_id);
+```
+
+학기별 강의 시드(1~3학년은 임의, 4학년 2학기는 지정 강의). `course_code`·수강 유니크 키로 다시 실행해도 중복되지 않는다. 교수는 기존 `professors`의 이름으로 찾는다:
+
+```sql
+SET @stud = (SELECT stud_id FROM students WHERE student_num = '<학번>');
+
+CREATE TEMPORARY TABLE seed_courses (name VARCHAR(255), code VARCHAR(255), prof VARCHAR(255), y INT, s INT);
+INSERT INTO seed_courses VALUES
+  ('컴퓨터개론', 'CSE111', '김현수', 1, 1),
+  ('C프로그래밍', 'CSE112', '김지수', 1, 1),
+  ('대학수학', 'MATH111', '김현수', 1, 1),
+  ('객체지향프로그래밍', 'CSE121', '김지수', 1, 2),
+  ('논리회로', 'CSE122', '신홍철', 1, 2),
+  ('자바프로그래밍', 'CSE211', '최권택', 2, 1),
+  ('컴퓨터구조', 'CSE212', '신홍철', 2, 1),
+  ('선형대수', 'MATH211', '김현수', 2, 1),
+  ('운영체제', 'CSE221', '신홍철', 2, 2),
+  ('데이터베이스', 'CSE222', '최권택', 2, 2),
+  ('확률과통계', 'MATH221', '김현수', 2, 2),
+  ('컴퓨터네트워크', 'CSE311', '신홍철', 3, 1),
+  ('웹프로그래밍', 'CSE312', '김지수', 3, 1),
+  ('인공지능', 'CSE321', '양재형', 3, 2),
+  ('모바일프로그래밍', 'CSE322', '김지수', 3, 2),
+  ('컴파일러', 'CSE323', '양재형', 3, 2),
+  ('캡스톤디자인Ⅱ', 'CSE421', '양재형', 4, 2),
+  ('소프트웨어공학', 'CSE422', '양재형', 4, 2),
+  ('자료구조와 알고리즘', 'CSE423', '김지수', 4, 2),
+  ('통계응용', 'MATH421', '김현수', 4, 2);
+
+INSERT IGNORE INTO courses (course_name, course_code, prof_id, user_created)
+SELECT v.name, v.code, p.prof_id, 0 FROM seed_courses v LEFT JOIN professors p ON p.name = v.prof;
+
+INSERT IGNORE INTO enrollments (stud_id, course_id, academic_year, semester)
+SELECT @stud, c.course_id, v.y, v.s FROM seed_courses v JOIN courses c ON c.course_code = v.code
+WHERE @stud IS NOT NULL;
+
+DROP TEMPORARY TABLE seed_courses;
 ```
 
 ## 노트·게시판

@@ -5,12 +5,21 @@ import { useAuth } from './AuthContext';
 
 const CourseContext = createContext({
   courses: [],
+  terms: [],
+  currentTerm: null,
+  selectedTerm: null,
+  setSelectedTerm: () => {},
   recentPosts: [],
   recentNotes: [],
 });
 
 // Provider와 그 짝인 훅을 같은 파일에 두는 관례이며, 이 훅 하나만을 위해 파일을
 // 분리하면 Context/Provider/훅 세 파일로 흩어져 오히려 추적하기 어려워진다.
+// eslint-disable-next-line react-refresh/only-export-components
+export const termOf = (course) => course.academicYear * 10 + course.semester;
+// eslint-disable-next-line react-refresh/only-export-components
+export const termLabel = (term) => `${Math.floor(term / 10)}학년 ${term % 10}학기`;
+
 // eslint-disable-next-line react-refresh/only-export-components
 export const useCourses = () => useContext(CourseContext);
 
@@ -63,9 +72,25 @@ export const CourseProvider = ({ children }) => {
     await loadDashboard();
   }, [loadDashboard]);
 
+  // 학기 키는 학년*10+학기(예: 42 = 4학년 2학기). 현재 학기 = 수강 강의 중 가장 늦은 학기.
+  // 학기는 학교 시스템이 등록하므로 따로 저장하지 않는다.
+  // courses는 검색·게시판 선택 등에서 전체 강의가 필요하므로 거르지 않고 그대로 둔다.
+  const terms = useMemo(() => (
+    [...new Set(courses.filter((c) => !c.userCreated).map(termOf))].sort((a, b) => b - a)
+  ), [courses]);
+  const currentTerm = terms[0] ?? null;
+
+  // 사이드바·강의목록이 보여 줄 학기. 페이지를 옮겨도 유지되도록 Context에 둔다(새로고침하면 현재 학기).
+  // 목록에 없는 학기(다른 계정으로 재로그인 등)면 현재 학기로 돌아간다.
+  const [pickedTerm, setSelectedTerm] = useState(null);
+  const selectedTerm = terms.includes(pickedTerm) ? pickedTerm : currentTerm;
+
   const value = useMemo(
-    () => ({ courses, recentPosts, recentNotes, createCourse, renameCourse, deleteCourse }),
-    [courses, recentPosts, recentNotes, createCourse, renameCourse, deleteCourse]
+    () => ({
+      courses, terms, currentTerm, selectedTerm, setSelectedTerm,
+      recentPosts, recentNotes, createCourse, renameCourse, deleteCourse,
+    }),
+    [courses, terms, currentTerm, selectedTerm, recentPosts, recentNotes, createCourse, renameCourse, deleteCourse]
   );
 
   return <CourseContext.Provider value={value}>{children}</CourseContext.Provider>;

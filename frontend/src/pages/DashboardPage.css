@@ -144,6 +144,11 @@ body:has(.dash) {
   font-weight: 600;
 }
 
+.dash-term {
+  color: var(--dash-color-ink-2);
+  font-weight: 500;
+}
+
 .dash-empty {
   margin: 0;
   padding: 1.5rem 0.5rem;

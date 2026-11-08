@@ -1,16 +1,28 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
-import { useCourses } from '../context/CourseContext';
+import { useCourses, termOf, termLabel } from '../context/CourseContext';
 import './DashboardPage.css';
 
 const DashboardPage = () => {
   // 사이드바(AppLayout)가 이미 같은 /dashboard/courses 응답을 CourseContext로 불러오므로,
   // 대시보드 페이지에서 동일한 요청을 다시 보내지 않고 그대로 재사용한다.
-  const { courses, recentPosts, recentNotes } = useCourses();
-  // 직접 만든 강의는 사이드바 "내가 만든 강의"에서 관리하고, 대시보드에는 수강 강의만 보여 준다.
-  const enrolledCourses = courses.filter(c => !c.userCreated);
+  const { courses, selectedTerm, recentPosts, recentNotes } = useCourses();
+  // 직접 만든 강의는 사이드바 "내가 만든 강의"에서 관리하고, 대시보드에는 사이드바에서 고른 학기의 수강 강의만 보여 준다.
+  const enrolledCourses = courses.filter(c => !c.userCreated && termOf(c) === selectedTerm);
   const [leadNote, ...otherNotes] = recentNotes;
+
+  const renderCourse = (course) => (
+    <li key={course.courseId}>
+      <Link className="dash-row" to={`/course/${course.courseId}`}>
+        <span className="dash-title">{course.courseName}</span>
+        <span className="dash-meta">
+          <span className="dash-code">{course.courseCode}</span>
+          <span>{course.professorName} 교수</span>
+        </span>
+      </Link>
+    </li>
+  );
 
   const formatTime = (dateStr) => {
     const now = new Date();
@@ -60,22 +72,14 @@ const DashboardPage = () => {
           </section>
 
           <section className="dash-section">
-            <h2 className="dash-heading">수강 중인 강의</h2>
+            <h2 className="dash-heading">
+              수강 중인 강의{selectedTerm && <span className="dash-term"> · {termLabel(selectedTerm)}</span>}
+            </h2>
             {enrolledCourses.length === 0 ? (
               <p className="dash-empty">수강 중인 강의가 없습니다.</p>
             ) : (
               <ul className="dash-list">
-                {enrolledCourses.map((course) => (
-                  <li key={course.courseId}>
-                    <Link className="dash-row" to={`/course/${course.courseId}`}>
-                      <span className="dash-title">{course.courseName}</span>
-                      <span className="dash-meta">
-                        <span className="dash-code">{course.courseCode}</span>
-                        <span>{course.professorName} 교수</span>
-                      </span>
-                    </Link>
-                  </li>
-                ))}
+                {enrolledCourses.map(renderCourse)}
               </ul>
             )}
           </section>

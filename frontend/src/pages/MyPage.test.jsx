@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import MyPage from './MyPage';
 import client from '../api/client';
@@ -73,5 +73,21 @@ describe('MyPage 2차 영역', () => {
     expect(screen.getByText('활동6')).toBeInTheDocument();
     expect(screen.getByText('활동7')).toBeInTheDocument();
     expect(screen.queryByText('활동1')).not.toBeInTheDocument();
+  });
+
+  it('강의별 학습 현황도 5개씩 페이지로 나눠 보여준다', async () => {
+    renderPage({
+      courseProgress: Array.from({ length: 6 }, (_, i) => (
+        { courseId: i + 1, courseName: `강의${i + 1}`, noteCount: 0, quizSetCount: 0, attemptCount: 0, lastActivityAt: null }
+      )),
+    });
+
+    expect(await screen.findByText('강의5')).toBeInTheDocument();
+    expect(screen.queryByText('강의6')).not.toBeInTheDocument();
+
+    const pages = within(screen.getByRole('navigation', { name: '강의별 학습 현황 페이지' }));
+    fireEvent.click(pages.getByRole('button', { name: '2' }));
+    expect(screen.getByText('강의6')).toBeInTheDocument();
+    expect(screen.queryByText('강의1')).not.toBeInTheDocument();
   });
 });

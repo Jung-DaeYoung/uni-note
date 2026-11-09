@@ -122,13 +122,9 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
         }`}
       >
         {/* Sidebar Header */}
-        <div className="h-12 flex items-center px-6 border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center shrink-0">
-              <span className="font-black text-sm text-white">U</span>
-            </div>
-            <span className="font-bold text-base tracking-tight text-white whitespace-nowrap">UniNote</span>
-          </div>
+        <div className="side-brand">
+          <span className="side-brand-mark" aria-hidden="true">U</span>
+          <span className="side-brand-name">UniNote</span>
         </div>
 
         {/* Navigation */}

@@ -14,6 +14,40 @@
   --side-hover: oklch(27.9% 0.041 260.031); /* slate-800 */
   --side-accent: oklch(70.7% 0.165 254.624); /* blue-400 */
   --side-danger: oklch(70.4% 0.191 22.216); /* red-400 */
+  --side-mark: oklch(54.6% 0.245 262.881); /* blue-600 */
+}
+
+/* 상단 브랜드: 헤더와 같은 48px 줄. */
+.side-brand {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.75rem;
+  height: 3rem;
+  padding-inline: 1.5rem;
+  border-bottom: 1px solid var(--side-rule);
+}
+
+.side-brand-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 4px;
+  background: var(--side-mark);
+  color: oklch(100% 0 0);
+  font-size: 0.875rem;
+  font-weight: 900;
+}
+
+.side-brand-name {
+  color: var(--side-ink);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  white-space: nowrap;
 }
 
 .side-nav {

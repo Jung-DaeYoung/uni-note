@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { Trash2 } from 'lucide-react';
 import client from '../../api/client';
-import { noteSchemaExtensions, NoteEditorStyles } from '../editor/NotionEditor';
+import { noteSchemaExtensions } from '../editor/NotionEditor';
 import { NoteTreeProvider, findNote } from '../../context/NoteTreeContext';
 import QuestionComments from '../quiz/QuestionComments';
 import { showAlert } from '../../context/ConfirmContext';
@@ -128,7 +128,6 @@ const SharedNoteViewer = ({ postId, onBack, onDelete }) => {
         )}
 
         <section className="board-note">
-          <NoteEditorStyles />
           {selected && <ReadOnlyNote key={selected.noteId} content={selected.content} onOpenNote={openNote} />}
         </section>
 

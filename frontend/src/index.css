@@ -23,3 +23,9 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* 앱 전역 스크롤바 유틸. 사이드바·노트 경로 등에서 쓴다. */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+.dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

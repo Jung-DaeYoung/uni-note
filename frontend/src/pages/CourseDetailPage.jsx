@@ -2,9 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   ChevronRight,
-  FileText,
   Home,
-  FolderOpen,
   PenLine,
   Trash2
 } from 'lucide-react';
@@ -150,23 +148,17 @@ const CourseDetailPage = () => {
   // --- Unified Header Content ---
   const headerContent = (
     <div className="note-header flex items-center justify-between w-full pr-4 h-full">
-      <nav className="flex items-center gap-1.5 min-w-0 overflow-x-auto no-scrollbar py-1">
-        <Link to="/dashboard" className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors">
-          <Home size={14} />
+      <nav aria-label="노트 경로" className="note-crumbs no-scrollbar">
+        <Link to="/dashboard" className="note-crumb note-crumb-home" aria-label="강의목록">
+          <Home size={14} aria-hidden="true" />
         </Link>
-        <ChevronRight size={10} className="text-slate-300 dark:text-slate-600 shrink-0" />
-        <div className="flex items-center gap-1 shrink-0 px-1.5 py-0.5 bg-slate-50 dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700">
-          <FolderOpen size={12} className="text-blue-500 dark:text-blue-400" />
-          <span className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate max-w-[120px]">{courseName}</span>
-        </div>
+        <ChevronRight size={10} className="note-crumb-sep" aria-hidden="true" />
+        <span className="note-crumb-course">{courseName}</span>
 
         {noteData?.breadcrumbs?.map((bc) => (
           <React.Fragment key={bc.noteId}>
-            <ChevronRight size={10} className="text-slate-300 dark:text-slate-600 shrink-0" />
-            <Link
-              to={`/course/${courseId}/note/${bc.noteId}`}
-              className="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate max-w-[120px]"
-            >
+            <ChevronRight size={10} className="note-crumb-sep" aria-hidden="true" />
+            <Link to={`/course/${courseId}/note/${bc.noteId}`} className="note-crumb">
               {bc.title}
             </Link>
           </React.Fragment>
@@ -174,8 +166,8 @@ const CourseDetailPage = () => {
 
         {noteData && (
           <>
-            <ChevronRight size={10} className="text-slate-300 dark:text-slate-600 shrink-0" />
-            <span className="text-xs font-black text-slate-900 dark:text-slate-100 truncate max-w-[180px]">
+            <ChevronRight size={10} className="note-crumb-sep" aria-hidden="true" />
+            <span aria-current="page" className="note-crumb-current">
               {noteData.title || '제목 없음'}
             </span>
           </>
@@ -284,10 +276,7 @@ const CourseDetailPage = () => {
                     onEditorReady={handleEditorReady}
                   />
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-40 opacity-20 text-slate-900 dark:text-slate-100">
-                    <FileText size={64} className="mb-4" />
-                    <p className="font-medium">노트를 불러오는 중...</p>
-                  </div>
+                  <p role="status" className="note-loading">노트를 불러오는 중...</p>
                 )}
               </div>
             </div>

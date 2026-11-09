@@ -44,6 +44,8 @@ jobs:
       DB_PASSWORD: ci_test_password
       JWT_SECRET: ci-only-fake-jwt-secret-at-least-32-bytes-long-0000
       JWT_EXPIRATION: "86400000"
+      # GeminiClient @PostConstruct가 빈 키면 컨텍스트 기동을 막는다. 테스트는 Gemini를 호출하지 않는다.
+      GEMINI_API_KEY: ci-only-fake-gemini-key
 
     steps:
       - uses: actions/checkout@v4

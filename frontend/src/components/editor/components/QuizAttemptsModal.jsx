@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useState } from 'react';
 import { X } from 'lucide-react';
 import client from '../../../api/client';
+import useModalDialog from '../../../hooks/useModalDialog';
 import '../../../pages/QuizLibraryPage.css';
 import './QuizAttemptsModal.css';
 
@@ -8,6 +9,7 @@ const QuizAttemptsModal = ({ isOpen, onClose, quizSetId, quizTitle, onViewAttemp
   const [attempts, setAttempts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const titleId = useId();
+  const dialogRef = useModalDialog(isOpen, onClose);
 
   // 모달이 열릴 때 서버 목록을 새로 불러오는 표준 fetch-on-open 패턴이다.
   useEffect(() => {
@@ -30,7 +32,7 @@ const QuizAttemptsModal = ({ isOpen, onClose, quizSetId, quizTitle, onViewAttemp
 
   return (
     <div className="att-overlay">
-      <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="att">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="att outline-none">
         <div className="att-head">
           <div className="att-heading">
             <h2 id={titleId} className="cf-title">풀이 기록</h2>

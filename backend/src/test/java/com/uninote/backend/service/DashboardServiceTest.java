@@ -68,6 +68,8 @@ class DashboardServiceTest {
         Enrollment enrollment = new Enrollment();
         enrollment.setStudent(student);
         enrollment.setCourse(enrolledCourse);
+        enrollment.setAcademicYear(4);
+        enrollment.setSemester(2);
 
         when(studentRepository.findByStudentNum("owner-num")).thenReturn(Optional.of(student));
         when(enrollmentRepository.findByStudent(student)).thenReturn(List.of(enrollment));
@@ -138,9 +140,9 @@ class DashboardServiceTest {
 
         var response = dashboardService.getDashboardData("owner-num");
 
-        assertThat(response.getCourses()).extracting("courseId", "professorName", "userCreated")
+        assertThat(response.getCourses()).extracting("courseId", "professorName", "userCreated", "academicYear", "semester")
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(10L, "교수", false),
-                        org.assertj.core.groups.Tuple.tuple(20L, null, true));
+                        org.assertj.core.groups.Tuple.tuple(10L, "교수", false, 4, 2),
+                        org.assertj.core.groups.Tuple.tuple(20L, null, true, null, null));
     }
 }

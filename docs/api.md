@@ -12,7 +12,7 @@
 | PUT | `/courses/{courseId}` | 예 | `{ courseName }` | `CourseResponse`. 본인이 만든 강의만, 학교 강의는 403 |
 | DELETE | `/courses/{courseId}` | 예 | 없음 | 빈 응답(204). 본인이 만든 강의만. 노트·하위 노트와 본인의 이 강의 퀴즈·풀이 기록·오답노트 항목도 함께 삭제 |
 
-`DashboardResponse.courses`는 수강 강의 다음에 본인이 만든 강의를 붙여 반환한다. `CourseResponse`는 `courseId`, `courseName`, `courseCode`, `professorName`, `userCreated`를 가지며, 직접 생성 강의는 `courseCode`·`professorName`이 null이다. 직접 생성 강의에서는 노트·AI 퀴즈·오답노트를 그대로 쓸 수 있고(노트 API는 수강 또는 강의 소유자를 허용), 게시판은 403, 노트·퀴즈 공유는 400이다.
+`DashboardResponse.courses`는 수강 강의 다음에 본인이 만든 강의를 붙여 반환한다. `CourseResponse`는 `courseId`, `courseName`, `courseCode`, `professorName`, `userCreated`, `academicYear`, `semester`를 가지며, 직접 생성 강의는 `courseCode`·`professorName`·`academicYear`·`semester`가 null이다. `academicYear`·`semester`는 수강 학년·학기이며 `/dashboard/courses` 응답에만 채워진다(`/courses` 생성·수정 응답은 직접 생성 강의라 null). 화면은 가장 늦은 학년·학기를 현재 학기로 보고, 사이드바의 학기 선택(기본: 현재 학기)에 맞춰 사이드바와 강의목록 페이지에 그 학기 강의만 표시한다. 직접 생성 강의에서는 노트·AI 퀴즈·오답노트를 그대로 쓸 수 있고(노트 API는 수강 또는 강의 소유자를 허용), 게시판은 403, 노트·퀴즈 공유는 400이다.
 
 ## 마이페이지
 

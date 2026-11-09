@@ -39,9 +39,9 @@ public class DashboardService {
 
         // 수강 강의 다음에 본인이 직접 만든 강의를 붙인다(소유자에게는 Enrollment가 없다).
         List<CourseResponse> courseList = Stream.concat(
-                        enrollments.stream().map(Enrollment::getCourse),
-                        courseRepository.findByOwner_StudIdAndUserCreatedTrueOrderByCourseIdAsc(student.getStudId()).stream())
-                .map(DashboardService::toCourseResponse)
+                        enrollments.stream().map(DashboardService::toCourseResponse),
+                        courseRepository.findByOwner_StudIdAndUserCreatedTrueOrderByCourseIdAsc(student.getStudId()).stream()
+                                .map(DashboardService::toCourseResponse))
                 .collect(Collectors.toList());
 
         // 최근 수정된 노트 6개 조회
@@ -75,14 +75,25 @@ public class DashboardService {
                 .build();
     }
 
+    // 수강 강의는 수강 학년·학기를 함께 내려준다.
+    static CourseResponse toCourseResponse(Enrollment enrollment) {
+        return builderOf(enrollment.getCourse())
+                .academicYear(enrollment.getAcademicYear())
+                .semester(enrollment.getSemester())
+                .build();
+    }
+
     // 직접 생성 강의는 교수·강의코드가 없으므로 null로 내려준다.
     static CourseResponse toCourseResponse(Course course) {
+        return builderOf(course).build();
+    }
+
+    private static CourseResponse.CourseResponseBuilder builderOf(Course course) {
         return CourseResponse.builder()
                 .courseId(course.getCourseId())
                 .courseName(course.getCourseName())
                 .courseCode(course.getCourseCode())
                 .professorName(course.getProfessor() != null ? course.getProfessor().getName() : null)
-                .userCreated(course.isUserCreated())
-                .build();
+                .userCreated(course.isUserCreated());
     }
 }

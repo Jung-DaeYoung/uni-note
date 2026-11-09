@@ -2,14 +2,18 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Menu, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useCourses } from '../../context/CourseContext';
+import { useCourses, termOf, termLabel } from '../../context/CourseContext';
 import { useTheme } from '../../context/ThemeContext';
 import { showAlert } from '../../context/ConfirmContext';
 import GlobalSearch from '../search/GlobalSearch';
 import './AppLayout.css';
 
 const AppLayout = ({ children, sidebarContent, headerContent }) => {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // 좁은 화면(< 768px)에서는 사이드바가 본문 위를 덮는 서랍이 된다. 페이지마다 새로 마운트되므로
+  // 좁은 화면에서는 이동할 때마다 닫힌 채로 시작하고, 넓은 화면에서는 열린 채로 시작한다.
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
+    () => window.matchMedia('(max-width: 767px)').matches
+  );
   const { logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -21,9 +25,10 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
   const [isBoardExpanded, setIsBoardExpanded] = useState(
     () => location.pathname === '/shared-quizzes' || location.pathname.startsWith('/shared-notes')
   );
-  const { courses, createCourse } = useCourses();
+  const { courses, terms, selectedTerm, setSelectedTerm, createCourse } = useCourses();
   const { theme, toggleTheme } = useTheme();
-  const enrolledCourses = courses.filter(c => !c.userCreated);
+  // 사이드바에는 선택한 학기(기본: 현재 학기)의 강의만 둔다.
+  const enrolledCourses = courses.filter(c => !c.userCreated && termOf(c) === selectedTerm);
   const myCourses = courses.filter(c => c.userCreated);
   // VS Code 새 파일처럼 "내가 만든 강의" 목록 안에 이름 입력칸을 띄운다. null이면 입력칸을 숨긴다.
   const [newCourseName, setNewCourseName] = useState(null);
@@ -56,8 +61,9 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
   // '/course/1'이 '/course/10'에도 걸리지 않도록 경로 구분자까지 비교한다.
   const isCourseActive = (course) => `${location.pathname}/`.startsWith(`/course/${course.courseId}/`);
   // 페이지가 넘긴 사이드바 내용(강의 페이지의 노트 목록)은 현재 강의 바로 아래에 둔다.
-  // 강의목록이 접혀 있거나 강의 목록에 현재 강의가 아직 없으면 강의목록 제목 바로 아래에 둔다.
-  const showSidebarUnderHeader = sidebarContent && (!isDashboardExpanded || !courses.some(isCourseActive));
+  // 강의목록이 접혀 있거나 사이드바 목록에 현재 강의가 없으면(아직 로딩 전, 다른 학기 강의) 강의목록 제목 바로 아래에 둔다.
+  const showSidebarUnderHeader = sidebarContent
+    && (!isDashboardExpanded || ![...enrolledCourses, ...myCourses].some(isCourseActive));
 
   const renderCourse = (course) => {
     const active = isCourseActive(course);
@@ -91,21 +97,34 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans text-slate-900 dark:text-slate-100">
+    <div className="flex h-dvh bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans text-slate-900 dark:text-slate-100">
       {/* Sidebar */}
-      <aside 
-        className={`bg-slate-900 text-white flex flex-col overflow-hidden ${
+      {/* 좁은 화면에서 서랍이 열렸을 때만 보이는 뒤 배경. 누르면 닫는다(넓은 화면에서는 CSS로 숨김). */}
+      {!isSidebarCollapsed && (
+        <button
+          type="button"
+          className="side-backdrop"
+          aria-label="사이드바 닫기"
+          tabIndex={-1}
+          onClick={() => setIsSidebarCollapsed(true)}
+        />
+      )}
+
+      {/* 접힌 사이드바는 inert로 키보드 초점·스크린리더에서 뺀다. */}
+      <aside
+        id="app-sidebar"
+        inert={isSidebarCollapsed}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' && window.matchMedia('(max-width: 767px)').matches) setIsSidebarCollapsed(true);
+        }}
+        className={`app-sidebar bg-slate-900 text-white flex flex-col overflow-hidden ${
           isSidebarCollapsed ? 'w-0' : 'w-64 border-r border-slate-800'
         }`}
       >
         {/* Sidebar Header */}
-        <div className="h-12 flex items-center px-6 border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center shrink-0">
-              <span className="font-black text-sm text-white">U</span>
-            </div>
-            <span className="font-bold text-base tracking-tight text-white whitespace-nowrap">UniNote</span>
-          </div>
+        <div className="side-brand">
+          <span className="side-brand-mark" aria-hidden="true">U</span>
+          <span className="side-brand-name">UniNote</span>
         </div>
 
         {/* Navigation */}
@@ -148,6 +167,18 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
                 <div className="side-group">
                   <div className="side-group-head">
                     <p className="side-group-label">수강 중인 강의</p>
+                    {terms.length > 0 && (
+                      <select
+                        value={selectedTerm ?? ''}
+                        onChange={(e) => setSelectedTerm(Number(e.target.value))}
+                        aria-label="학기 선택"
+                        className="side-term"
+                      >
+                        {terms.map(term => (
+                          <option key={term} value={term}>{termLabel(term)}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                   {enrolledCourses.length === 0 ? (
                     <p className="side-empty">수강 중인 강의 없음</p>
@@ -255,7 +286,10 @@ const AppLayout = ({ children, sidebarContent, headerContent }) => {
         <header className="app-header h-12 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 flex items-center px-4 sticky top-0 z-50 shrink-0">
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-[background-color,color,scale] duration-150 ease-out text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 active:scale-[0.97] motion-reduce:active:scale-100"
+            aria-label={isSidebarCollapsed ? "사이드바 열기" : "사이드바 접기"}
+            aria-expanded={!isSidebarCollapsed}
+            aria-controls="app-sidebar"
+            className="p-2.5 -ml-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-[background-color,color,scale] duration-150 ease-out text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 active:scale-[0.97] motion-reduce:active:scale-100"
             title={isSidebarCollapsed ? "사이드바 열기" : "사이드바 접기"}
           >
             <Menu size={20} />

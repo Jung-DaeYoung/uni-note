@@ -1,6 +1,7 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
 import React from 'react';
+import { FileText } from 'lucide-react';
 import { useNoteTree } from '../../../context/NoteTreeContext';
 
 // 페이지 링크를 보여줄 React 컴포넌트.
@@ -17,7 +18,7 @@ const PageLinkComponent = ({ node }) => {
   return (
     <NodeViewWrapper className="page-link-wrapper" data-type="page-link">
       <div className="page-link-container">
-        <span className="page-link-icon">📄</span>
+        <FileText size={16} className="page-link-icon" aria-hidden="true" />
         <span className="page-link-title-text">{currentTitle || '제목 없음'}</span>
       </div>
     </NodeViewWrapper>

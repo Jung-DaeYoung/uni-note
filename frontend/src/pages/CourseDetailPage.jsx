@@ -2,9 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   ChevronRight,
-  FileText,
   Home,
-  FolderOpen,
   PenLine,
   Trash2
 } from 'lucide-react';
@@ -150,23 +148,17 @@ const CourseDetailPage = () => {
   // --- Unified Header Content ---
   const headerContent = (
     <div className="note-header flex items-center justify-between w-full pr-4 h-full">
-      <nav className="flex items-center gap-1.5 min-w-0 overflow-x-auto no-scrollbar py-1">
-        <Link to="/dashboard" className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition-colors">
-          <Home size={14} />
+      <nav aria-label="노트 경로" className="note-crumbs no-scrollbar">
+        <Link to="/dashboard" className="note-crumb note-crumb-home" aria-label="강의목록">
+          <Home size={14} aria-hidden="true" />
         </Link>
-        <ChevronRight size={10} className="text-slate-300 dark:text-slate-600 shrink-0" />
-        <div className="flex items-center gap-1 shrink-0 px-1.5 py-0.5 bg-slate-50 dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700">
-          <FolderOpen size={12} className="text-blue-500 dark:text-blue-400" />
-          <span className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate max-w-[120px]">{courseName}</span>
-        </div>
+        <ChevronRight size={10} className="note-crumb-sep" aria-hidden="true" />
+        <span className="note-crumb-course">{courseName}</span>
 
         {noteData?.breadcrumbs?.map((bc) => (
           <React.Fragment key={bc.noteId}>
-            <ChevronRight size={10} className="text-slate-300 dark:text-slate-600 shrink-0" />
-            <Link
-              to={`/course/${courseId}/note/${bc.noteId}`}
-              className="text-xs font-bold text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate max-w-[120px]"
-            >
+            <ChevronRight size={10} className="note-crumb-sep" aria-hidden="true" />
+            <Link to={`/course/${courseId}/note/${bc.noteId}`} className="note-crumb">
               {bc.title}
             </Link>
           </React.Fragment>
@@ -174,8 +166,8 @@ const CourseDetailPage = () => {
 
         {noteData && (
           <>
-            <ChevronRight size={10} className="text-slate-300 dark:text-slate-600 shrink-0" />
-            <span className="text-xs font-black text-slate-900 dark:text-slate-100 truncate max-w-[180px]">
+            <ChevronRight size={10} className="note-crumb-sep" aria-hidden="true" />
+            <span aria-current="page" className="note-crumb-current">
               {noteData.title || '제목 없음'}
             </span>
           </>
@@ -196,13 +188,13 @@ const CourseDetailPage = () => {
             )}
           </div>
         )}
-        <div role="group" aria-label="노트 작업" className="note-seg-group">
+        <div role="group" aria-label="노트 작업" className="note-tools">
           {noteId && (
             <button
               onClick={() => setIsQuizModalOpen(true)}
-              className="note-seg note-seg-accent"
+              className="lib-btn lib-btn-primary note-tool"
             >
-              <span className="note-seg-extra">AI </span>문제 생성
+              <span className="note-tool-extra">AI </span>문제 생성
             </button>
           )}
           {noteId && !isUserCreated && (
@@ -210,9 +202,9 @@ const CourseDetailPage = () => {
               onClick={() => handleShareNote(noteData?.title || '제목 없음')}
               disabled={!noteData || saveState.status !== 'synced'}
               title={saveState.status !== 'synced' ? '저장이 끝난 뒤 공유할 수 있습니다' : '현재 노트와 하위 노트를 공유합니다'}
-              className="note-seg"
+              className="lib-btn note-tool"
             >
-              <span className="note-seg-extra">노트 </span>공유
+              <span className="note-tool-extra">노트 </span>공유
             </button>
           )}
           {isUserCreated ? (
@@ -220,18 +212,18 @@ const CourseDetailPage = () => {
               <button
                 onClick={handleRenameCourse}
                 title="강의 이름 변경"
-                className="note-seg note-seg-icon"
+                className="lib-btn note-tool note-tool-icon"
               >
-                <PenLine size={14} />
-                <span className="note-seg-label">이름 변경</span>
+                <PenLine size={14} aria-hidden="true" />
+                <span className="note-tool-label">이름 변경</span>
               </button>
               <button
                 onClick={handleDeleteCourse}
                 title="강의 삭제"
-                className="note-seg note-seg-icon note-seg-danger"
+                className="lib-btn note-tool note-tool-icon note-tool-danger"
               >
-                <Trash2 size={14} />
-                <span className="note-seg-label">강의 삭제</span>
+                <Trash2 size={14} aria-hidden="true" />
+                <span className="note-tool-label">강의 삭제</span>
               </button>
             </>
           ) : (
@@ -240,9 +232,10 @@ const CourseDetailPage = () => {
                 setIsBoardOpen(!isBoardOpen);
                 setKeywordTarget(null);
               }}
-              className={`note-seg ${isBoardOpen ? 'note-seg-open' : ''}`}
+              aria-expanded={isBoardOpen}
+              className={`lib-btn note-tool ${isBoardOpen ? 'note-tool-open' : ''}`}
             >
-              {isBoardOpen ? '닫기' : '커뮤니티'}
+              커뮤니티
             </button>
           )}
         </div>
@@ -268,11 +261,11 @@ const CourseDetailPage = () => {
         <CBTPlayer quizData={quizResult} onClose={() => setQuizResult(null)} courseId={courseId} />
       )}
       <AppLayout sidebarContent={sidebarContent} headerContent={headerContent}>
-        <div className="flex h-[calc(100vh-48px)] bg-slate-50 dark:bg-slate-950 overflow-hidden relative font-sans">
+        <div className="flex h-[calc(100dvh-48px)] bg-slate-50 dark:bg-slate-950 overflow-hidden relative font-sans">
           {/* Left: Lecture Note Area */}
           <main className={`flex-1 overflow-y-auto bg-white dark:bg-slate-950 ${isBoardOpen && isBoardMaximized ? 'opacity-0 invisible' : isSidePanelOpen ? 'xl:mr-[400px]' : 'mr-0'}`}>
-            <div className={`mx-auto pt-8 ${isSidePanelOpen ? 'max-w-4xl' : 'max-w-7xl'}`}>
-              <div className="px-8 pb-10">
+            <div className={`mx-auto pt-4 md:pt-8 ${isSidePanelOpen ? 'max-w-4xl' : 'max-w-7xl'}`}>
+              <div className="px-3 pb-10 md:px-8">
                 {noteId && noteData && noteData.noteId === parseInt(noteId) ? (
                   <NotionEditor key={noteId} noteId={noteId} courseId={courseId} initialData={noteData} onSaved={fetchTree} onSaveStateChange={setSaveState}
                     onKeywordSelect={(selection) => {
@@ -283,10 +276,7 @@ const CourseDetailPage = () => {
                     onEditorReady={handleEditorReady}
                   />
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-40 opacity-20 text-slate-900 dark:text-slate-100">
-                    <FileText size={64} className="mb-4" />
-                    <p className="font-medium">노트를 불러오는 중...</p>
-                  </div>
+                  <p role="status" className="note-loading">노트를 불러오는 중...</p>
                 )}
               </div>
             </div>

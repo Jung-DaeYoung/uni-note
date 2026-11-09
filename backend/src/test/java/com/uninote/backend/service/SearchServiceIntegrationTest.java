@@ -52,6 +52,8 @@ class SearchServiceIntegrationTest {
         Enrollment enrollment = new Enrollment();
         enrollment.setStudent(me);
         enrollment.setCourse(mine);
+        enrollment.setAcademicYear(4);
+        enrollment.setSemester(2);
         em.persist(enrollment);
     }
 

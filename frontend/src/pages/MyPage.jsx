@@ -32,6 +32,24 @@ const ACTIVITY_TYPES = {
 };
 
 const ACTIVITIES_PER_PAGE = 5;
+const COURSES_PER_PAGE = 5;
+
+// 화면에서 나눈 목록의 페이지 번호. 한 페이지뿐이면 그리지 않는다.
+const Pager = ({ label, pageCount, page, onChange }) => pageCount > 1 && (
+  <nav aria-label={label} className="my-pages">
+    {Array.from({ length: pageCount }, (_, i) => i + 1).map(p => (
+      <button
+        key={p}
+        type="button"
+        onClick={() => onChange(p)}
+        aria-current={p === page ? 'page' : undefined}
+        className="my-page"
+      >
+        {p}
+      </button>
+    ))}
+  </nav>
+);
 
 const formatDateTime =(value) => (value ? value.slice(0, 16).replace('T', ' ') : '-');
 
@@ -59,6 +77,7 @@ const MyPage = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [activityPage, setActivityPage] = useState(1);
+  const [coursePage, setCoursePage] = useState(1);
 
   useEffect(() => {
     client.get('/mypage')
@@ -75,6 +94,9 @@ const MyPage = () => {
   const activityPageCount = Math.ceil(activities.length / ACTIVITIES_PER_PAGE);
   const activityOffset = (activityPage - 1) * ACTIVITIES_PER_PAGE;
   const pagedActivities = activities.slice(activityOffset, activityOffset + ACTIVITIES_PER_PAGE);
+  const courseProgress = data?.courseProgress ?? [];
+  const coursePageCount = Math.ceil(courseProgress.length / COURSES_PER_PAGE);
+  const pagedCourses = courseProgress.slice((coursePage - 1) * COURSES_PER_PAGE, coursePage * COURSES_PER_PAGE);
 
   return (
     <AppLayout>
@@ -129,23 +151,26 @@ const MyPage = () => {
                 {data.courseProgress.length === 0 ? (
                   <p className="lib-empty">수강 중인 강의가 없습니다.</p>
                 ) : (
-                  <ul className="lib-list">
-                    {data.courseProgress.map(course => (
-                      <li key={course.courseId}>
-                        <Link to={`/course/${course.courseId}`} className="my-row my-course-row">
-                          <span className="my-row-title">{course.courseName}</span>
-                          <span className="my-row-meta my-counts">
-                            <span>노트 {course.noteCount}</span>
-                            <span>퀴즈 {course.quizSetCount}</span>
-                            <span>풀이 {course.attemptCount}</span>
-                          </span>
-                          <span className="my-row-meta">
-                            최근 활동 {course.lastActivityAt ? formatDateTime(course.lastActivityAt) : '없음'}
-                          </span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
+                  <>
+                    <ul className="lib-list">
+                      {pagedCourses.map(course => (
+                        <li key={course.courseId}>
+                          <Link to={`/course/${course.courseId}`} className="my-row my-course-row">
+                            <span className="my-row-title">{course.courseName}</span>
+                            <span className="my-row-meta my-counts">
+                              <span>노트 {course.noteCount}</span>
+                              <span>퀴즈 {course.quizSetCount}</span>
+                              <span>풀이 {course.attemptCount}</span>
+                            </span>
+                            <span className="my-row-meta">
+                              최근 활동 {course.lastActivityAt ? formatDateTime(course.lastActivityAt) : '없음'}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                    <Pager label="강의별 학습 현황 페이지" pageCount={coursePageCount} page={coursePage} onChange={setCoursePage} />
+                  </>
                 )}
               </section>
 
@@ -170,21 +195,7 @@ const MyPage = () => {
                         );
                       })}
                     </ul>
-                    {activityPageCount > 1 && (
-                      <nav aria-label="최근 활동 페이지" className="my-pages">
-                        {Array.from({ length: activityPageCount }, (_, i) => i + 1).map(page => (
-                          <button
-                            key={page}
-                            type="button"
-                            onClick={() => setActivityPage(page)}
-                            aria-current={page === activityPage ? 'page' : undefined}
-                            className="my-page"
-                          >
-                            {page}
-                          </button>
-                        ))}
-                      </nav>
-                    )}
+                    <Pager label="최근 활동 페이지" pageCount={activityPageCount} page={activityPage} onChange={setActivityPage} />
                   </>
                 )}
               </section>

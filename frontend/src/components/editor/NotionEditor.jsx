@@ -7,7 +7,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
-import { all, createLowlight } from 'lowlight'
+import { common, createLowlight } from 'lowlight'
 import BaseImage from '@tiptap/extension-image';
 import Heading from '@tiptap/extension-heading';
 import Paragraph from '@tiptap/extension-paragraph';
@@ -43,8 +43,12 @@ import useSourceBlockScroll from './hooks/useSourceBlockScroll';
 import { showAlert } from '../../context/ConfirmContext';
 
 import 'highlight.js/styles/atom-one-dark.css'
+import '../../pages/QuizLibraryPage.css';
+import './NotionEditor.css';
 
-const lowlight = createLowlight(all)
+// 자주 쓰는 37개 언어만 등록한다(all은 192개로 에디터 번들의 대부분을 차지). 목록에 없는 언어로
+// 저장된 블록도 language 속성은 그대로 보존되고, 강조만 없이 표시된다.
+const lowlight = createLowlight(common)
 
 // 커스텀 코드 블록 확장 정의
 const CustomCodeBlock = CodeBlockLowlight.extend({
@@ -317,7 +321,7 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
     content: getInitialContent(),
     editorProps: {
       attributes: {
-        class: 'uninote-editor focus:outline-none min-h-[700px] text-lg leading-relaxed',
+        class: 'uninote-editor focus:outline-none min-h-[50vh] md:min-h-[700px] text-lg leading-relaxed',
         spellcheck: 'false',
       },
       handleClickOn: (view, pos, node) => {
@@ -408,25 +412,18 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
 
   return (
     <div className="relative">
-      {uploadStatus === 'uploading' && (
-        <div className="absolute -top-10 left-0 flex items-center gap-1.5 px-3 py-1 bg-blue-50 dark:bg-blue-500/10 rounded-full border border-blue-100 dark:border-blue-500/30 z-10 shadow-sm">
-          <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider">업로드 중...</span>
-        </div>
-      )}
-      {uploadStatus === 'error' && uploadError && (
-        <div className="absolute -top-10 left-0 flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-500/10 rounded-full border border-red-100 dark:border-red-500/20 z-10 shadow-sm">
-          <span className="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider">{uploadError}</span>
-          <button
-            onClick={clearUploadError}
-            className="text-[9px] font-black text-red-400 dark:text-red-400/70 hover:text-red-600 dark:hover:text-red-300 uppercase tracking-wider"
-          >
-            닫기
-          </button>
-        </div>
-      )}
+      {/* 업로드 상태. 위치를 고정해 본문이 밀리지 않게 하고, 화면 낭독기에도 알린다. */}
+      <div role="status" className="ne-status">
+        {uploadStatus === 'uploading' && <span>업로드 중...</span>}
+        {uploadStatus === 'error' && uploadError && (
+          <>
+            <span className="ne-status-error">{uploadError}</span>
+            <button onClick={clearUploadError} className="ne-status-close">닫기</button>
+          </>
+        )}
+      </div>
 
-      <section className="relative min-h-[850px] bg-white dark:bg-slate-900 rounded-[2.5rem] px-12 py-8 shadow-2xl shadow-slate-200/40 dark:shadow-slate-950/40 border border-slate-100 dark:border-slate-700 ring-1 ring-slate-50 dark:ring-slate-800">
-        <NoteEditorStyles />
+      <section className="relative min-h-[60vh] md:min-h-[850px] bg-white dark:bg-slate-900 rounded px-4 py-6 md:px-12 md:py-8 border border-slate-200 dark:border-slate-700">
         <div className="relative z-20">
           {editor && <BlockHandle editor={editor} />}
           {editor && onKeywordSelect && <KeywordSelectionMenu editor={editor} onExplain={onKeywordSelect} onQuiz={onKeywordQuiz} />}
@@ -440,134 +437,5 @@ const NotionEditor = ({ courseId, noteId, initialData, onSaved, onSaveStateChang
     </div>
   );
 };
-
-// 에디터 본문 스타일. 공유 노트 읽기 전용 뷰어도 같은 모양을 위해 쓴다.
-export const NoteEditorStyles = () => (
-  <style>{`
-          .uninote-editor { color: #1e293b; font-size: 0.9375rem; }
-          .ProseMirror h1:first-child { 
-            font-size: 1.875rem; 
-            font-weight: 800; 
-            margin-top: 0; 
-            margin-bottom: 1rem; 
-            border-bottom: 2px solid #f1f5f9;
-            padding-bottom: 1rem;
-            letter-spacing: -0.025em;
-          }
-          .uninote-editor h1 { font-size: 2rem; font-weight: 800; margin-top: 1.5rem; margin-bottom: 1rem; line-height: 1.2; color: #0f172a; }
-          .uninote-editor h2 { font-size: 1.5rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.75rem; color: #1e293b; }
-          .uninote-editor p { margin-bottom: 0.5rem; line-height: 1.625; }
-          .uninote-editor blockquote { border-left: 4px solid #e2e8f0; padding-left: 1rem; font-style: italic; color: #475569; margin: 1.5rem 0; }
-          .uninote-editor img { max-width: 650px; width: 100%; height: auto; border-radius: 12px; margin: 1.5rem 0; border: 1px solid #f1f5f9; display: block; }
-          
-          /* 하이라이트 애니메이션 */
-          @keyframes highlight-fade {
-            0% { background-color: rgba(59, 130, 246, 0); }
-            20% { background-color: rgba(59, 130, 246, 0.2); }
-            50% { background-color: rgba(59, 130, 246, 0.3); }
-            100% { background-color: rgba(59, 130, 246, 0); }
-          }
-          .origin-highlight {
-            animation: highlight-fade 3s ease-in-out;
-            border-radius: 8px;
-            position: relative;
-          }
-          .origin-highlight::before {
-            content: '';
-            position: absolute;
-            left: -12px;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            background: #2563eb;
-            border-radius: 2px;
-            animation: fade-in 0.5s ease-out;
-          }
-          @media (prefers-reduced-motion: reduce) {
-            .origin-highlight {
-              animation: none;
-              background-color: rgba(59, 130, 246, 0.15);
-            }
-            .origin-highlight::before {
-              animation: none;
-            }
-          }
-          /* 페이지 링크 블록 스타일 고도화 */
-          .page-link-wrapper {
-            margin: 0.5rem 0;
-            padding: 2px 0;
-          }
-          .page-link-container {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem 1.25rem;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            user-select: none;
-            width: fit-content;
-            min-width: 280px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-          }
-          .page-link-container:hover {
-            background: #f1f5f9;
-            border-color: #cbd5e1;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            transform: translateY(-1px);
-          }
-          .page-link-icon { font-size: 1.25rem; }
-          .page-link-title-text { 
-            font-size: 0.95rem; 
-            font-weight: 700; 
-            color: #334155;
-            border-bottom: 1px solid transparent;
-          }
-          .page-link-container:hover .page-link-title-text {
-            border-bottom-color: #94a3b8;
-          }
-
-          /* PDF 블록 스타일 */
-          .pdf-block-wrapper {
-            margin: 1rem 0;
-            padding: 2px 0;
-          }
-
-          /* 노션 스타일 코드 블록 */
-          .code-block-wrapper { margin: 1.5rem 0; position: relative; z-index: 10; }
-          .code-block-wrapper pre { background: #f1f5f9; padding: 2.5rem 1rem 1rem; border-radius: 12px; overflow-x: auto; border: 1px solid #e2e8f0; position: relative; }
-          .code-block-wrapper pre code { font-family: 'Fira Code', monospace; background: transparent; padding: 0; font-size: 0.9rem; color: #334155; }
-          .ProseMirror code { background: rgba(135,131,120,0.12); padding: 2px 4px; border-radius: 4px; font-family: 'Fira Code', monospace; font-size: 0.85em; }
-          .uninote-editor ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; }
-          .uninote-editor ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1rem; }
-          .uninote-editor [data-type="taskList"] { list-style: none; padding: 0; }
-          .uninote-editor li[data-checked] { display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.25rem; }
-          .uninote-editor li[data-checked] input { margin-top: 0.4rem; cursor: pointer; }
-          .ProseMirror > * { padding-left: 32px !important; position: relative; transition: background 0.2s; min-height: 1.5em; }
-          .ProseMirror > *:hover { background: rgba(55, 53, 47, 0.04); border-radius: 6px; }
-          .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-          .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-          .no-scrollbar::-webkit-scrollbar { display: none; }
-
-          /* 야간모드: 위 규칙은 그대로 두고 .dark 조상이 있을 때만 덮어쓴다 */
-          .dark .uninote-editor { color: #cbd5e1; }
-          .dark .ProseMirror h1:first-child { border-bottom-color: #334155; }
-          .dark .uninote-editor h1 { color: #f1f5f9; }
-          .dark .uninote-editor h2 { color: #e2e8f0; }
-          .dark .uninote-editor blockquote { border-left-color: #475569; color: #94a3b8; }
-          .dark .uninote-editor img { border-color: #334155; }
-          .dark .page-link-container { background: #1e293b; border-color: #334155; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
-          .dark .page-link-container:hover { background: #273449; border-color: #475569; }
-          .dark .page-link-title-text { color: #cbd5e1; }
-          .dark .page-link-container:hover .page-link-title-text { border-bottom-color: #64748b; }
-          .dark .code-block-wrapper pre { background: #0f172a; border-color: #334155; }
-          .dark .code-block-wrapper pre code { color: #cbd5e1; }
-          .dark .ProseMirror code { background: rgba(148, 163, 184, 0.16); }
-          .dark .ProseMirror > *:hover { background: rgba(148, 163, 184, 0.08); }
-          .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
-  `}</style>
-);
 
 export default NotionEditor;

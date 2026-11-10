@@ -1,6 +1,17 @@
 # UniNote CI/CD 전환 설계 (사전 분석)
 
-작성일: 2026-11-09 · 기준 브랜치: `feature/note-ai` (`1ac1a86`) · 개정: 2026-11-09 (검토 반영)
+작성일: 2026-11-09 · 기준 브랜치: `feature/note-ai` (`1ac1a86`) · 개정: 2026-11-09 (검토 반영), 2026-11-10 (배포 방식 변경)
+
+> **2026-11-10 배포 방식 변경.** 아래 방식이 이 문서의 OIDC·`AWS-RunShellScript`·`deploy-backend.yml` 설계를 대체한다. 단계 계획은 `docs/current-plan.md`, 결정 근거는 `docs/1109.md` 6절에 있다.
+>
+> | 항목 | 현재 방식 |
+> |---|---|
+> | AWS 인증 | IAM User Access Key. GitHub Secrets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. Free Tier SCP가 `iam:*Provider*`를 막아 OIDC Provider를 만들 수 없다 |
+> | SSM | 커스텀 문서 `UniNote-Deploy` (파라미터 `ImageTag`), 리전 `ap-southeast-2`, 인스턴스 `i-0bf5c3061e672a073` |
+> | 배포 스크립트 | EC2 `/opt/uninote/deploy.sh` (저장소에 없음). 6장 스크립트는 이 스크립트의 설계 참고안이다 |
+> | 워크플로 | 기존 `.github/workflows/ci.yml`에 `deploy` job을 추가한다 (`needs: image`, main push에서만) |
+> | GHCR | Private. 태그는 `:<github.sha>` 하나. EC2 root가 pull 인증을 마쳤다 |
+> | 1·2장 | 작성 당시(CI 도입 전) 분석이다. CI와 GHCR push는 PR #7·#8로 main에 반영됐다 |
 
 ## 읽기 전에
 
@@ -13,7 +24,7 @@
   - Frontend: Netlify 자동 배포
   - Backend: AWS EC2 + Docker Compose + Spring Boot 3.4.2
   - DB: AWS RDS MySQL 8.4.11
-  - 예정: GHCR 이미지 저장, AWS OIDC + SSM 배포, Flyway 검토
+  - 예정: GHCR 이미지 저장, AWS SSM 배포(IAM User Access Key), Flyway 검토
 
 ### 개정 내역 (2026-11-09)
 
@@ -91,9 +102,11 @@
 
 ### ⚠️ 배포 전에 꼭 알아야 할 사실
 
-- `feature/note-ai`의 `c731e49`에는 Enrollment 변경이 들어 있다. `academic_year`·`semester` NOT NULL 컬럼과 unique 키를 추가한다. 이 커밋은 아직 `main`에 없다.
-- 운영은 `ddl-auto: validate`다. RDS에 스키마를 먼저 맞추지 않으면 **병합 후 첫 배포에서 기동이 실패한다.**
-- RDS의 실제 상태는 **[확인 필요]**다. 대응 방법은 9장에 있다.
+- `c731e49`에는 Enrollment 변경이 들어 있다. `academic_year`·`semester` NOT NULL 컬럼과 unique 키를 추가한다. **이 커밋은 PR #6으로 이미 `main`에 병합됐다** (2026-11-10 `git merge-base`로 확인).
+- 운영은 `ddl-auto: validate`다. 컬럼이나 키가 없으면 이 커밋 이후 이미지는 기동에 실패한다.
+- **2026-11-10 해소.** 사용자가 운영 RDS를 로컬 DB 덤프(2026-11-10)로 재구축했다. `enrollments`의 `academic_year`·`semester`는 NOT NULL이고, 테이블 20개와 주요 데이터 건수가 로컬과 일치한다 (사용자 보고).
+  - 같은 날 main `3074587` 이미지를 `deploy.sh`로 수동 배포했고, 기동과 RDS 연결, Netlify 화면을 확인했다 (사용자 보고).
+  - 이 문서는 DB를 자동으로 변경하거나 재초기화하는 방식을 다루지 않는다.
 - 백엔드 코드에는 Enrollment를 쓰는 곳이 없다(`new Enrollment`나 `save` 호출이 main과 feature 모두 0건). 수강 데이터는 시드 SQL로만 들어간다.
   - 그래서 컬럼을 먼저 추가해도 기존 이미지가 깨지지 않는다(validate는 남는 컬럼을 무시한다). 9장의 적용 순서는 이 사실을 전제로 한다.
 
@@ -103,15 +116,15 @@
 |---|---|---|
 | Backend 테스트 | 가능 | MySQL 8.4 service container와 더미 환경변수 |
 | Frontend lint·test·build | 가능 | lint·test 통과 확인 |
-| 이미지 빌드 → GHCR push | 가능 | `GITHUB_TOKEN`만으로 충분 |
-| OIDC → SSM으로 EC2 배포 | 조건부 | IAM·SSM Agent·root의 compose 사용 가능 여부가 [미확인] (4장) |
+| 이미지 빌드 → GHCR push | 가능 (완료, PR #8) | `GITHUB_TOKEN`만으로 충분 |
+| SSM으로 EC2 배포 | 가능 | OIDC는 SCP 제한으로 불가. IAM User Access Key로 `UniNote-Deploy` 실행 (4장) |
 | 자동 롤백 | 가능 | `prev` 태그 + 여러 조건 검증 (6·7장) |
 | Flyway | 가능하나 별도 단계 | RDS 컬럼 상태를 먼저 확인 (9장) |
 
 ## 3. 필요한 변경 사항 (구현 단계에서)
 
-1. `.github/workflows/ci.yml`, `.github/workflows/deploy-backend.yml`을 새로 만든다.
-2. `deploy/ec2-deploy.sh`를 새로 만든다. EC2에서 실행할 배포 스크립트이고, SSM으로 전달한다. EC2에 계속 남는 파일은 아니다.
+1. `.github/workflows/ci.yml`을 새로 만든다 (완료, PR #7·#8). CD는 같은 파일에 `deploy` job으로 추가한다. `deploy-backend.yml`은 만들지 않는다.
+2. 배포 스크립트는 EC2 `/opt/uninote/deploy.sh`에 둔다(root 소유 755). SSM 문서 `UniNote-Deploy`가 이 스크립트를 실행한다. 저장소에는 두지 않는다.
 3. (선택) `git update-index --chmod=+x backend/gradlew`. 워크플로에서 `chmod`해도 된다.
 4. (선택) Dockerfile에 `LABEL org.opencontainers.image.source=https://github.com/Jung-DaeYoung/uni-note`를 추가한다.
 5. GHCR 이미지 이름은 소문자로 쓴다: `ghcr.io/jung-daeyoung/uni-note-backend:<sha>`
@@ -121,23 +134,28 @@
 
 ## 4. AWS 콘솔에서 직접 설정해야 할 항목
 
-1. **IAM → Identity provider**
-   - URL: `https://token.actions.githubusercontent.com`
-   - Audience: `sts.amazonaws.com`
-2. **IAM Role** (예: `uninote-github-deploy`)
-   - 신뢰 정책
-     - `aud = sts.amazonaws.com`
-     - `sub = repo:Jung-DaeYoung/uni-note:environment:production`
-   - 권한
-     - `ssm:SendCommand`: 다음 두 리소스로만 제한한다.
-       - `arn:aws:ssm:ap-southeast-2::document/AWS-RunShellScript`
-       - 해당 인스턴스 ARN
-     - `ssm:GetCommandInvocation`, `ssm:ListCommandInvocations`
-3. **EC2 인스턴스 프로파일**: `AmazonSSMManagedInstanceCore`. 현재 붙어 있는 Role은 [미확인]이다.
-4. **SSM Fleet Manager**에서 인스턴스가 `Online`인지 확인한다.
+2026-11-10 기준 1~4는 사용자가 완료했다고 보고했다.
+
+1. **IAM User** (`uninote-github-deploy`)와 Access Key
+   - OIDC Identity provider는 Free Tier SCP `DenyIAMRestrictedActions`가 `iam:*Provider*`를 막아 만들 수 없다.
+   - 권한 (최소)
+
+     | Action | Resource |
+     |---|---|
+     | `ssm:SendCommand` | `arn:aws:ssm:ap-southeast-2:<계정ID>:document/UniNote-Deploy` 와 `arn:aws:ec2:ap-southeast-2:<계정ID>:instance/i-0bf5c3061e672a073` (둘 다 필요) |
+     | `ssm:GetCommandInvocation` | `*` |
+
+   - 커스텀 문서 ARN에는 계정 ID가 들어간다. AWS 관리형 문서(`::document/AWS-…`)와 형식이 다르다.
+   - `AWS-RunShellScript`는 허용하지 않는다. 결과 확인에는 위 두 권한이면 충분하다.
+2. **SSM Document `UniNote-Deploy`**: 파라미터 `ImageTag`를 받아 `/opt/uninote/deploy.sh <ImageTag>`를 root로 실행한다. 다음은 [확인 필요]다 (`aws ssm get-document --name UniNote-Deploy`).
+   - `ImageTag`에 `allowedPattern: ^[0-9a-f]{40}$`가 있는가
+   - 스크립트 종료 코드가 그대로 step 상태(`Success`/`Failed`)가 되는가
+   - `aws:runShellScript`의 실행 제한 `timeoutSeconds`는 **600초**로 한다. 지정하지 않으면 기본값 3600초라, Actions가 폴링을 멈춘(15분) 뒤에도 EC2에서 스크립트가 계속 돌 수 있다. 새 문서 버전을 만들면 기본 버전으로 지정해야 적용된다
+     - **2026-11-10 완료 (사용자 보고).** 버전 2에 `timeoutSeconds: 600`을 넣었고, 버전 2가 기본 버전이다(콘솔 Versions 탭에서 확인).
+   - **2026-11-10 SSM 수동 실행 성공 (사용자 보고).** Run Command에서 기본 버전으로 `ImageTag=307458768d792d6bd1c405fa18055d773e3b5e1a`를 실행해 `Success`를 확인했다. ResponseCode는 따로 확인하지 않았다.
+3. **SSM Managed Node**: 인스턴스가 `Online`이다 (사용자 보고). EC2 인스턴스 프로파일은 SSM Agent 통신에 필요한 권한을 가져야 한다.
+4. **EC2 GHCR 인증**: 패키지가 Private이다. root로 `read:packages` 토큰을 써서 `docker login ghcr.io --password-stdin`을 한 번 했다 (사용자 보고).
 5. **RDS 자동 백업과 삭제 방지**. 현재 보류 상태다. Flyway 도입 전에는 필수다.
-6. (GHCR 패키지를 비공개로 둘 경우만) Parameter Store SecureString에 `read:packages` PAT를 저장하고, EC2 Role에 `ssm:GetParameter`를 준다.
-   - 공개 저장소이므로 패키지도 공개로 두면 이 설정이 필요 없다.
 
 ### EC2에서 확인할 항목 ([확인 필요], 읽기 전용)
 
@@ -158,83 +176,84 @@ df -h /; docker images
 
 | 이름 | 종류 | 용도 |
 |---|---|---|
-| `AWS_ROLE_ARN` | Secret | OIDC로 Assume할 Role (로그에서 가려지도록 Secret에 둔다) |
-| `AWS_REGION` | Variable | `ap-southeast-2` |
-| `EC2_INSTANCE_ID` | Variable | SSM 대상 인스턴스 |
-| `GITHUB_TOKEN` | 자동 제공 | GHCR push (`packages: write`) |
+| `AWS_ACCESS_KEY_ID` | Repository Secret (등록 완료) | IAM User `uninote-github-deploy` 키 |
+| `AWS_SECRET_ACCESS_KEY` | Repository Secret (등록 완료) | 위 키의 비밀 값 |
+| `GITHUB_TOKEN` | 자동 제공 | GHCR push (`image` job, `packages: write`) |
 
-- AWS Access Key는 만들지 않는다.
+- 리전 `ap-southeast-2`와 인스턴스 ID는 비밀 값이 아니다. `image` job의 `IMAGE`처럼 `deploy` job `env`에 둔다.
+- Repository Secret은 모든 브랜치의 push 워크플로에서 읽을 수 있다. main 전용 Environment `production`의 Secret으로 옮기고 `deploy` job에 `environment: production`을 지정하기를 권장한다 (사용자 결정).
+- Access Key는 장기 키다. 주기적으로 교체하고 CloudTrail로 사용 기록을 확인한다.
 - 운영 비밀값(DB, JWT, Gemini, truststore)은 GitHub에 넣지 않는다. 계속 EC2 `backend.env`에만 둔다.
 - CI 테스트에 쓰는 DB·JWT 값은 더미 값이다. 워크플로에 직접 적는다.
 
 ## 6. Workflow 파일 구성안
 
-### `ci.yml`
+### `ci.yml` (현재, PR #7·#8)
 
-```yaml
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main, feature/note-ai, 'ci/**']
-```
+| job | needs | 실행 조건 |
+|---|---|---|
+| `backend` (Backend test) | 없음 | PR·push. MySQL 8.4 service, `./gradlew test`, CI 전용 가짜 env |
+| `frontend` (Frontend lint, test, build) | 없음 | PR·push. Node 24, `npm ci → lint → test → build` |
+| `image` (Backend image (GHCR)) | `backend`, `frontend` | main push만. 태그 `ghcr.io/jung-daeyoung/uni-note-backend:${{ github.sha }}` |
+| `deploy` (구현됨, `ci/cd` 브랜치, main 병합 전) | `image` | main push만 |
 
-- `paths` 필터는 걸지 않는다. 필수 체크로 지정한 job이 path 필터 때문에 실행되지 않으면 PR이 대기 상태로 남는다.
-- `backend` job
-  - `services.mysql: mysql:8.4` (DB `uninote_db`)
-  - `setup-java`(temurin 21, gradle cache)
-  - `chmod +x gradlew && ./gradlew test`
-  - 더미 환경변수: `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`(32바이트 이상), `JWT_EXPIRATION`, `GEMINI_API_KEY=dummy`
-- `frontend` job
-  - `setup-node`(Netlify와 같은 버전 [확인 필요], npm cache `frontend/package-lock.json`)
-  - `npm ci && npm run lint && npm test && npm run build`
-  - 세 스크립트는 모두 `package.json`에 실제로 있다.
-- `deploy-script` step
-  - `sh -n deploy/ec2-deploy.sh`로 문법만 검사한다.
-  - Ubuntu 러너의 `sh`는 dash라서 EC2와 같은 셸로 검사하게 된다.
+- 트리거는 `pull_request: [main]`, `push: [main]`이다. `paths` 필터는 걸지 않는다. 필수 체크로 지정한 job이 실행되지 않으면 PR이 대기 상태로 남는다.
 
-### `deploy-backend.yml`
+### `deploy` job (구현됨, `ci/cd` 브랜치, main 병합 전)
 
-- 트리거
-  - `push: main` (`paths: backend/**`, `deploy/**`, 이 워크플로 파일)
-  - `workflow_dispatch` (입력값 `image_tag`, 롤백용)
+전문은 `docs/current-plan.md` 5단계에 있다. 설계 요점은 다음과 같다.
+
 - 설정
-  - `concurrency: deploy-prod` (진행 중인 배포는 취소하지 않는다)
-  - `environment: production`
-  - `permissions: { contents: read, packages: write, id-token: write }`
-- `build` job
-  - 테스트 실행 → `docker/login-action`(ghcr) → `docker/build-push-action`
-    - context: `backend`
-    - platform: `linux/amd64`
-    - cache: gha
-    - 태그: `:${{ github.sha }}`, `:main`
-  - `workflow_dispatch`로 실행하면 build를 건너뛰고 `image_tag`로 지정한 기존 이미지를 쓴다.
-- `deploy` job
-  1. `image_tag`가 `^[0-9a-f]{40}$` 형식인지 검증한다. 명령 주입을 막기 위해서다.
-  2. `aws-actions/configure-aws-credentials`로 OIDC 인증을 한다.
-  3. `deploy/ec2-deploy.sh`를 base64로 인코딩하고, `jq`로 SSM `--parameters` JSON을 만든다.
-     - `commands`: `echo <b64> | base64 -d > /tmp/uninote-deploy.sh` → `sh /tmp/uninote-deploy.sh <TAG>`
-     - `executionTimeout`: `900`
-     - base64로 전달하는 이유는 세 가지다.
-       - 따옴표 처리 문제가 없다.
-       - SSM 문서 파라미터 문법 `{{ }}`가 `docker inspect -f '{{...}}'`와 부딪치지 않는다. SSM이 이 부분을 어떻게 처리하는지는 [확인 필요]인데, base64로 보내면 이 문제를 피할 수 있다.
-       - 스크립트를 저장소에서 버전 관리하고 리뷰할 수 있다.
-  4. `aws ssm wait command-executed` → `get-command-invocation`으로 결과 줄(`OK`, `ROLLED_BACK` 등)과 종료 코드를 확인한다.
-  5. 외부 경로를 검증한다(7장): `https://uninote.duckdns.org/api/courses` → 403인지 확인한다.
+  - `needs: image`, `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`
+  - `concurrency: { group: deploy-prod, cancel-in-progress: false }`. 워크플로 concurrency가 SHA별이라, main push가 연달아 오면 배포가 겹칠 수 있기 때문이다.
+  - `permissions: {}`. 이 job은 `GITHUB_TOKEN`을 쓰지 않는다.
+  - `env`에 Secrets(`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), `AWS_DEFAULT_REGION`, 인스턴스 ID
+- 실행
+  1. `aws ssm send-command --document-name UniNote-Deploy --timeout-seconds 120 --parameters '{"ImageTag":["<github.sha>"]}'`. 러너에 AWS CLI가 있어 checkout이나 추가 action이 필요 없다.
+     - `--timeout-seconds 120`은 명령이 시작되기까지의 전달 timeout이다. 인스턴스가 오프라인일 때 명령이 오래 대기하다가 나중에 오래된 SHA로 실행되는 일을 막는다. 실행 시간 제한은 SSM 문서의 `timeoutSeconds`(600초)가 정한다.
+     - 전달 120초 + 실행 600초 = 720초로, 폴링 15분(900초)과 job `timeout-minutes: 20`보다 짧다. 그래서 Actions가 결과를 기다리는 동안 SSM 명령이 반드시 끝난다.
+  2. `aws ssm get-command-invocation`으로 10초마다 최대 15분 폴링한다.
+     - `aws ssm wait command-executed`는 쓰지 않는다. 약 100초(5초 × 20회)만 기다리므로, 배포가 길면 EC2에서 배포가 계속되는데 Actions만 실패한다.
+     - 명령 직후의 `InvocationDoesNotExist`는 재시도한다.
+  3. `Status`와 `ResponseCode`만 출력한다. `Status`가 `Success`가 아니면 job을 실패시킨다.
+- `ImageTag` 형식 검증은 SSM 문서의 `allowedPattern`과 `deploy.sh`에서 한다. `github.sha`는 GitHub가 만드는 값이라 워크플로에서 따로 검증하지 않는다.
+- 외부 경로 검증(`https://uninote.duckdns.org/api/courses` → 403, 7장)은 최소 구성에서 뺐다. 필요하면 step 하나로 추가한다.
+- PR에서는 `image`가 skipped라 `deploy`도 skipped다. fork PR에는 secrets가 전달되지 않는다.
 
-### SSM 배포 스크립트 `deploy/ec2-deploy.sh` (설계안)
+### EC2 배포 스크립트 `/opt/uninote/deploy.sh` (설계 참고안)
 
-설계 원칙
+- 실제 스크립트는 EC2에만 있고 저장소에는 없다. 아래는 그 스크립트가 지켜야 할 원칙과 참고 구현이다. 실제 내용이 이 원칙을 지키는지는 [확인 필요]다.
+- 실제 스크립트에서 알려진 동작 (사용자 보고, 2026-11-10 수동 배포에서 사용)
+  - SHA 형식 검증, root 확인, `flock`으로 중복 실행 방지
+  - GHCR pull → `uninote-backend:latest`를 `prev`로 보존 → 새 이미지를 `latest`로 → Compose 재시작
+  - 헬스체크: `http://127.0.0.1:8080/api/courses`가 200·401·403이면 성공. 참고 구현(403만, 이미지 ID·재시작 횟수 확인)과 다르다. 이번 범위에서는 바꾸지 않는다
+  - 실패하면 `prev`로 롤백한다. 실제 종료 코드 체계는 아래 참고 구현과 다를 수 있다 [확인 필요]
+- 참고안의 `APP_DIR`, 이미지 이름 등은 EC2 실제 값에 맞춰야 한다.
 
-- AWS-RunShellScript는 `sh`(Ubuntu에서는 dash)로 실행된다. 그래서 `pipefail`, `[[ ]]`, 배열 같은 bash 문법을 쓰지 않는다.
-- `set -e`를 쓰지 않는다. 쓰면 배포가 실패했을 때 스크립트가 그 자리에서 끝나 롤백이 실행되지 않는다. 대신 단계마다 명시적으로 분기한다.
+두 스크립트의 역할과 셸 옵션 (사용자 보고, 내용은 [확인 필요])
+
+| 스크립트 | 위치 | 역할 | 셸 옵션 |
+|---|---|---|---|
+| SSM 문서 wrapper | `UniNote-Deploy`의 `aws:runShellScript` 명령 | `ImageTag`를 받아 `deploy.sh`를 호출하고, 그 종료 코드를 SSM 결과로 넘긴다 | `set -eu` |
+| 배포 스크립트 | EC2 `/opt/uninote/deploy.sh` | pull, 태그 교체, 재기동, 헬스체크, 롤백 | `set -Eeuo pipefail` |
+
+- wrapper는 `aws:runShellScript`가 `sh`(Ubuntu에서는 dash)로 실행한다. `set -eu`이므로 `deploy.sh`가 0이 아닌 값으로 끝나면 wrapper도 그 값으로 끝나고 SSM 결과는 `Failed`가 된다. 단, `|| true`나 파이프(`| tee`)로 호출하면 종료 코드가 가려진다.
+- `deploy.sh`의 `-E`와 `-o pipefail`은 bash 옵션이다. 그래서 shebang이 bash여야 하고, wrapper는 `sh /opt/uninote/deploy.sh`가 아니라 실행 파일로 직접 호출해야 한다.
+- `deploy.sh`는 `-e`를 쓰므로, 헬스체크·재기동 실패가 롤백 전에 스크립트를 끝내지 않도록 해야 한다. 실패할 수 있는 명령을 `if`·`||`로 감싸거나 `trap ... ERR`로 롤백을 실행한다. `-E`는 함수 안의 오류에도 `ERR` trap이 동작하게 한다.
+- `pipefail`에서는 `docker logs ... | grep -q`처럼 앞 명령이 SIGPIPE로 끝나는 파이프가 실패로 판정될 수 있다.
+
+설계 원칙 (아래 참고 구현은 POSIX `sh` 버전이다. 실제 `deploy.sh`는 bash와 `set -Eeuo pipefail`을 쓰므로 원칙만 적용한다)
+
+- 실패하면 반드시 0이 아닌 값으로 끝낸다. 롤백에 성공했어도 배포는 실패이므로 0이 아닌 값으로 끝낸다. SSM은 종료 코드로 `Success`/`Failed`를 정하고, Actions는 이 상태로 성공·실패를 정한다.
+- `sh`로 실행하는 스크립트에는 `pipefail`, `[[ ]]`, 배열 같은 bash 문법을 쓰지 않는다. bash로 실행하는 스크립트는 shebang과 SSM 문서의 호출 방식이 일치해야 한다.
+- `-e`를 쓰면 실패한 명령에서 스크립트가 바로 끝나 롤백이 실행되지 않을 수 있다. 참고 구현은 `-e` 없이 단계마다 명시적으로 분기한다. `-e`를 쓰는 실제 `deploy.sh`는 위 방법(조건문으로 감싸기 또는 `ERR` trap)으로 롤백 경로를 보장한다.
 - 이미지를 교체하기 전에 실패하면(pull이나 tag 실패) 운영에 영향이 없다. 그대로 종료한다.
 - 롤백한 뒤에도 같은 기준으로 상태를 검증한다. 롤백까지 실패하면 다른 종료 코드를 남긴다.
 - 출력은 결과 줄만 남긴다. 공개 저장소라 Actions 로그가 공개되므로 컨테이너 로그나 환경값은 출력하지 않는다.
 
 ```sh
 #!/bin/sh
-# 사용: sh ec2-deploy.sh <40자리 commit SHA>
+# 사용: sh /opt/uninote/deploy.sh <40자리 commit SHA>
 # 종료 코드: 0 성공 / 1 교체 전 실패 또는 배포 실패 후 롤백 성공 / 2 롤백 실패 / 3 복구할 prev 없음
 set -u
 
@@ -339,7 +358,7 @@ DB에 대해서는 간접 근거가 있다. 운영은 `ddl-auto: validate`라서
 | 로그에 `Started BackendApplication` | 기동 완료, 즉 validate 단계에서 DB 연결·스키마 검증을 통과했는지 |
 | `127.0.0.1:8080` → 403 | Tomcat과 보안 필터가 동작하는지 |
 | 15초 동안 `RestartCount`가 그대로 | crash loop가 아닌지 |
-| (Actions) `https://uninote.duckdns.org/api/courses` → 403 | DNS·Nginx·TLS·프록시 경로 |
+| (Actions, 선택) `https://uninote.duckdns.org/api/courses` → 403 | DNS·Nginx·TLS·프록시 경로. 최소 `deploy` job에는 없다 |
 
 - 외부 경로 검증이 실패하면 앱은 정상이고 Nginx 쪽 문제다. 이때는 자동 롤백하지 않고 워크플로를 실패로 표시만 한다. 롤백해도 해결되지 않는 문제이기 때문이다.
 
@@ -368,17 +387,21 @@ DB에 대해서는 간접 근거가 있다. 운영은 `ddl-auto: validate`라서
 
 | 위험 | 해결책 |
 |---|---|
-| 엔티티 변경(c731e49)을 병합한 뒤 validate 실패로 기동 실패 | 9장 순서대로 스키마를 먼저 맞춘다. 실패하면 `prev`로 자동 복구된다 |
-| `sh`에서 `pipefail` 오류가 나거나 `set -e` 때문에 롤백 전에 종료 | POSIX sh로 작성하고 명시적으로 분기한다(6장). CI에서 `sh -n`으로 검사한다 |
+| 엔티티 변경(`c731e49`, 이미 main에 있음) 때문에 첫 자동 배포가 validate 실패로 기동 실패 | 해소(2026-11-10). RDS 재구축 후 `3074587`을 수동 배포해 기동을 확인했다(1장, 사용자 보고) |
+| wrapper(`sh`, `set -eu`)에서 bash 문법 오류가 나거나, `deploy.sh`(`set -Eeuo pipefail`)가 롤백 전에 종료 | wrapper는 `deploy.sh`를 직접 실행하고, `deploy.sh`는 조건문 또는 `ERR` trap으로 롤백 경로를 보장한다(6장). 스크립트가 EC2에만 있어 CI에서 검사할 수 없으므로 6단계 실패 리허설로 확인한다 |
+| `deploy.sh`나 SSM 문서가 실패를 0으로 끝내 Actions가 성공으로 표시 | 문서와 스크립트의 종료 코드 전파를 확인하고, 실패 리허설로 `Failed`가 나오는지 본다 |
+| `aws ssm wait`가 약 100초 뒤 실패 | 최대 15분 폴링 루프를 쓴다 (6장) |
+| `SendCommand` AccessDenied | 문서 ARN에 계정 ID를 넣고, 인스턴스 ARN도 함께 허용한다 (4장) |
+| Access Key 유출 | 문서·인스턴스 단위 최소 권한, 주기적 교체, Environment `production`으로 이동 권장 |
 | 롤백까지 실패해 서비스 중단 | `exit 2`로 구분한다. 워크플로 실패를 알림으로 받고 SSH로 긴급 복구한다(10장) |
 | 403만 보고 성공으로 오판 | 여러 조건을 함께 보는 검증과 외부 경로 검증(7장) |
 | 롤백한 이전 이미지가 새 스키마와 맞지 않음 | expand → contract로 나눈다. Flyway는 기본적으로 미래 버전 마이그레이션을 무시한다 |
 | GHCR 이름 대문자로 push 실패 | `jung-daeyoung`으로 소문자 고정 |
 | SSM이 root로 실행되어 compose 플러그인이 없거나 상대경로가 틀림 | `sudo docker compose version`을 미리 확인하고, 스크립트에서 `cd`한다 |
-| SSM의 `{{ }}` 파라미터 해석과 따옴표 문제 | 스크립트를 base64로 전달한다 |
-| 비공개 GHCR pull 실패 | 패키지를 공개로 두거나, Parameter Store 토큰으로 `docker login` |
+| SSM 문서에 임의 명령이 들어감 | `AWS-RunShellScript`를 허용하지 않고, 커스텀 문서의 `ImageTag`에 `allowedPattern`을 둔다 |
+| Private GHCR pull 실패 | EC2 root로 `docker login ghcr.io`(완료). 토큰이 만료되면 다시 로그인한다 |
 | SHA 이미지가 쌓여 EBS 20GB가 가득 참 | 11장 정리 정책 |
-| OIDC 범위가 넓어 다른 브랜치나 fork에서 배포 가능 | `sub`를 `environment:production`으로, 배포 브랜치는 main만 허용 |
+| Repository Secret을 다른 브랜치 워크플로가 읽음 | `deploy`는 main push에서만 실행. 키를 main 전용 Environment `production`으로 옮기기를 권장 |
 | Flyway가 기존 RDS를 건드림 | 9장 규칙(baseline 버전 = RDS에 이미 반영된 버전), 스냅샷 먼저 |
 | backend만 바뀌어도 Netlify가 빌드되어 크레딧 소모 | 이번 범위 밖. 필요하면 별도로 처리 |
 | 서버에서 빌드할 때 메모리 부족 | GHCR pull 방식이라 서버 빌드가 없어지므로 해소된다 |
@@ -436,6 +459,7 @@ SELECT COUNT(*) FROM enrollments WHERE academic_year IS NULL OR semester IS NULL
    - ③ Flyway 이미지 배포 (baseline만 기록)
    - ④ `feature/note-ai` 병합
    - ③과 ④의 순서는 바꿔도 된다.
+   - **2026-11-10 현황:** `c731e49`는 이미 main에 병합됐으므로 위 순서의 ④는 끝난 상태다. 운영 RDS는 두 컬럼이 NOT NULL인 덤프로 재구축됐으므로(1장) 경우 A로 본다. unique 키는 복원에 쓴 덤프에 들어 있었다. Flyway 도입 전에 RDS에서 `SHOW CREATE TABLE enrollments;`로 한 번 더 확인한다.
 5. 로컬과 CI 기본 프로필은 `spring.flyway.enabled: false`, `ddl-auto: update`를 유지한다. Flyway는 `application-prod.yaml`에서만 켠다.
 6. CI에 Flyway 검증 job을 추가한다. 빈 MySQL 8.4에서 Flyway를 켜고 `ddl-auto: validate`로 `contextLoads`를 실행해, V1(+V2)과 엔티티가 일치하는지 확인한다.
    - Boot 3.4.2가 관리하는 Flyway 10.x가 MySQL 8.4를 정식으로 지원하는지는 [확인 필요]다. 이 job에서 경고 수준인지 실패하는지 확인한다.
@@ -494,13 +518,13 @@ MySQL DDL은 트랜잭션으로 되돌릴 수 없다. 그래서 마이그레이�
   - 실행 중인 컨테이너가 쓰는 이미지는 삭제되지 않고 오류가 난다. 이 오류는 무시한다(`|| true`).
 - `cleanup()`은 **배포에 성공했을 때만** 실행한다. 롤백한 경우에는 실패한 이미지를 남겨 두고 조사한다.
 - 결과적으로 EC2에는 이미지가 최대 2~3개(현재, 직전, 조사 중인 실패 이미지)만 남는다.
-- 더 이전 버전으로 수동 롤백할 때는 GHCR에서 다시 pull하면 된다. 공개 패키지라 GHCR 쪽 보관에는 제한이 없다. GHCR 정리는 필요할 때 따로 검토한다.
+- 더 이전 버전으로 수동 롤백할 때는 GHCR에서 다시 pull하면 된다. 패키지가 Private이라 GHCR 저장 한도와 과금은 [미확인]이다(`1109.md` 12절). GHCR 정리는 필요할 때 따로 검토한다.
 - `eclipse-temurin` 같은 빌드 기반 이미지는 EC2에서 빌드를 멈춘 뒤 한 번만 수동으로 정리한다. 자동 정리 대상에는 넣지 않는다.
 
 ## 12. 배포 실패 시 이전 Docker 이미지로 복구하는 방법
 
 - **자동**: 6장 스크립트가 검증에 실패하면 `prev`로 되돌리고 같은 기준으로 다시 검증한다(`ROLLED_BACK`, exit 1).
-- **수동**: `deploy-backend.yml`을 `workflow_dispatch`로 실행하고 `image_tag`에 이전 SHA를 넣는다. 그 SHA 이미지를 pull한 뒤 같은 스크립트로 교체하고 검증한다.
+- **수동**: SSM 콘솔이나 CLI로 `UniNote-Deploy`를 실행하고 `ImageTag`에 이전 SHA를 넣는다. 그 SHA 이미지를 pull한 뒤 같은 스크립트로 교체하고 검증한다. 워크플로 `workflow_dispatch`는 이번 범위에 넣지 않았다.
 - **긴급** (롤백도 실패해 `ROLLBACK_FAILED`가 나왔을 때, EC2에서 직접)
 
   ```bash

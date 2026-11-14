@@ -17,4 +17,5 @@ RUN mkdir -p /app/uploads
 COPY --from=build /workspace/build/libs/*.jar app.jar
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+# 컨테이너 기본 시간대는 UTC다. LocalDateTime·Clock이 KST로 동작하도록 JVM 시간대를 고정한다.
+ENTRYPOINT ["java", "-Duser.timezone=Asia/Seoul", "-jar", "/app/app.jar"]

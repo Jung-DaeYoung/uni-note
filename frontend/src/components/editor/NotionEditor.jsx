@@ -148,7 +148,16 @@ export const noteSchemaExtensions = [
   CustomParagraph,
   TaskList,
   TaskItem.configure({ nested: true }),
-  Image,
+  // 모서리 핸들로 크기 조절. 결과는 attrs.width/height(px)로 노트 JSON에 저장된다.
+  Image.configure({
+    resize: {
+      enabled: true,
+      directions: ['bottom-left', 'bottom-right'],
+      minWidth: 120,
+      minHeight: 60,
+      alwaysPreserveAspectRatio: true,
+    },
+  }),
   CustomCodeBlock.configure({ lowlight }),
   BlockId,
   PageLink,

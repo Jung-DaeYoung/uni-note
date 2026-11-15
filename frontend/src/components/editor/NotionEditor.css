@@ -78,6 +78,33 @@
 .uninote-editor blockquote { border-left: 4px solid var(--lib-color-rule); padding-left: 1rem; font-style: italic; color: var(--lib-color-ink-2); margin: 1.5rem 0; }
 .uninote-editor img { max-width: 650px; width: 100%; height: auto; border-radius: 12px; margin: 1.5rem 0; border: 1px solid var(--lib-color-rule); display: block; }
 
+/* 크기 조절 이미지: 노드뷰가 img를 [data-resize-container] > [data-resize-wrapper]로 감싼다.
+   여백은 바깥으로 옮겨 핸들이 이미지 모서리에 붙게 하고, 저장된 height(px)는 무시해
+   좁은 화면에서 width만 줄어도 비율이 깨지지 않게 한다. */
+.uninote-editor [data-resize-container][data-node="image"] { margin: 1.5rem 0; }
+.uninote-editor [data-resize-wrapper] { min-width: 0; max-width: 100%; }
+.uninote-editor [data-resize-wrapper] > img { margin: 0; max-width: 100%; height: auto !important; }
+/* 크기를 지정하지 않은 이미지는 기존처럼 최대 650px까지 채운다. */
+.uninote-editor [data-resize-wrapper] > img:not([style*="width"]) { width: 650px; }
+
+.uninote-editor [data-resize-handle] {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--lib-color-primary);
+  border: 2px solid var(--lib-color-field);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+  z-index: 1;
+}
+.uninote-editor [data-resize-handle="bottom-right"] { cursor: nwse-resize; transform: translate(40%, 40%); }
+.uninote-editor [data-resize-handle="bottom-left"] { cursor: nesw-resize; transform: translate(-40%, 40%); }
+.uninote-editor [data-resize-container]:hover [data-resize-handle],
+.uninote-editor .ProseMirror-selectednode [data-resize-handle],
+.uninote-editor [data-resize-state="true"] [data-resize-handle] { opacity: 1; }
+/* ResizableNodeView는 읽기 전용이어도 핸들을 붙이므로 공유 노트 뷰어에서는 숨긴다. */
+.uninote-editor[contenteditable="false"] [data-resize-handle] { display: none; }
+
 /* 출처로 이동했을 때 해당 블록을 잠깐 강조한다. */
 @keyframes highlight-fade {
   0% { background-color: rgba(59, 130, 246, 0); }
